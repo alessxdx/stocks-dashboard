@@ -1051,23 +1051,72 @@ let dayChangeCache = {};
 async function fetchPrices(tickers) {
   const missing = tickers.filter(t => t && !priceCache[t]);
   if (!missing.length) return;
-  try {
-    const r = await fetch(`/.netlify/functions/prices?tickers=${missing.join(',')}`, {
-      signal: AbortSignal.timeout(15000)
-    });
-    if (!r.ok) throw new Error('Function returned ' + r.status);
-    const resp = await r.json();
-    // Store full data (price + dayChangePct)
-    Object.entries(resp.data || {}).forEach(([ticker, d]) => {
-      priceCache[ticker] = d.price;
-      dayChangeCache[ticker] = d.dayChangePct;
-    });
-    // Fallback to flat prices
-    Object.entries(resp.prices || {}).forEach(([ticker, p]) => {
-      if (!priceCache[ticker]) priceCache[ticker] = p;
-    });
-  } catch(e) {
-    console.error('Price fetch error:', e.message);
+
+  // Google Finance — same source as your =GOOGLEFINANCE() in Google Sheets
+  // Using a lightweight CORS proxy to bypass browser restrictions
+  const PROXY = 'https://api.allorigins.win/get?url=';
+
+  const exchangeMap = {
+    'NVDA':'NASDAQ','AAPL':'NASDAQ','MSFT':'NASDAQ','AMZN':'NASDAQ','META':'NASDAQ',
+    'GOOG':'NASDAQ','NFLX':'NASDAQ','AMD':'NASDAQ','ADBE':'NASDAQ','INTU':'NASDAQ',
+    'ASML':'NASDAQ','MU':'NASDAQ','QBTS':'NASDAQ','IREN':'NASDAQ','DUOL':'NASDAQ',
+    'TXRH':'NASDAQ','NBIS':'NASDAQ','BKNG':'NASDAQ','FICO':'NASDAQ',
+    'TSM':'NYSE','MA':'NYSE','MCO':'NYSE','CRM':'NYSE','EFX':'NYSE',
+    'JPM':'NYSE','UNH':'NYSE','MSCI':'NYSE','CCJ':'NYSE','ELF':'NYSE',
+    'DB':'NYSE','BE':'NYSE','URA':'NYSE',
+    'VOO':'NYSEARCA','SCHG':'NYSEARCA','SPYI':'NYSEARCA','SMH':'NYSEARCA',
+  };
+
+  function getGoogleUrl(ticker) {
+    if (ticker.endsWith('.SI')) {
+      return `https://www.google.com/finance/quote/${ticker.replace('.SI','')}:SGX`;
+    }
+    const exchange = exchangeMap[ticker] || 'NASDAQ';
+    return `https://www.google.com/finance/quote/${ticker}:${exchange}`;
+  }
+
+  function extractData(html) {
+    let price = null;
+    const priceMatch = html.match(/class="YMlKec fxKbKc"[^>]*>\s*([^<]+)</);
+    if (priceMatch) {
+      const raw = priceMatch[1].replace(/[^0-9.]/g, '');
+      const p = parseFloat(raw);
+      if (!isNaN(p) && p > 0) price = p;
+    }
+    let dayChangePct = null;
+    const posMatch = html.match(/class="[^"]*Ez2Ioe[^"]*"[^>]*>\s*\+?([0-9.]+)%/);
+    const negMatch = html.match(/class="[^"]*Ebnabc[^"]*"[^>]*>\s*-?([0-9.]+)%/);
+    if (posMatch) dayChangePct = parseFloat(posMatch[1]);
+    else if (negMatch) dayChangePct = -parseFloat(negMatch[1]);
+    return { price, dayChangePct };
+  }
+
+  // Fetch in parallel batches of 5
+  const chunks = [];
+  for (let i = 0; i < missing.length; i += 5) chunks.push(missing.slice(i, i+5));
+
+  for (const chunk of chunks) {
+    await Promise.all(chunk.map(async ticker => {
+      const googleUrl = getGoogleUrl(ticker);
+      try {
+        const r = await fetch(PROXY + encodeURIComponent(googleUrl), {
+          signal: AbortSignal.timeout(12000)
+        });
+        if (!r.ok) return;
+        const data = await r.json();
+        const html = data.contents || '';
+        const { price, dayChangePct } = extractData(html);
+        if (price) {
+          priceCache[ticker] = price;
+          dayChangeCache[ticker] = dayChangePct;
+          console.log(`${ticker}: $${price} | day: ${dayChangePct}%`);
+        } else {
+          console.warn(`${ticker}: price not found`);
+        }
+      } catch(e) {
+        console.warn(`${ticker}: ${e.message}`);
+      }
+    }));
   }
 }
 
