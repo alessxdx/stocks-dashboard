@@ -818,7 +818,10 @@ tr:hover td { background:var(--surface2); }
   <div class="section">
     <div class="section-header">
       <div class="section-title">All Stocks</div>
-      <span class="section-badge" id="wl-count">—</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="section-badge" id="wl-count">—</span>
+        <button class="btn btn-sm" onclick="openAddTickerModal()">+ Add Stock</button>
+      </div>
     </div>
     <div class="table-wrap">
       <table>
@@ -1072,6 +1075,8 @@ async function sb(table, method='GET', body=null, query='') {
 // ============================================================
 let priceCache = {};
 let dayChangeCache = {};
+let periodCache = {};
+let _customWatchlist = JSON.parse(localStorage.getItem('wl_custom')||'[]');
 
 async function fetchPrices(tickers) {
   const missing = tickers.filter(t => t && !priceCache[t]);
@@ -1088,11 +1093,19 @@ async function fetchPrices(tickers) {
     Object.entries(resp.data || {}).forEach(([ticker, d]) => {
       priceCache[ticker] = d.price;
       dayChangeCache[ticker] = d.dayChangePct;
+      // Store period % changes from same worker response
+      periodCache[ticker] = {
+        day:         d.dayChangePct         ?? null,
+        week:        d.weekChangePct        ?? null,
+        month:       d.monthChangePct       ?? null,
+        three_month: d.threeMonthChangePct  ?? null,
+        ytd:         d.ytdChangePct         ?? null,
+      };
     });
     Object.entries(resp.prices || {}).forEach(([ticker, p]) => {
       if (!priceCache[ticker]) priceCache[ticker] = p;
     });
-    console.log('Prices loaded:', Object.keys(priceCache).length, 'tickers');
+    console.log('Prices + periods loaded:', Object.keys(priceCache).length, 'tickers');
   } catch(e) {
     console.error('Price fetch error:', e.message);
   }
@@ -1717,7 +1730,7 @@ let _wlSortKey = 'day', _wlSortDir = -1;
 async function loadWatchlistPage() {
   await loadAllData();
 
-  // Collect all unique tickers from all brokerages
+  // Collect all tickers — webull (active+closed), syfe, cmc (active+closed), plus custom
   const wbAll = (_wbHoldings||[]).map(h => ({ticker:h.ticker, isSG:false}));
   const syAll = (_syfeH||[]).map(h => ({ticker:h.ticker, isSG:false}));
   const cmcMap = {};
@@ -1726,49 +1739,51 @@ async function loadWatchlistPage() {
   });
   const cmcAll = Object.values(cmcMap);
 
-  const allItems = [...wbAll, ...syAll, ...cmcAll]
+  // Include custom watchlist tickers
+  const customTickers = _customWatchlist.map(t => ({
+    ticker: t.ticker,
+    isSG: t.ticker.endsWith('.SI')
+  }));
+
+  const allItems = [...wbAll, ...syAll, ...cmcAll, ...customTickers]
     .filter((v,i,a) => a.findIndex(x=>x.ticker===v.ticker)===i)
     .sort((a,b) => a.ticker.localeCompare(b.ticker));
 
   const tickers = allItems.map(h=>h.ticker);
   document.getElementById('wl-count').textContent = tickers.length + ' stocks';
 
-  // Fetch current prices
-  await fetchPrices(tickers);
-
-  // Now fetch historical prices for period % changes via Worker
-  // Pass a 'history=1' flag so the Worker returns historical data
-  await fetchPeriodChanges(tickers);
-
+  // Always force-fetch all tickers for watchlist so period data is fresh
+  await forceFetchPrices(tickers);
   renderWatchlistTable(allItems);
 }
 
-// Cache for period changes
-let periodCache = {};
-
-async function fetchPeriodChanges(tickers) {
-  const missing = tickers.filter(t => !periodCache[t]);
-  if (!missing.length) return;
+// Force fetch — bypasses cache so period data always loads
+async function forceFetchPrices(tickers) {
+  if (!tickers.length) return;
   try {
-    const r = await fetch(`${WORKER_URL}?tickers=${missing.join(',')}&mode=history`, {
+    const r = await fetch(`${WORKER_URL}?tickers=${tickers.join(',')}`, {
       signal: AbortSignal.timeout(20000)
     });
-    if (!r.ok) return;
+    if (!r.ok) throw new Error('Worker ' + r.status);
     const resp = await r.json();
-    // Worker returns period data if available
     Object.entries(resp.data || {}).forEach(([ticker, d]) => {
+      priceCache[ticker] = d.price;
+      dayChangeCache[ticker] = d.dayChangePct;
       periodCache[ticker] = {
-        day: d.dayChangePct ?? null,
-        week: d.weekChangePct ?? null,
-        month: d.monthChangePct ?? null,
+        day:         d.dayChangePct        ?? null,
+        week:        d.weekChangePct       ?? null,
+        month:       d.monthChangePct      ?? null,
         three_month: d.threeMonthChangePct ?? null,
-        ytd: d.ytdChangePct ?? null,
+        ytd:         d.ytdChangePct        ?? null,
       };
-      // Also update price cache
-      if (d.price) priceCache[ticker] = d.price;
     });
-  } catch(e) { console.warn('Period fetch failed:', e.message); }
+    Object.entries(resp.prices || {}).forEach(([ticker, p]) => {
+      if (!priceCache[ticker]) priceCache[ticker] = p;
+    });
+  } catch(e) { console.error('Force fetch error:', e.message); }
 }
+
+
 
 function wlSort(key) {
   if(_wlSortKey===key) _wlSortDir*=-1;
@@ -1828,6 +1843,35 @@ function renderWatchlistTable(items) {
   document.getElementById('wl-page-updated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-SG');
 }
 
+
+
+// ============================================================
+// CUSTOM WATCHLIST MANAGEMENT
+// ============================================================
+function openAddTickerModal() {
+  document.getElementById('add-ticker-modal').classList.add('open');
+  document.getElementById('add-ticker-input').value = '';
+  document.getElementById('add-ticker-input').focus();
+}
+
+function submitAddTicker() {
+  let ticker = document.getElementById('add-ticker-input').value.toUpperCase().trim();
+  const exchange = document.getElementById('add-ticker-exchange').value;
+  if (!ticker) return alert('Please enter a ticker symbol');
+  if (exchange === 'SGX' && !ticker.endsWith('.SI')) ticker = ticker + '.SI';
+  // Check not already in list
+  const existing = [...(_wbHoldings||[]).map(h=>h.ticker), ...(_syfeH||[]).map(h=>h.ticker)];
+  const cmcExisting = (_cmcTrades||[]).filter(t=>t.brokerage==='cmc').map(t=>t.ticker+'.SI');
+  const allExisting = [...existing, ...cmcExisting, ..._customWatchlist.map(x=>x.ticker)];
+  if (allExisting.includes(ticker)) {
+    alert(`${ticker} is already in your watchlist`);
+    return;
+  }
+  _customWatchlist.push({ ticker });
+  localStorage.setItem('wl_custom', JSON.stringify(_customWatchlist));
+  closeModal('add-ticker-modal');
+  loadWatchlistPage();
+}
 
 // ============================================================
 // INIT
@@ -1892,5 +1936,26 @@ loadWatchlist();
 setInterval(loadWatchlist, 60000);
 
 </script>
+
+<div class="modal-overlay" id="add-ticker-modal">
+  <div class="modal">
+    <div class="modal-title">Add Stock to Watchlist</div>
+    <div class="form-group">
+      <label class="form-label">Ticker Symbol</label>
+      <input class="form-input" id="add-ticker-input" placeholder="e.g. NVDA, D05 (for SGX add .SI)" style="text-transform:uppercase">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Exchange</label>
+      <select class="form-input" id="add-ticker-exchange">
+        <option value="US">US Stock (NASDAQ/NYSE)</option>
+        <option value="SGX">Singapore Stock (SGX — auto adds .SI)</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="closeModal('add-ticker-modal')">Cancel</button>
+      <button class="btn btn-submit" onclick="submitAddTicker()">Add to Watchlist</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
