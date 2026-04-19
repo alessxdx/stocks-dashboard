@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Investment Dashboard</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
   --bg: #0a0a0f;
@@ -24,6 +24,7 @@
   --cmc: #34d399;
   --font-head: 'Syne', sans-serif;
   --font-mono: 'DM Mono', monospace;
+  --font-num: 'Montserrat', sans-serif;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 body { background:var(--bg); color:var(--text); font-family:var(--font-mono); min-height:100vh; }
@@ -93,7 +94,7 @@ body { background:var(--bg); color:var(--text); font-family:var(--font-mono); mi
 .stat-card.syfe::before { background:var(--syfe); }
 .stat-card.cmc::before { background:var(--cmc); }
 .stat-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; margin-bottom:8px; }
-.stat-value { font-family:var(--font-head); font-size:24px; font-weight:700; }
+.stat-value { font-family:var(--font-num); font-size:24px; font-weight:700; }
 .stat-sub { font-size:11px; color:var(--muted); margin-top:4px; }
 .stat-change { font-size:12px; margin-top:6px; font-weight:500; }
 .pos { color:var(--green); }
@@ -111,20 +112,24 @@ body { background:var(--bg); color:var(--text); font-family:var(--font-mono); mi
   background:var(--surface2); color:var(--muted); letter-spacing:.5px;
 }
 .table-wrap { overflow-x:auto; }
-table { width:100%; border-collapse:collapse; font-size:12px; }
+table { width:100%; border-collapse:collapse; font-size:13px; font-family:var(--font-num); }
 th {
-  padding:10px 16px; text-align:left; color:var(--muted);
-  font-size:10px; text-transform:uppercase; letter-spacing:.8px;
-  border-bottom:1px solid var(--border); font-weight:400;
-  white-space:nowrap;
+  padding:11px 16px; text-align:left; color:var(--text);
+  font-size:11px; text-transform:uppercase; letter-spacing:.8px;
+  border-bottom:1px solid var(--border); font-weight:700;
+  white-space:nowrap; cursor:pointer; user-select:none;
 }
-td { padding:11px 16px; border-bottom:1px solid var(--border); white-space:nowrap; }
+th:hover { color:var(--text); }
+th.sort-asc::after { content:' ▲'; color:var(--accent); font-size:9px; }
+th.sort-desc::after { content:' ▼'; color:var(--accent); font-size:9px; }
+td { padding:12px 16px; border-bottom:1px solid var(--border); white-space:nowrap; font-size:13px; }
 tr:last-child td { border-bottom:none; }
 tr:hover td { background:var(--surface2); }
 .ticker-badge {
-  display:inline-block; background:var(--surface2);
-  border:1px solid var(--border2); border-radius:6px;
-  padding:2px 8px; font-size:11px; font-weight:500; font-family:var(--font-mono);
+  display:inline-block; background:#1e2a3a;
+  border:1px solid #3a6aaa; border-radius:6px;
+  padding:4px 11px; font-size:13px; font-weight:700; font-family:var(--font-mono);
+  color:#7eb8f7; letter-spacing:.5px;
 }
 .status-active { color:var(--green); }
 .status-closed { color:var(--muted); }
@@ -217,6 +222,21 @@ tr:hover td { background:var(--surface2); }
   .sidebar .logo, .sidebar .nav-item span, .sidebar-footer { display:none; }
   .main { margin-left:64px; padding:20px; }
 }
+
+
+/* BROKER FILTER TABS */
+.filter-tabs { display:flex; gap:8px; padding:12px 16px; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+.filter-tab {
+  padding:6px 14px; border-radius:20px; border:1px solid var(--border2);
+  cursor:pointer; font-size:11px; background:var(--surface2); color:var(--muted);
+  transition:all .2s; font-family:var(--font-mono);
+}
+.filter-tab:hover { color:var(--text); }
+.filter-tab.active { color:#fff; border-color:transparent; }
+.filter-tab.all.active { background:var(--accent); }
+.filter-tab.webull.active { background:var(--webull); }
+.filter-tab.syfe.active { background:var(--syfe); }
+.filter-tab.cmc.active { background:var(--cmc); }
 
 /* WATCHLIST */
 .watchlist {
@@ -322,22 +342,22 @@ tr:hover td { background:var(--surface2); }
   </div>
   <div class="stat-grid stat-grid-3">
     <div class="stat-card webull">
-      <div class="stat-label">Webull</div>
+      <div class="stat-label">Webull (US Stocks)</div>
       <div class="stat-value" id="ov-webull-value">—</div>
       <div class="stat-change" id="ov-webull-pl">—</div>
-      <div class="stat-sub" id="ov-webull-cost">—</div>
+      <div class="stat-sub" id="ov-webull-cost">—</div><div class="stat-sub" style="color:var(--webull);font-size:10px">USD</div>
     </div>
     <div class="stat-card syfe">
       <div class="stat-label">Syfe (VOO + SCHG + SPYI)</div>
       <div class="stat-value" id="ov-syfe-value">—</div>
       <div class="stat-change" id="ov-syfe-pl">—</div>
-      <div class="stat-sub" id="ov-syfe-cost">—</div>
+      <div class="stat-sub" id="ov-syfe-cost">—</div><div class="stat-sub" style="color:var(--accent2);font-size:10px">USD</div>
     </div>
     <div class="stat-card cmc">
       <div class="stat-label">CMC Invest (SG Stocks)</div>
       <div class="stat-value" id="ov-cmc-value">—</div>
       <div class="stat-change" id="ov-cmc-pl">—</div>
-      <div class="stat-sub" id="ov-cmc-cost">—</div>
+      <div class="stat-sub" id="ov-cmc-cost">—</div><div class="stat-sub" style="color:var(--cmc);font-size:10px">SGD</div>
     </div>
   </div>
 
@@ -346,12 +366,23 @@ tr:hover td { background:var(--surface2); }
       <div class="section-title">All Active Positions</div>
       <div class="section-badge" id="all-pos-count">Loading...</div>
     </div>
+    <div class="filter-tabs">
+      <div class="filter-tab all active" onclick="filterPositions('all',this)">All</div>
+      <div class="filter-tab webull" onclick="filterPositions('webull',this)">Webull</div>
+      <div class="filter-tab syfe" onclick="filterPositions('syfe',this)">Syfe</div>
+      <div class="filter-tab cmc" onclick="filterPositions('cmc',this)">CMC Invest</div>
+    </div>
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>Ticker</th><th>Broker</th><th>Shares</th>
-          <th>Avg Cost</th><th>Live Price</th><th>Market Value</th>
-          <th>Unrealised P&L</th><th>Return %</th>
+          <th onclick="sortPositions('ticker')">Ticker</th>
+          <th>Broker</th>
+          <th onclick="sortPositions('shares')">Shares</th>
+          <th onclick="sortPositions('avg_cost')">Avg Cost</th>
+          <th onclick="sortPositions('live_price')">Live Price</th>
+          <th onclick="sortPositions('market_value')">Market Value</th>
+          <th onclick="sortPositions('unrealised_pl')">Unrealised P&L</th>
+          <th onclick="sortPositions('return_pct')">Return %</th>
         </tr></thead>
         <tbody id="all-positions-body">
           <tr><td colspan="8" class="loading"><div class="spinner"></div>Loading positions...</td></tr>
@@ -781,33 +812,27 @@ tr:hover td { background:var(--surface2); }
 <div id="page-watchlist" class="page">
   <div class="page-header">
     <div class="page-title">Watchlist</div>
-    <div class="page-subtitle">All stocks you own or previously owned — live prices & performance</div>
+    <div class="page-subtitle">Live prices & performance — Day · Week · Month · 3M · YTD</div>
     <div class="last-updated" id="wl-page-updated">Fetching prices...</div>
   </div>
-
-  <!-- Period tabs -->
-  <div class="broker-tabs" id="wl-period-tabs">
-    <div class="broker-tab active" onclick="setWLPeriod('day',this)">Day</div>
-    <div class="broker-tab" onclick="setWLPeriod('week',this)">Week</div>
-    <div class="broker-tab" onclick="setWLPeriod('month',this)">Month</div>
-    <div class="broker-tab" onclick="setWLPeriod('ytd',this)">YTD</div>
-  </div>
-
   <div class="section">
     <div class="section-header">
-      <div class="section-title">All Holdings</div>
+      <div class="section-title">All Stocks</div>
       <span class="section-badge" id="wl-count">—</span>
     </div>
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>Ticker</th><th>Broker</th><th>Live Price</th>
-          <th id="wl-chg-header">Day Change %</th>
-          <th>Shares Held</th><th>Avg Cost</th><th>Market Value</th>
-          <th>Unrealised P&L</th><th>Return %</th><th>Status</th>
+          <th onclick="wlSort('ticker')">Ticker</th>
+          <th onclick="wlSort('price')">Live Price</th>
+          <th onclick="wlSort('day')" class="sort-desc">Day %</th>
+          <th onclick="wlSort('week')">Week %</th>
+          <th onclick="wlSort('month')">Month %</th>
+          <th onclick="wlSort('three_month')">3 Month %</th>
+          <th onclick="wlSort('ytd')">YTD %</th>
         </tr></thead>
-        <tbody id="wl-table-body">
-          <tr><td colspan="10" class="loading"><div class="spinner"></div>Loading...</td></tr>
+        <tbody id="wl-body">
+          <tr><td colspan="7" class="loading"><div class="spinner"></div>Loading...</td></tr>
         </tbody>
       </table>
     </div>
@@ -1083,6 +1108,14 @@ const fmtSGD = v => v != null ? 'S$' + Number(v).toLocaleString('en-US',{minimum
 const fmtNum = v => Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:4});
 const fmtPct = v => (v>=0?'+':'')+Number(v).toFixed(2)+'%';
 const fmtDate = d => d ? new Date(d).toLocaleDateString('en-SG',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+function fmtShares(v) {
+  const n = Number(v);
+  const rounded = Math.round(n);
+  // If very close to an integer (within 0.01), show as integer
+  if (Math.abs(n - rounded) < 0.01) return rounded.toLocaleString('en-US');
+  // Otherwise keep up to 4 decimal places (e.g. VOO 52.1778)
+  return n.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:4});
+}
 function plColor(v) { return v >= 0 ? 'pos' : 'neg'; }
 function plStr(v, prefix='$') { return (v>=0?'+':'')+prefix+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 
@@ -1142,37 +1175,19 @@ async function loadOverview() {
   const sgTickers = [...new Set(cmcActive.map(h => h.ticker+'.SI'))];
   await fetchPrices([...wbTickers, ...syfeTickers, ...sgTickers]);
 
-  // Webull value
   let wbValue=0, wbCost=0, wbRealised=0;
-  active.forEach(h => {
-    const p = price(h.ticker);
-    wbValue += h.shares * p;
-    wbCost += h.total_cost;
-  });
+  active.forEach(h => { wbValue += h.shares * price(h.ticker); wbCost += h.total_cost; });
   (_wbHoldings||[]).forEach(h => { wbRealised += (h.total_realised_pl||0); });
 
-  // Syfe value
   let syValue=0, syCost=0;
-  (_syfeH||[]).forEach(h => {
-    const p = price(h.ticker);
-    syValue += h.shares * p;
-    syCost += h.total_invested;
-  });
+  (_syfeH||[]).forEach(h => { syValue += h.shares * price(h.ticker); syCost += h.total_invested; });
 
-  // CMC value
   let cmcValue=0, cmcCost=0;
-  cmcActive.forEach(h => {
-    const p = price(h.ticker+'.SI');
-    cmcValue += h.shares * p;
-    cmcCost += h.cost;
-  });
+  cmcActive.forEach(h => { cmcValue += h.shares * price(h.ticker+'.SI'); cmcCost += h.cost; });
 
-  // Dividends
   const divUS = (_divUS||[]).reduce((s,d) => s+d.amount_usd, 0);
-  const divSG = (_divSG||[]).reduce((s,d) => s+d.total_sgd, 0);
   const divSyfe = (_divSyfe||[]).reduce((s,d) => s+d.amount_usd, 0);
 
-  // Update overview cards
   document.getElementById('ov-total-value').textContent = fmtUSD(wbValue+syValue) + ' + ' + fmtSGD(cmcValue);
   document.getElementById('ov-total-invested-usd').textContent = fmtUSD(wbCost+syCost);
   document.getElementById('ov-total-invested-sgd').textContent = fmtSGD(cmcCost);
@@ -1194,47 +1209,105 @@ async function loadOverview() {
   document.getElementById('ov-cmc-cost').textContent = `Invested: ${fmtSGD(cmcCost)}`;
 
   document.getElementById('overview-updated').textContent = 'Live prices as of ' + new Date().toLocaleTimeString('en-SG');
-  document.getElementById('all-pos-count').textContent = (active.length + (_syfeH||[]).length + cmcActive.length) + ' positions';
 
-  // All positions table
-  let rows = '';
+  // Build all positions data
+  _allPositionsData = [];
   active.forEach(h => {
-    const p = price(h.ticker); const val = h.shares * p;
-    const pl = val - h.total_cost; const pct = h.total_cost > 0 ? pl/h.total_cost*100 : 0;
-    rows += `<tr>
-      <td><span class="ticker-badge">${h.ticker}</span></td>
-      <td><span class="pill pill-webull">Webull</span></td>
-      <td>${fmtNum(h.shares)}</td><td>${fmtUSD(h.avg_cost)}</td>
-      <td>${fmtUSD(p)}</td><td>${fmtUSD(val)}</td>
-      <td class="${plColor(pl)}">${plStr(pl)}</td>
-      <td class="${plColor(pct)}">${fmtPct(pct)}</td>
-    </tr>`;
+    const p = price(h.ticker), val = h.shares * p;
+    const pl = val - h.total_cost, pct = h.total_cost > 0 ? pl/h.total_cost*100 : 0;
+    _allPositionsData.push({ ticker:h.ticker, broker:'webull', shares:h.shares, avg_cost:h.avg_cost, live_price:p, market_value:val, unrealised_pl:pl, return_pct:pct, isSG:false });
   });
   (_syfeH||[]).forEach(h => {
-    const p = price(h.ticker); const val = h.shares * p;
-    const pl = val - h.total_invested; const pct = h.total_invested > 0 ? pl/h.total_invested*100 : 0;
-    rows += `<tr>
-      <td><span class="ticker-badge">${h.ticker}</span></td>
-      <td><span class="pill pill-syfe">Syfe</span></td>
-      <td>${fmtNum(h.shares)}</td><td>${fmtUSD(h.avg_cost)}</td>
-      <td>${fmtUSD(p)}</td><td>${fmtUSD(val)}</td>
-      <td class="${plColor(pl)}">${plStr(pl)}</td>
-      <td class="${plColor(pct)}">${fmtPct(pct)}</td>
-    </tr>`;
+    const p = price(h.ticker), val = h.shares * p;
+    const pl = val - h.total_invested, pct = h.total_invested > 0 ? pl/h.total_invested*100 : 0;
+    _allPositionsData.push({ ticker:h.ticker, broker:'syfe', shares:h.shares, avg_cost:h.avg_cost, live_price:p, market_value:val, unrealised_pl:pl, return_pct:pct, isSG:false });
   });
   cmcActive.forEach(h => {
-    const p = price(h.ticker+'.SI'); const val = h.shares * p;
-    const pl = val - h.cost; const pct = h.cost > 0 ? pl/h.cost*100 : 0;
-    rows += `<tr>
-      <td><span class="ticker-badge">${h.ticker}</span></td>
-      <td><span class="pill pill-cmc">CMC</span></td>
-      <td>${fmtNum(h.shares)}</td><td>${fmtSGD(h.avgPrice)}</td>
-      <td>${fmtSGD(p)}</td><td>${fmtSGD(val)}</td>
-      <td class="${plColor(pl)}">${plStr(pl,'S$')}</td>
-      <td class="${plColor(pct)}">${fmtPct(pct)}</td>
-    </tr>`;
+    const p = price(h.ticker+'.SI'), val = h.shares * p;
+    const pl = val - h.cost, pct = h.cost > 0 ? pl/h.cost*100 : 0;
+    _allPositionsData.push({ ticker:h.ticker, broker:'cmc', shares:h.shares, avg_cost:h.avgPrice, live_price:p, market_value:val, unrealised_pl:pl, return_pct:pct, isSG:true });
   });
-  document.getElementById('all-positions-body').innerHTML = rows || '<tr><td colspan="8" class="empty">No active positions found.</td></tr>';
+
+  document.getElementById('all-pos-count').textContent = _allPositionsData.length + ' positions';
+  renderPositions();
+}
+
+let _allPositionsData = [];
+let _posFilter = 'all';
+let _posSort = { key: 'unrealised_pl', dir: -1 };
+
+// Multi-select filter — set of active brokers
+let _posFilters = new Set(['all']);
+
+function filterPositions(broker, el) {
+  if (broker === 'all') {
+    // All resets everything
+    _posFilters = new Set(['all']);
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector('.filter-tab.all').classList.add('active');
+  } else {
+    // Remove 'all' when selecting a specific broker
+    _posFilters.delete('all');
+    document.querySelector('.filter-tab.all').classList.remove('active');
+    if (_posFilters.has(broker)) {
+      _posFilters.delete(broker);
+      el.classList.remove('active');
+      // If nothing selected, reset to all
+      if (_posFilters.size === 0) {
+        _posFilters = new Set(['all']);
+        document.querySelector('.filter-tab.all').classList.add('active');
+      }
+    } else {
+      _posFilters.add(broker);
+      el.classList.add('active');
+    }
+  }
+  renderPositions();
+}
+
+function sortPositions(key) {
+  if (_posSort.key === key) {
+    _posSort.dir *= -1;
+  } else {
+    _posSort = { key, dir: key === 'ticker' ? 1 : -1 };
+  }
+  // Update header indicators
+  document.querySelectorAll('#page-overview th').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    if (th.getAttribute('onclick') === `sortPositions('${key}')`) {
+      th.classList.add(_posSort.dir === 1 ? 'sort-asc' : 'sort-desc');
+    }
+  });
+  renderPositions();
+}
+
+function renderPositions() {
+  let data = _posFilters.has('all') ? [..._allPositionsData] : _allPositionsData.filter(p => _posFilters.has(p.broker));
+  const key = _posSort.key, dir = _posSort.dir;
+  data.sort((a,b) => {
+    const av = typeof a[key] === 'string' ? a[key] : (a[key]||0);
+    const bv = typeof b[key] === 'string' ? b[key] : (b[key]||0);
+    return typeof av === 'string' ? av.localeCompare(bv)*dir : (av-bv)*dir;
+  });
+
+  const rows = data.map(h => {
+    const priceStr = h.live_price > 0 ? (h.isSG ? fmtSGD(h.live_price) : fmtUSD(h.live_price)) : '<span style="color:var(--muted)">—</span>';
+    const valStr = h.market_value > 0 ? (h.isSG ? fmtSGD(h.market_value) : fmtUSD(h.market_value)) : '<span style="color:var(--muted)">—</span>';
+    const avgStr = h.isSG ? fmtSGD(h.avg_cost) : fmtUSD(h.avg_cost);
+    return `<tr>
+      <td><span class="ticker-badge">${h.ticker}</span></td>
+      <td><span class="pill pill-${h.broker}">${h.broker === 'cmc' ? 'CMC' : h.broker.charAt(0).toUpperCase()+h.broker.slice(1)}</span></td>
+      <td>${fmtShares(h.shares)}</td>
+      <td>${avgStr}</td>
+      <td>${priceStr}</td>
+      <td>${valStr}</td>
+      <td class="${plColor(h.unrealised_pl)}" style="font-family:var(--font-num);font-weight:600">${h.market_value>0?(h.isSG?plStr(h.unrealised_pl,'S$'):plStr(h.unrealised_pl)):'—'}</td>
+      <td class="${plColor(h.return_pct)}" style="font-family:var(--font-num);font-weight:600">${h.market_value>0?fmtPct(h.return_pct):'—'}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('all-positions-body').innerHTML = rows || '<tr><td colspan="8" class="empty">No positions found</td></tr>';
+  document.getElementById('all-pos-count').textContent = data.length + ' positions';
 }
 
 // ============================================================
@@ -1279,7 +1352,7 @@ async function loadWebull() {
     const pl = val - h.total_cost; const pct = h.total_cost>0 ? pl/h.total_cost*100 : 0;
     aRows += `<tr>
       <td><span class="ticker-badge">${h.ticker}</span></td>
-      <td>${fmtNum(h.shares)}</td><td>${fmtUSD(h.avg_cost)}</td>
+      <td>${fmtShares(h.shares)}</td><td>${fmtUSD(h.avg_cost)}</td>
       <td>${fmtUSD(p)}</td><td>${fmtUSD(val)}</td>
       <td class="${plColor(pl)}">${plStr(pl)}</td>
       <td class="${plColor(pct)}">${fmtPct(pct)}</td>
@@ -1306,7 +1379,7 @@ async function loadWebull() {
     <td>${fmtDate(t.date)}</td>
     <td><span class="ticker-badge">${t.ticker}</span></td>
     <td class="${t.action==='Buy'?'action-buy':'action-sell'}">${t.action}</td>
-    <td>${fmtNum(t.qty)}</td><td>${fmtUSD(t.price)}</td><td>${fmtUSD(t.amount)}</td>
+    <td>${fmtShares(t.qty)}</td><td>${fmtUSD(t.price)}</td><td>${fmtUSD(t.amount)}</td>
     <td class="${t.realised_pl!=0?plColor(t.realised_pl):''}">${t.realised_pl!=0?plStr(t.realised_pl):'—'}</td>
   </tr>`).join('');
 
@@ -1345,7 +1418,7 @@ async function loadSyfe() {
     const p = price(ticker); const val = h.shares*p;
     const pl = val - h.total_invested; const pct = h.total_invested>0?pl/h.total_invested*100:0;
     const key = ticker.toLowerCase();
-    document.getElementById(`sy-${key}-shares`).textContent = fmtNum(h.shares);
+    document.getElementById(`sy-${key}-shares`).textContent = fmtShares(h.shares);
     document.getElementById(`sy-${key}-avg`).textContent = fmtUSD(h.avg_cost);
     document.getElementById(`sy-${key}-price`).textContent = fmtUSD(p);
     document.getElementById(`sy-${key}-value`).textContent = fmtUSD(val);
@@ -1416,7 +1489,7 @@ async function loadCMC() {
     const pl = val - h.cost; const pct = h.cost>0?pl/h.cost*100:0;
     return `<tr>
       <td><span class="ticker-badge">${h.ticker}</span></td>
-      <td>${fmtNum(h.shares)}</td><td>${fmtSGD(h.avgPrice)}</td>
+      <td>${fmtShares(h.shares)}</td><td>${fmtSGD(h.avgPrice)}</td>
       <td>${fmtSGD(p)}</td><td>${fmtSGD(val)}</td>
       <td class="${plColor(pl)}">${plStr(pl,'S$')}</td>
       <td class="${plColor(pct)}">${fmtPct(pct)}</td>
@@ -1427,7 +1500,7 @@ async function loadCMC() {
   const sells = (_cmcTrades||[]).filter(t=>t.action==='Sell');
   document.getElementById('cmc-sells-body').innerHTML = sells.map(t => `<tr>
     <td><span class="ticker-badge">${t.ticker}</span></td>
-    <td>${fmtDate(t.date)}</td><td>${fmtNum(t.qty)}</td>
+    <td>${fmtDate(t.date)}</td><td>${fmtShares(t.qty)}</td>
     <td>${fmtSGD(t.price)}</td><td>${fmtSGD(t.amount)}</td>
     <td class="${plColor(t.profit)}">${plStr(t.profit,'S$')}</td>
   </tr>`).join('');
@@ -1436,7 +1509,7 @@ async function loadCMC() {
   document.getElementById('cmc-divs-body').innerHTML = (_divSG||[]).map(d => `<tr>
     <td><span class="ticker-badge">${d.ticker}</span></td>
     <td>${fmtDate(d.date)}</td><td>${fmtSGD(d.per_share)}</td>
-    <td>${fmtNum(d.shares)}</td><td class="pos">${fmtSGD(d.total_sgd)}</td>
+    <td>${fmtShares(d.shares)}</td><td class="pos">${fmtSGD(d.total_sgd)}</td>
   </tr>`).join('');
 
   // CMC deposits
@@ -1519,7 +1592,7 @@ async function loadDividends() {
   document.getElementById('div-sg-body').innerHTML = (_divSG||[]).map(d => `<tr>
     <td>${fmtDate(d.date)}</td>
     <td><span class="ticker-badge">${d.ticker}</span></td>
-    <td>${fmtSGD(d.per_share)}</td><td>${fmtNum(d.shares)}</td>
+    <td>${fmtSGD(d.per_share)}</td><td>${fmtShares(d.shares)}</td>
     <td class="pos">${fmtSGD(d.total_sgd)}</td>
   </tr>`).join('');
 }
@@ -1636,100 +1709,125 @@ async function submitSGTrade() {
 // ============================================================
 // WATCHLIST PAGE
 // ============================================================
-let _wlPeriod = 'day';
-
-// All tickers ever traded (active + closed Webull, all Syfe, all CMC)
-function getAllTickers() {
-  const webullAll = (_wbHoldings||[]).map(h => ({
-    ticker: h.ticker, broker: 'webull', isSG: false,
-    shares: h.shares, avgCost: h.avg_cost, totalCost: h.total_cost,
-    status: h.status === 'active' && h.shares > 0.01 ? 'Active' : 'Closed'
-  }));
-  const syfeAll = (_syfeH||[]).map(h => ({
-    ticker: h.ticker, broker: 'syfe', isSG: false,
-    shares: h.shares, avgCost: h.avg_cost, totalCost: h.total_invested,
-    status: 'Active'
-  }));
-  // CMC — derive from trades
-  const cmcMap = {};
-  const cmcTrades = (_cmcTrades||[]).filter(t=>t.brokerage==='cmc');
-  cmcTrades.forEach(t => {
-    if (!cmcMap[t.ticker]) cmcMap[t.ticker] = {ticker:t.ticker, shares:0, cost:0};
-    if (t.action==='Buy') { cmcMap[t.ticker].shares += t.qty; cmcMap[t.ticker].cost += t.amount; }
-    else { 
-      const avg = cmcMap[t.ticker].cost / cmcMap[t.ticker].shares;
-      cmcMap[t.ticker].shares -= t.qty; cmcMap[t.ticker].cost -= avg * t.qty;
-    }
-  });
-  const cmcAll = Object.values(cmcMap).map(h => ({
-    ticker: h.ticker+'.SI', broker: 'cmc', isSG: true,
-    shares: h.shares, avgCost: h.shares>0 ? h.cost/h.shares : 0, totalCost: h.cost,
-    status: h.shares > 0 ? 'Active' : 'Closed'
-  }));
-  return [...webullAll, ...syfeAll, ...cmcAll].sort((a,b)=>a.ticker.localeCompare(b.ticker));
-}
-
-function setWLPeriod(period, el) {
-  _wlPeriod = period;
-  document.querySelectorAll('#wl-period-tabs .broker-tab').forEach(t=>t.classList.remove('active'));
-  el.classList.add('active');
-  const labels = {day:'Day Change %', week:'Week Change %', month:'Month Change %', ytd:'YTD Change %'};
-  document.getElementById('wl-chg-header').textContent = labels[period];
-  renderWatchlistTable();
-}
-
-function getChangePct(ticker, period) {
-  // For now day change comes from live data; week/month/ytd we calculate from avg cost as proxy
-  // (true historical % needs a paid API — we show what we have)
-  if (period === 'day') return dayChangeCache[ticker] ?? null;
-  // For week/month/ytd — use unrealised return vs avg cost as best available data
-  const p = priceCache[ticker] || 0;
-  const h = getAllTickers().find(x => x.ticker === ticker);
-  if (!h || !h.avgCost || p === 0) return null;
-  return (p - h.avgCost) / h.avgCost * 100;
-}
-
-function renderWatchlistTable() {
-  const all = getAllTickers();
-  const periodLabels = {day:'Today', week:'This Week', month:'This Month', ytd:'YTD'};
-  document.getElementById('wl-count').textContent = all.length + ' stocks';
-
-  const rows = all.map(h => {
-    const p = priceCache[h.ticker] || 0;
-    const chg = getChangePct(h.ticker, _wlPeriod);
-    const chgColor = chg == null ? 'var(--muted)' : chg >= 0 ? 'var(--green)' : 'var(--red)';
-    const chgStr = chg == null ? '—' : (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
-    const val = h.shares > 0 ? h.shares * p : 0;
-    const pl = val - (h.shares > 0 ? h.totalCost : 0);
-    const plPct = h.totalCost > 0 && h.shares > 0 ? pl/h.totalCost*100 : null;
-    const displayTicker = h.ticker.replace('.SI','');
-    const priceStr = h.isSG ? (p>0?'S$'+p.toFixed(3):'—') : (p>0?'$'+p.toFixed(2):'—');
-
-    return `<tr>
-      <td><span class="ticker-badge">${displayTicker}</span></td>
-      <td><span class="pill pill-${h.broker}">${h.broker}</span></td>
-      <td>${priceStr}</td>
-      <td style="color:${chgColor};font-weight:500">${chgStr}</td>
-      <td>${h.shares > 0 ? fmtNum(h.shares) : '—'}</td>
-      <td>${h.avgCost > 0 ? (h.isSG ? fmtSGD(h.avgCost) : fmtUSD(h.avgCost)) : '—'}</td>
-      <td>${val > 0 ? (h.isSG ? fmtSGD(val) : fmtUSD(val)) : '—'}</td>
-      <td>${val > 0 ? `<span class="${plColor(pl)}">${h.isSG?plStr(pl,'S$'):plStr(pl)}</span>` : '—'}</td>
-      <td>${plPct != null ? `<span class="${plColor(plPct)}">${fmtPct(plPct)}</span>` : '—'}</td>
-      <td><span class="${h.status==='Active'?'status-active':'status-closed'}">${h.status}</span></td>
-    </tr>`;
-  }).join('');
-
-  document.getElementById('wl-table-body').innerHTML = rows || '<tr><td colspan="10" class="empty">No data</td></tr>';
-  document.getElementById('wl-page-updated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-SG');
-}
+// ============================================================
+// WATCHLIST PAGE — ticker + live price + period % changes
+// ============================================================
+let _wlSortKey = 'day', _wlSortDir = -1;
 
 async function loadWatchlistPage() {
   await loadAllData();
-  const all = getAllTickers();
-  const tickers = [...new Set(all.map(h=>h.ticker))];
+
+  // Collect all unique tickers from all brokerages
+  const wbAll = (_wbHoldings||[]).map(h => ({ticker:h.ticker, isSG:false}));
+  const syAll = (_syfeH||[]).map(h => ({ticker:h.ticker, isSG:false}));
+  const cmcMap = {};
+  (_cmcTrades||[]).filter(t=>t.brokerage==='cmc').forEach(t => {
+    if(!cmcMap[t.ticker]) cmcMap[t.ticker] = {ticker:t.ticker+'.SI', isSG:true};
+  });
+  const cmcAll = Object.values(cmcMap);
+
+  const allItems = [...wbAll, ...syAll, ...cmcAll]
+    .filter((v,i,a) => a.findIndex(x=>x.ticker===v.ticker)===i)
+    .sort((a,b) => a.ticker.localeCompare(b.ticker));
+
+  const tickers = allItems.map(h=>h.ticker);
+  document.getElementById('wl-count').textContent = tickers.length + ' stocks';
+
+  // Fetch current prices
   await fetchPrices(tickers);
-  renderWatchlistTable();
+
+  // Now fetch historical prices for period % changes via Worker
+  // Pass a 'history=1' flag so the Worker returns historical data
+  await fetchPeriodChanges(tickers);
+
+  renderWatchlistTable(allItems);
 }
+
+// Cache for period changes
+let periodCache = {};
+
+async function fetchPeriodChanges(tickers) {
+  const missing = tickers.filter(t => !periodCache[t]);
+  if (!missing.length) return;
+  try {
+    const r = await fetch(`${WORKER_URL}?tickers=${missing.join(',')}&mode=history`, {
+      signal: AbortSignal.timeout(20000)
+    });
+    if (!r.ok) return;
+    const resp = await r.json();
+    // Worker returns period data if available
+    Object.entries(resp.data || {}).forEach(([ticker, d]) => {
+      periodCache[ticker] = {
+        day: d.dayChangePct ?? null,
+        week: d.weekChangePct ?? null,
+        month: d.monthChangePct ?? null,
+        three_month: d.threeMonthChangePct ?? null,
+        ytd: d.ytdChangePct ?? null,
+      };
+      // Also update price cache
+      if (d.price) priceCache[ticker] = d.price;
+    });
+  } catch(e) { console.warn('Period fetch failed:', e.message); }
+}
+
+function wlSort(key) {
+  if(_wlSortKey===key) _wlSortDir*=-1;
+  else { _wlSortKey=key; _wlSortDir=key==='ticker'?1:-1; }
+  document.querySelectorAll('#page-watchlist th').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    if(th.getAttribute('onclick')===`wlSort('${key}')`)
+      th.classList.add(_wlSortDir===1?'sort-asc':'sort-desc');
+  });
+  const wbAll=(_wbHoldings||[]).map(h=>({ticker:h.ticker,isSG:false}));
+  const syAll=(_syfeH||[]).map(h=>({ticker:h.ticker,isSG:false}));
+  const cmcMap={};(_cmcTrades||[]).filter(t=>t.brokerage==='cmc').forEach(t=>{if(!cmcMap[t.ticker])cmcMap[t.ticker]={ticker:t.ticker+'.SI',isSG:true};});
+  const all=[...wbAll,...syAll,...Object.values(cmcMap)].filter((v,i,a)=>a.findIndex(x=>x.ticker===v.ticker)===i);
+  renderWatchlistTable(all);
+}
+
+function renderWatchlistTable(items) {
+  function pct(val) {
+    if(val==null) return '<span style="color:var(--muted)">—</span>';
+    const c = val>=0 ? 'var(--green)' : 'var(--red)';
+    return `<span style="color:${c};font-size:13px;font-weight:500">${val>=0?'+':''}${val.toFixed(2)}%</span>`;
+  }
+
+  const enriched = items.map(h => {
+    const pc = periodCache[h.ticker] || {};
+    return {
+      ...h,
+      price: priceCache[h.ticker] || 0,
+      day: pc.day ?? dayChangeCache[h.ticker] ?? null,
+      week: pc.week ?? null,
+      month: pc.month ?? null,
+      three_month: pc.three_month ?? null,
+      ytd: pc.ytd ?? null,
+    };
+  });
+
+  const sorted = [...enriched].sort((a,b) => {
+    const k = _wlSortKey;
+    const av = k==='ticker' ? a.ticker : (a[k]??-9999);
+    const bv = k==='ticker' ? b.ticker : (b[k]??-9999);
+    return typeof av==='string' ? av.localeCompare(bv)*_wlSortDir : (av-bv)*_wlSortDir;
+  });
+
+  document.getElementById('wl-body').innerHTML = sorted.map(h => {
+    const ps = h.price > 0 ? (h.isSG ? 'S$'+h.price.toFixed(3) : '$'+h.price.toFixed(2)) : '<span style="color:var(--muted)">—</span>';
+    return `<tr>
+      <td><span class="ticker-badge">${h.ticker.replace('.SI','')}</span></td>
+      <td style="font-family:var(--font-num);font-weight:600;font-size:13px">${ps}</td>
+      <td style="font-family:var(--font-num)">${pct(h.day)}</td>
+      <td style="font-family:var(--font-num)">${pct(h.week)}</td>
+      <td style="font-family:var(--font-num)">${pct(h.month)}</td>
+      <td style="font-family:var(--font-num)">${pct(h.three_month)}</td>
+      <td style="font-family:var(--font-num)">${pct(h.ytd)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('wl-page-updated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-SG');
+}
+
 
 // ============================================================
 // INIT
