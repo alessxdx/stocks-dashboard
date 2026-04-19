@@ -1,0 +1,1961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Investment Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0f;
+  --surface: #111118;
+  --surface2: #1a1a24;
+  --border: #ffffff0f;
+  --border2: #ffffff18;
+  --text: #e8e8f0;
+  --muted: #6b6b80;
+  --accent: #7c6aff;
+  --accent2: #a78bfa;
+  --green: #34d399;
+  --red: #f87171;
+  --gold: #fbbf24;
+  --webull: #00c2e0;
+  --syfe: #7c6aff;
+  --cmc: #34d399;
+  --font-head: 'Syne', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+  --font-num: 'Montserrat', sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:var(--font-mono); min-height:100vh; }
+
+/* LAYOUT */
+.app { display:flex; min-height:100vh; }
+.sidebar {
+  width:220px; min-height:100vh; background:var(--surface);
+  border-right:1px solid var(--border); position:fixed; left:0; top:0;
+  display:flex; flex-direction:column; padding:24px 0; z-index:100;
+}
+.main { margin-left:220px; flex:1; padding:32px; }
+
+/* SIDEBAR */
+.logo {
+  padding:0 20px 24px; border-bottom:1px solid var(--border);
+  font-family:var(--font-head); font-size:18px; font-weight:800;
+  letter-spacing:-0.5px;
+}
+.logo span { color:var(--accent); }
+.nav { padding:16px 0; flex:1; }
+.nav-item {
+  display:flex; align-items:center; gap:10px;
+  padding:10px 20px; cursor:pointer; font-size:12px;
+  color:var(--muted); transition:all .2s; letter-spacing:.5px;
+  text-transform:uppercase; border-left:2px solid transparent;
+}
+.nav-item:hover { color:var(--text); background:var(--surface2); }
+.nav-item.active { color:var(--text); border-left-color:var(--accent); background:var(--surface2); }
+.nav-item .dot { width:6px; height:6px; border-radius:50%; background:var(--muted); }
+.nav-item.active .dot, .nav-item:hover .dot { background:var(--accent); }
+.nav-dot-webull { background:var(--webull) !important; }
+.nav-dot-syfe { background:var(--syfe) !important; }
+.nav-dot-cmc { background:var(--cmc) !important; }
+.sidebar-footer { padding:16px 20px; border-top:1px solid var(--border); font-size:11px; color:var(--muted); }
+.price-indicator { display:flex; align-items:center; gap:6px; }
+.price-dot { width:6px; height:6px; border-radius:50%; background:var(--green); animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+/* PAGES */
+.page { display:none; }
+.page.active { display:block; }
+
+/* HEADER */
+.page-header { margin-bottom:28px; }
+.page-title { font-family:var(--font-head); font-size:28px; font-weight:800; letter-spacing:-1px; }
+.page-subtitle { color:var(--muted); font-size:12px; margin-top:4px; }
+.last-updated { font-size:11px; color:var(--muted); margin-top:6px; }
+
+/* STAT CARDS */
+.stat-grid { display:grid; gap:16px; margin-bottom:28px; }
+.stat-grid-4 { grid-template-columns:repeat(4,1fr); }
+.stat-grid-3 { grid-template-columns:repeat(3,1fr); }
+.stat-grid-2 { grid-template-columns:repeat(2,1fr); }
+.stat-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:20px; position:relative; overflow:hidden;
+}
+.stat-card::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  background:var(--accent); opacity:.4;
+}
+.stat-card.green::before { background:var(--green); }
+.stat-card.red::before { background:var(--red); }
+.stat-card.gold::before { background:var(--gold); }
+.stat-card.webull::before { background:var(--webull); }
+.stat-card.syfe::before { background:var(--syfe); }
+.stat-card.cmc::before { background:var(--cmc); }
+.stat-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; margin-bottom:8px; }
+.stat-value { font-family:var(--font-num); font-size:24px; font-weight:700; }
+.stat-sub { font-size:11px; color:var(--muted); margin-top:4px; }
+.stat-change { font-size:12px; margin-top:6px; font-weight:500; }
+.pos { color:var(--green); }
+.neg { color:var(--red); }
+
+/* TABLES */
+.section { background:var(--surface); border:1px solid var(--border); border-radius:12px; margin-bottom:20px; overflow:hidden; }
+.section-header {
+  padding:16px 20px; border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between;
+}
+.section-title { font-family:var(--font-head); font-size:14px; font-weight:700; }
+.section-badge {
+  font-size:10px; padding:3px 8px; border-radius:20px;
+  background:var(--surface2); color:var(--muted); letter-spacing:.5px;
+}
+.table-wrap { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; font-size:13px; font-family:var(--font-num); }
+th {
+  padding:11px 16px; text-align:left; color:var(--text);
+  font-size:11px; text-transform:uppercase; letter-spacing:.8px;
+  border-bottom:1px solid var(--border); font-weight:700;
+  white-space:nowrap; cursor:pointer; user-select:none;
+}
+th:hover { color:var(--text); }
+th.sort-asc::after { content:' ▲'; color:var(--accent); font-size:9px; }
+th.sort-desc::after { content:' ▼'; color:var(--accent); font-size:9px; }
+td { padding:12px 16px; border-bottom:1px solid var(--border); white-space:nowrap; font-size:13px; }
+tr:last-child td { border-bottom:none; }
+tr:hover td { background:var(--surface2); }
+.ticker-badge {
+  display:inline-block; background:#1e2a3a;
+  border:1px solid #3a6aaa; border-radius:6px;
+  padding:4px 11px; font-size:13px; font-weight:700; font-family:var(--font-mono);
+  color:#7eb8f7; letter-spacing:.5px;
+}
+.status-active { color:var(--green); }
+.status-closed { color:var(--muted); }
+.action-buy { color:var(--green); }
+.action-sell { color:var(--red); }
+
+/* BROKER TABS */
+.broker-tabs { display:flex; gap:8px; margin-bottom:20px; }
+.broker-tab {
+  padding:8px 16px; border-radius:8px; border:1px solid var(--border);
+  cursor:pointer; font-size:11px; text-transform:uppercase; letter-spacing:.5px;
+  background:var(--surface); color:var(--muted); transition:all .2s;
+}
+.broker-tab:hover { color:var(--text); }
+.broker-tab.active { color:var(--text); border-color:var(--accent); background:var(--surface2); }
+
+/* FX TABLE */
+.fx-from { color:var(--gold); }
+.fx-to { color:var(--green); }
+.fx-rate { color:var(--accent2); }
+
+/* LOADING */
+.loading { text-align:center; padding:48px; color:var(--muted); font-size:13px; }
+.spinner {
+  width:28px; height:28px; border:2px solid var(--border2);
+  border-top-color:var(--accent); border-radius:50%;
+  animation:spin .8s linear infinite; margin:0 auto 12px;
+}
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* PILL TAGS */
+.pill {
+  display:inline-block; padding:2px 8px; border-radius:20px;
+  font-size:10px; font-weight:500; text-transform:uppercase; letter-spacing:.5px;
+}
+.pill-webull { background:#00c2e015; color:var(--webull); border:1px solid #00c2e030; }
+.pill-syfe { background:#7c6aff15; color:var(--accent2); border:1px solid #7c6aff30; }
+.pill-cmc { background:#34d39915; color:var(--cmc); border:1px solid #34d39930; }
+
+/* EMPTY STATE */
+.empty { text-align:center; padding:40px; color:var(--muted); font-size:12px; }
+
+/* CHART PLACEHOLDER / MINI BAR */
+.mini-bar { display:flex; align-items:center; gap:6px; }
+.mini-bar-fill { height:4px; border-radius:2px; background:var(--accent); opacity:.6; }
+
+/* OVERVIEW DONUT PLACEHOLDER */
+.overview-chart { display:flex; align-items:center; justify-content:center; padding:24px; }
+
+/* ADD BUTTONS */
+.btn {
+  padding:8px 16px; border-radius:8px; border:1px solid var(--border2);
+  cursor:pointer; font-size:11px; font-family:var(--font-mono);
+  background:var(--surface2); color:var(--text); transition:all .2s;
+}
+.btn:hover { background:var(--accent); border-color:var(--accent); color:#fff; }
+.btn-sm { padding:5px 10px; font-size:10px; }
+
+/* MODAL */
+.modal-overlay {
+  position:fixed; inset:0; background:#00000090; z-index:1000;
+  display:flex; align-items:center; justify-content:center;
+  opacity:0; pointer-events:none; transition:opacity .2s;
+}
+.modal-overlay.open { opacity:1; pointer-events:all; }
+.modal {
+  background:var(--surface); border:1px solid var(--border2);
+  border-radius:16px; padding:28px; width:440px; max-width:95vw;
+  transform:translateY(20px); transition:transform .2s;
+}
+.modal-overlay.open .modal { transform:translateY(0); }
+.modal-title { font-family:var(--font-head); font-size:18px; font-weight:700; margin-bottom:20px; }
+.form-group { margin-bottom:14px; }
+.form-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px; display:block; }
+.form-input {
+  width:100%; padding:10px 12px; background:var(--surface2);
+  border:1px solid var(--border2); border-radius:8px;
+  color:var(--text); font-family:var(--font-mono); font-size:13px;
+}
+.form-input:focus { outline:none; border-color:var(--accent); }
+.form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.modal-actions { display:flex; gap:10px; margin-top:20px; justify-content:flex-end; }
+.btn-cancel { background:transparent; border-color:var(--border); color:var(--muted); }
+.btn-submit { background:var(--accent); border-color:var(--accent); color:#fff; }
+.btn-submit:hover { background:#6b5ce7; }
+
+@media (max-width:900px) {
+  .stat-grid-4 { grid-template-columns:repeat(2,1fr); }
+  .sidebar { width:64px; }
+  .sidebar .logo, .sidebar .nav-item span, .sidebar-footer { display:none; }
+  .main { margin-left:64px; padding:20px; }
+}
+
+
+/* BROKER FILTER TABS */
+.filter-tabs { display:flex; gap:8px; padding:12px 16px; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+.filter-tab {
+  padding:6px 14px; border-radius:20px; border:1px solid var(--border2);
+  cursor:pointer; font-size:11px; background:var(--surface2); color:var(--muted);
+  transition:all .2s; font-family:var(--font-mono);
+}
+.filter-tab:hover { color:var(--text); }
+.filter-tab.active { color:#fff; border-color:transparent; }
+.filter-tab.all.active { background:var(--accent); }
+.filter-tab.webull.active { background:var(--webull); }
+.filter-tab.syfe.active { background:var(--syfe); }
+.filter-tab.cmc.active { background:var(--cmc); }
+
+/* WATCHLIST */
+.watchlist {
+  border-top: 1px solid var(--border);
+  padding: 12px 0;
+  flex: 1;
+  overflow-y: auto;
+  max-height: 420px;
+}
+.watchlist::-webkit-scrollbar { width: 3px; }
+.watchlist::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+.watchlist-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px 10px;
+  font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted);
+}
+.wl-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 20px; cursor: pointer; transition: background .15s;
+}
+.wl-item:hover { background: var(--surface2); }
+.wl-ticker { font-size: 11px; font-weight: 500; color: var(--text); letter-spacing: .3px; }
+.wl-right { text-align: right; }
+.wl-price { font-size: 11px; color: var(--text); font-family: var(--font-mono); }
+.wl-chg { font-size: 10px; margin-top: 1px; }
+.wl-loading { font-size: 11px; color: var(--muted); padding: 10px 20px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="logo">PORT<span>FOLIO</span></div>
+  <nav class="nav">
+    <div class="nav-item active" onclick="showPage('overview')">
+      <div class="dot"></div><span>Overview</span>
+    </div>
+    <div class="nav-item" onclick="showPage('webull')">
+      <div class="dot nav-dot-webull"></div><span>Webull</span>
+    </div>
+    <div class="nav-item" onclick="showPage('syfe')">
+      <div class="dot nav-dot-syfe"></div><span>Syfe</span>
+    </div>
+    <div class="nav-item" onclick="showPage('cmc')">
+      <div class="dot nav-dot-cmc"></div><span>CMC Invest</span>
+    </div>
+    <div class="nav-item" onclick="showPage('fx')">
+      <div class="dot"></div><span>FX Tracker</span>
+    </div>
+    <div class="nav-item" onclick="showPage('dividends')">
+      <div class="dot"></div><span>Dividends</span>
+    </div>
+    <div class="nav-item" onclick="showPage('watchlist')">
+      <div class="dot"></div><span>Watchlist</span>
+    </div>
+  </nav>
+  <div class="watchlist" id="watchlist">
+    <div class="watchlist-header">
+      <span>Watchlist</span>
+      <div class="price-indicator"><div class="price-dot"></div></div>
+    </div>
+    <div id="watchlist-items">
+      <div class="wl-loading">Loading...</div>
+    </div>
+  </div>
+  <div class="sidebar-footer">
+    <div class="price-indicator"><div class="price-dot"></div><span>Live prices</span></div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+
+<!-- ===================== OVERVIEW PAGE ===================== -->
+<div id="page-overview" class="page active">
+  <div class="page-header">
+    <div class="page-title">Portfolio Overview</div>
+    <div class="page-subtitle">All brokerages combined</div>
+    <div class="last-updated" id="overview-updated">Fetching live prices...</div>
+  </div>
+  <div class="stat-grid stat-grid-4">
+    <div class="stat-card green">
+      <div class="stat-label">Total Portfolio Value</div>
+      <div class="stat-value" id="ov-total-value">—</div>
+      <div class="stat-sub">USD + SGD combined</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Invested (USD)</div>
+      <div class="stat-value" id="ov-total-invested-usd">—</div>
+      <div class="stat-sub">Webull + Syfe</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Invested (SGD)</div>
+      <div class="stat-value" id="ov-total-invested-sgd">—</div>
+      <div class="stat-sub">CMC Invest</div>
+    </div>
+    <div class="stat-card gold">
+      <div class="stat-label">Total Dividends Received</div>
+      <div class="stat-value" id="ov-total-divs">—</div>
+      <div class="stat-sub">US + SG + Syfe</div>
+    </div>
+  </div>
+  <div class="stat-grid stat-grid-3">
+    <div class="stat-card webull">
+      <div class="stat-label">Webull (US Stocks)</div>
+      <div class="stat-value" id="ov-webull-value">—</div>
+      <div class="stat-change" id="ov-webull-pl">—</div>
+      <div class="stat-sub" id="ov-webull-cost">—</div><div class="stat-sub" style="color:var(--webull);font-size:10px">USD</div>
+    </div>
+    <div class="stat-card syfe">
+      <div class="stat-label">Syfe (VOO + SCHG + SPYI)</div>
+      <div class="stat-value" id="ov-syfe-value">—</div>
+      <div class="stat-change" id="ov-syfe-pl">—</div>
+      <div class="stat-sub" id="ov-syfe-cost">—</div><div class="stat-sub" style="color:var(--accent2);font-size:10px">USD</div>
+    </div>
+    <div class="stat-card cmc">
+      <div class="stat-label">CMC Invest (SG Stocks)</div>
+      <div class="stat-value" id="ov-cmc-value">—</div>
+      <div class="stat-change" id="ov-cmc-pl">—</div>
+      <div class="stat-sub" id="ov-cmc-cost">—</div><div class="stat-sub" style="color:var(--cmc);font-size:10px">SGD</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">All Active Positions</div>
+      <div class="section-badge" id="all-pos-count">Loading...</div>
+    </div>
+    <div class="filter-tabs">
+      <div class="filter-tab all active" onclick="filterPositions('all',this)">All</div>
+      <div class="filter-tab webull" onclick="filterPositions('webull',this)">Webull</div>
+      <div class="filter-tab syfe" onclick="filterPositions('syfe',this)">Syfe</div>
+      <div class="filter-tab cmc" onclick="filterPositions('cmc',this)">CMC Invest</div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th onclick="sortPositions('ticker')">Ticker</th>
+          <th>Broker</th>
+          <th onclick="sortPositions('shares')">Shares</th>
+          <th onclick="sortPositions('avg_cost')">Avg Cost</th>
+          <th onclick="sortPositions('live_price')">Live Price</th>
+          <th onclick="sortPositions('market_value')">Market Value</th>
+          <th onclick="sortPositions('unrealised_pl')">Unrealised P&L</th>
+          <th onclick="sortPositions('return_pct')">Return %</th>
+        </tr></thead>
+        <tbody id="all-positions-body">
+          <tr><td colspan="8" class="loading"><div class="spinner"></div>Loading positions...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== WEBULL PAGE ===================== -->
+<div id="page-webull" class="page">
+  <div class="page-header">
+    <div class="page-title" style="color:var(--webull)">Webull</div>
+    <div class="page-subtitle">US Stocks — Active & Closed Positions</div>
+  </div>
+  <div class="stat-grid stat-grid-4">
+    <div class="stat-card webull">
+      <div class="stat-label">Portfolio Value</div>
+      <div class="stat-value" id="wb-value">—</div>
+      <div class="stat-sub">Active positions USD</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Invested</div>
+      <div class="stat-value" id="wb-invested">—</div>
+      <div class="stat-sub" id="wb-invested-sgd">—</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-label">Unrealised P&L</div>
+      <div class="stat-value" id="wb-unrealised">—</div>
+      <div class="stat-change" id="wb-unrealised-pct">—</div>
+    </div>
+    <div class="stat-card gold">
+      <div class="stat-label">Realised P&L (all time)</div>
+      <div class="stat-value" id="wb-realised">—</div>
+      <div class="stat-sub">Closed trades</div>
+    </div>
+  </div>
+  <div class="stat-grid stat-grid-3">
+    <div class="stat-card">
+      <div class="stat-label">Total Deposits</div>
+      <div class="stat-value" id="wb-dep-sgd">—</div>
+      <div class="stat-sub" id="wb-dep-usd">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Withdrawals</div>
+      <div class="stat-value" id="wb-wd">—</div>
+    </div>
+    <div class="stat-card gold">
+      <div class="stat-label">US Dividends Received</div>
+      <div class="stat-value" id="wb-divs">—</div>
+    </div>
+  </div>
+
+  <!-- Active Holdings -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">Active Holdings</div>
+      <div style="display:flex;gap:8px">
+        <span class="section-badge" id="wb-active-count">—</span>
+        <button class="btn btn-sm" onclick="openModal('add-trade-modal','webull')">+ Add Trade</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Ticker</th><th>Shares</th><th>Avg Cost</th>
+          <th>Live Price</th><th>Market Value</th><th>Unrealised P&L</th>
+          <th>Return %</th><th>Realised P&L</th>
+        </tr></thead>
+        <tbody id="wb-active-body">
+          <tr><td colspan="8" class="loading"><div class="spinner"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Closed Positions -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">Closed Positions</div>
+      <span class="section-badge" id="wb-closed-count">—</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Ticker</th><th>Total Realised P&L</th><th>Status</th></tr></thead>
+        <tbody id="wb-closed-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Trade History -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">Trade History</div>
+      <span class="section-badge" id="wb-trades-count">—</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Date</th><th>Ticker</th><th>Action</th>
+          <th>Qty</th><th>Price</th><th>Amount</th><th>Realised P&L</th>
+        </tr></thead>
+        <tbody id="wb-trades-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Deposits & Withdrawals -->
+  <div class="stat-grid stat-grid-2">
+    <div class="section" style="margin:0">
+      <div class="section-header">
+        <div class="section-title">Deposits</div>
+        <button class="btn btn-sm" onclick="openModal('add-deposit-modal','webull')">+ Add</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Currency</th><th>Amount</th></tr></thead>
+          <tbody id="wb-deposits-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="section" style="margin:0">
+      <div class="section-header">
+        <div class="section-title">Withdrawals</div>
+        <button class="btn btn-sm" onclick="openModal('add-withdrawal-modal','webull')">+ Add</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Currency</th><th>Amount</th></tr></thead>
+          <tbody id="wb-withdrawals-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== SYFE PAGE ===================== -->
+<div id="page-syfe" class="page">
+  <div class="page-header">
+    <div class="page-title" style="color:var(--accent2)">Syfe</div>
+    <div class="page-subtitle">VOO · SCHG · SPYI — Recurring Investment Plan</div>
+  </div>
+  <div class="stat-grid stat-grid-3">
+    <div class="stat-card syfe">
+      <div class="stat-label">Total Portfolio Value</div>
+      <div class="stat-value" id="sy-total-value">—</div>
+      <div class="stat-change" id="sy-total-pl">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Invested (USD)</div>
+      <div class="stat-value" id="sy-total-invested">—</div>
+    </div>
+    <div class="stat-card gold">
+      <div class="stat-label">Total Dividends (USD)</div>
+      <div class="stat-value" id="sy-total-divs">—</div>
+      <div class="stat-sub">VOO + SCHG + SPYI cash</div>
+    </div>
+  </div>
+
+  <!-- VOO -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">VOO — Vanguard S&P 500 ETF</div>
+      <span class="pill pill-syfe">Recurring $250–$500/buy</span>
+    </div>
+    <div class="stat-grid stat-grid-4" style="padding:16px;margin:0">
+      <div><div class="stat-label">Shares</div><div class="stat-value" style="font-size:20px" id="sy-voo-shares">—</div></div>
+      <div><div class="stat-label">Avg Cost</div><div class="stat-value" style="font-size:20px" id="sy-voo-avg">—</div></div>
+      <div><div class="stat-label">Live Price</div><div class="stat-value" style="font-size:20px" id="sy-voo-price">—</div></div>
+      <div><div class="stat-label">Market Value</div><div class="stat-value" style="font-size:20px" id="sy-voo-value">—</div></div>
+    </div>
+    <div class="stat-grid stat-grid-3" style="padding:0 16px 16px;margin:0">
+      <div><div class="stat-label">Total Invested</div><div class="stat-value" style="font-size:18px" id="sy-voo-invested">—</div></div>
+      <div><div class="stat-label">Unrealised P&L</div><div class="stat-value" style="font-size:18px" id="sy-voo-pl">—</div></div>
+      <div><div class="stat-label">Dividends Received</div><div class="stat-value" style="font-size:18px" id="sy-voo-divs">—</div></div>
+    </div>
+  </div>
+
+  <!-- SCHG -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">SCHG — Schwab US Large-Cap Growth ETF</div>
+      <span class="pill pill-syfe">Recurring $350–$500/buy</span>
+    </div>
+    <div class="stat-grid stat-grid-4" style="padding:16px;margin:0">
+      <div><div class="stat-label">Shares</div><div class="stat-value" style="font-size:20px" id="sy-schg-shares">—</div></div>
+      <div><div class="stat-label">Avg Cost</div><div class="stat-value" style="font-size:20px" id="sy-schg-avg">—</div></div>
+      <div><div class="stat-label">Live Price</div><div class="stat-value" style="font-size:20px" id="sy-schg-price">—</div></div>
+      <div><div class="stat-label">Market Value</div><div class="stat-value" style="font-size:20px" id="sy-schg-value">—</div></div>
+    </div>
+    <div class="stat-grid stat-grid-3" style="padding:0 16px 16px;margin:0">
+      <div><div class="stat-label">Total Invested</div><div class="stat-value" style="font-size:18px" id="sy-schg-invested">—</div></div>
+      <div><div class="stat-label">Unrealised P&L</div><div class="stat-value" style="font-size:18px" id="sy-schg-pl">—</div></div>
+      <div><div class="stat-label">Dividends Received</div><div class="stat-value" style="font-size:18px" id="sy-schg-divs">—</div></div>
+    </div>
+  </div>
+
+  <!-- SPYI -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">SPYI — NEOS S&P 500 High Income ETF</div>
+      <span class="pill pill-syfe">Lump Sum · Monthly Cash Dividends</span>
+    </div>
+    <div class="stat-grid stat-grid-4" style="padding:16px;margin:0">
+      <div><div class="stat-label">Shares</div><div class="stat-value" style="font-size:20px" id="sy-spyi-shares">—</div></div>
+      <div><div class="stat-label">Avg Cost</div><div class="stat-value" style="font-size:20px" id="sy-spyi-avg">—</div></div>
+      <div><div class="stat-label">Live Price</div><div class="stat-value" style="font-size:20px" id="sy-spyi-price">—</div></div>
+      <div><div class="stat-label">Market Value</div><div class="stat-value" style="font-size:20px" id="sy-spyi-value">—</div></div>
+    </div>
+    <div class="stat-grid stat-grid-3" style="padding:0 16px 16px;margin:0">
+      <div><div class="stat-label">Total Invested</div><div class="stat-value" style="font-size:18px" id="sy-spyi-invested">—</div></div>
+      <div><div class="stat-label">Unrealised P&L</div><div class="stat-value" style="font-size:18px" id="sy-spyi-pl">—</div></div>
+      <div><div class="stat-label">Cash Dividends Received</div><div class="stat-value" style="font-size:18px" id="sy-spyi-divs">—</div></div>
+    </div>
+  </div>
+
+  <!-- Syfe Deposits/FX -->
+  <div class="stat-grid stat-grid-2">
+    <div class="section" style="margin:0">
+      <div class="section-header">
+        <div class="section-title">Deposits</div>
+        <button class="btn btn-sm" onclick="openModal('add-deposit-modal','syfe')">+ Add</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Currency</th><th>Amount</th><th>Source</th></tr></thead>
+          <tbody id="sy-deposits-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="section" style="margin:0">
+      <div class="section-header">
+        <div class="section-title">SPYI Dividend History</div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Amount (USD)</th></tr></thead>
+          <tbody id="sy-divs-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== CMC PAGE ===================== -->
+<div id="page-cmc" class="page">
+  <div class="page-header">
+    <div class="page-title" style="color:var(--cmc)">CMC Invest</div>
+    <div class="page-subtitle">Singapore Stocks (SGX)</div>
+  </div>
+  <div class="stat-grid stat-grid-4">
+    <div class="stat-card cmc">
+      <div class="stat-label">Portfolio Value (SGD)</div>
+      <div class="stat-value" id="cmc-value">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Invested (SGD)</div>
+      <div class="stat-value" id="cmc-invested">—</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-label">Unrealised P&L (SGD)</div>
+      <div class="stat-value" id="cmc-unrealised">—</div>
+      <div class="stat-change" id="cmc-unrealised-pct">—</div>
+    </div>
+    <div class="stat-card gold">
+      <div class="stat-label">SG Dividends (SGD)</div>
+      <div class="stat-value" id="cmc-divs">—</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">Active SG Holdings</div>
+      <button class="btn btn-sm" onclick="openModal('add-sg-trade-modal','cmc')">+ Add Trade</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Ticker</th><th>Shares</th><th>Avg Cost (SGD)</th>
+          <th>Live Price</th><th>Market Value</th><th>Unrealised P&L</th><th>Return %</th>
+        </tr></thead>
+        <tbody id="cmc-active-body">
+          <tr><td colspan="7" class="loading"><div class="spinner"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-header"><div class="section-title">Sell History</div></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Ticker</th><th>Date</th><th>Shares</th><th>Price</th><th>Received</th><th>Profit/Loss</th></tr></thead>
+        <tbody id="cmc-sells-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-header"><div class="section-title">SG Dividend History</div></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Ticker</th><th>Date</th><th>Per Share</th><th>Shares</th><th>Total (SGD)</th></tr></thead>
+        <tbody id="cmc-divs-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="stat-grid stat-grid-2">
+    <div class="section" style="margin:0">
+      <div class="section-header">
+        <div class="section-title">CMC Deposits</div>
+        <button class="btn btn-sm" onclick="openModal('add-deposit-modal','cmc')">+ Add</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Amount (SGD)</th></tr></thead>
+          <tbody id="cmc-deposits-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="section" style="margin:0">
+      <div class="section-header"><div class="section-title">CMC Withdrawals</div></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Amount (SGD)</th></tr></thead>
+          <tbody id="cmc-withdrawals-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== FX PAGE ===================== -->
+<div id="page-fx" class="page">
+  <div class="page-header">
+    <div class="page-title">FX Tracker</div>
+    <div class="page-subtitle">SGD ↔ USD Conversions — Webull & Syfe</div>
+  </div>
+  <div class="stat-grid stat-grid-3">
+    <div class="stat-card">
+      <div class="stat-label">Total SGD Converted → USD</div>
+      <div class="stat-value" id="fx-sgd-to-usd-sgd">—</div>
+      <div class="stat-sub" id="fx-sgd-to-usd-usd">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total USD Converted → SGD</div>
+      <div class="stat-value" id="fx-usd-to-sgd-usd">—</div>
+      <div class="stat-sub" id="fx-usd-to-sgd-sgd">—</div>
+    </div>
+    <div class="stat-card gold">
+      <div class="stat-label">Average SGD/USD Rate</div>
+      <div class="stat-value" id="fx-avg-rate">—</div>
+      <div class="stat-sub">Avg across all conversions</div>
+    </div>
+  </div>
+
+  <div class="broker-tabs">
+    <div class="broker-tab active" onclick="filterFX('all',this)">All</div>
+    <div class="broker-tab" onclick="filterFX('webull',this)">Webull</div>
+    <div class="broker-tab" onclick="filterFX('syfe',this)">Syfe</div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">FX Conversion History</div>
+      <button class="btn btn-sm" onclick="openModal('add-fx-modal','')">+ Add Conversion</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Date</th><th>Broker</th><th>From</th><th>Amount From</th>
+          <th>To</th><th>Amount To</th><th>Rate</th>
+        </tr></thead>
+        <tbody id="fx-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== DIVIDENDS PAGE ===================== -->
+<div id="page-dividends" class="page">
+  <div class="page-header">
+    <div class="page-title">Dividends</div>
+    <div class="page-subtitle">All dividend income — US stocks, SG stocks, Syfe SPYI</div>
+  </div>
+  <div class="stat-grid stat-grid-3">
+    <div class="stat-card gold">
+      <div class="stat-label">US Dividends (USD)</div>
+      <div class="stat-value" id="div-us-total">—</div>
+      <div class="stat-sub">Webull portfolio</div>
+    </div>
+    <div class="stat-card gold">
+      <div class="stat-label">SG Dividends (SGD)</div>
+      <div class="stat-value" id="div-sg-total">—</div>
+      <div class="stat-sub">CMC Invest</div>
+    </div>
+    <div class="stat-card gold">
+      <div class="stat-label">Syfe SPYI Cash (USD)</div>
+      <div class="stat-value" id="div-syfe-total">—</div>
+      <div class="stat-sub">Monthly income</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-header"><div class="section-title">US Dividend History (Webull)</div></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Date</th><th>Ticker</th><th>Amount (USD)</th></tr></thead>
+        <tbody id="div-us-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-header"><div class="section-title">SG Dividend History (CMC)</div></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Date</th><th>Ticker</th><th>Per Share</th><th>Shares</th><th>Total (SGD)</th></tr></thead>
+        <tbody id="div-sg-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== WATCHLIST PAGE ===================== -->
+<div id="page-watchlist" class="page">
+  <div class="page-header">
+    <div class="page-title">Watchlist</div>
+    <div class="page-subtitle">Live prices & performance — Day · Week · Month · 3M · YTD</div>
+    <div class="last-updated" id="wl-page-updated">Fetching prices...</div>
+  </div>
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">All Stocks</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="section-badge" id="wl-count">—</span>
+        <button class="btn btn-sm" onclick="openAddTickerModal()">+ Add Stock</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th onclick="wlSort('ticker')">Ticker</th>
+          <th onclick="wlSort('price')">Live Price</th>
+          <th onclick="wlSort('day')" class="sort-desc">Day %</th>
+          <th onclick="wlSort('week')">Week %</th>
+          <th onclick="wlSort('month')">Month %</th>
+          <th onclick="wlSort('three_month')">3 Month %</th>
+          <th onclick="wlSort('ytd')">YTD %</th>
+        </tr></thead>
+        <tbody id="wl-body">
+          <tr><td colspan="7" class="loading"><div class="spinner"></div>Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+
+</main>
+</div>
+
+<!-- ===================== MODALS ===================== -->
+<div class="modal-overlay" id="add-trade-modal">
+  <div class="modal">
+    <div class="modal-title">Add Trade</div>
+    <div class="form-group">
+      <label class="form-label">Broker</label>
+      <input class="form-input" id="trade-broker" readonly>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Ticker</label>
+        <input class="form-input" id="trade-ticker" placeholder="e.g. NVDA">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Action</label>
+        <select class="form-input" id="trade-action">
+          <option value="Buy">Buy</option>
+          <option value="Sell">Sell</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input class="form-input" type="date" id="trade-date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Quantity</label>
+        <input class="form-input" type="number" id="trade-qty" placeholder="0">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Price per Share</label>
+        <input class="form-input" type="number" id="trade-price" placeholder="0.00">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Realised P&L (if Sell)</label>
+        <input class="form-input" type="number" id="trade-rpl" placeholder="0.00">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="closeModal('add-trade-modal')">Cancel</button>
+      <button class="btn btn-submit" onclick="submitTrade()">Save Trade</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="add-deposit-modal">
+  <div class="modal">
+    <div class="modal-title">Add Deposit</div>
+    <div class="form-group">
+      <label class="form-label">Broker</label>
+      <input class="form-input" id="dep-broker" readonly>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input class="form-input" type="date" id="dep-date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Currency</label>
+        <select class="form-input" id="dep-currency">
+          <option>SGD</option><option>USD</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Amount</label>
+        <input class="form-input" type="number" id="dep-amount" placeholder="0.00">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Source / Note</label>
+        <input class="form-input" id="dep-note" placeholder="e.g. DBS, Cash Plus">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="closeModal('add-deposit-modal')">Cancel</button>
+      <button class="btn btn-submit" onclick="submitDeposit()">Save Deposit</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="add-withdrawal-modal">
+  <div class="modal">
+    <div class="modal-title">Add Withdrawal</div>
+    <div class="form-group">
+      <label class="form-label">Broker</label>
+      <input class="form-input" id="wd-broker" readonly>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input class="form-input" type="date" id="wd-date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Currency</label>
+        <select class="form-input" id="wd-currency"><option>SGD</option><option>USD</option></select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Amount</label>
+      <input class="form-input" type="number" id="wd-amount" placeholder="0.00">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="closeModal('add-withdrawal-modal')">Cancel</button>
+      <button class="btn btn-submit" onclick="submitWithdrawal()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="add-fx-modal">
+  <div class="modal">
+    <div class="modal-title">Add FX Conversion</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Broker</label>
+        <select class="form-input" id="fx-broker"><option>webull</option><option>syfe</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input class="form-input" type="date" id="fx-date">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">From Currency</label>
+        <select class="form-input" id="fx-from"><option>SGD</option><option>USD</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">To Currency</label>
+        <select class="form-input" id="fx-to"><option>USD</option><option>SGD</option></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Rate</label>
+        <input class="form-input" type="number" id="fx-rate" placeholder="0.0000" step="0.0001">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Amount From</label>
+        <input class="form-input" type="number" id="fx-amt-from" placeholder="0.00">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Amount To (received)</label>
+      <input class="form-input" type="number" id="fx-amt-to" placeholder="0.00">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="closeModal('add-fx-modal')">Cancel</button>
+      <button class="btn btn-submit" onclick="submitFX()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="add-sg-trade-modal">
+  <div class="modal">
+    <div class="modal-title">Add SG Trade (CMC)</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Ticker (SGX)</label>
+        <input class="form-input" id="sg-ticker" placeholder="e.g. D05, ME8U">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Action</label>
+        <select class="form-input" id="sg-action"><option>Buy</option><option>Sell</option></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input class="form-input" type="date" id="sg-date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Quantity (Shares)</label>
+        <input class="form-input" type="number" id="sg-qty">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Price (SGD)</label>
+        <input class="form-input" type="number" id="sg-price" step="0.001">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Profit/Loss (if Sell)</label>
+        <input class="form-input" type="number" id="sg-profit">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="closeModal('add-sg-trade-modal')">Cancel</button>
+      <button class="btn btn-submit" onclick="submitSGTrade()">Save Trade</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+const SUPABASE_URL = 'https://icoexpnpeinzwhbmyxvi.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljb2V4cG5wZWluendoYm15eHZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MTY1NzIsImV4cCI6MjA5MjA5MjU3Mn0.iLbaAuK--cT3c-z59kDZRxHJPofDogqKzODd2YxpPis';
+
+
+
+// ============================================================
+// SUPABASE HELPERS
+// ============================================================
+async function sb(table, method='GET', body=null, query='') {
+  const url = `${SUPABASE_URL}/rest/v1/${table}${query}`;
+  const opts = {
+    method, headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': method==='POST' ? 'return=representation' : ''
+    }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(url, opts);
+  if (!r.ok) { console.error('Supabase error:', await r.text()); return null; }
+  return method==='DELETE' ? null : r.json();
+}
+
+// ============================================================
+// LIVE PRICE FETCHING (Yahoo Finance via CORS proxy)
+// ============================================================
+let priceCache = {};
+let dayChangeCache = {};
+let periodCache = {};
+let _customWatchlist = JSON.parse(localStorage.getItem('wl_custom')||'[]');
+
+async function fetchPrices(tickers) {
+  const missing = tickers.filter(t => t && !priceCache[t]);
+  if (!missing.length) return;
+
+  try {
+    // Cloudflare Worker — fetches Google Finance prices server-side, no CORS issues
+    const WORKER_URL = 'https://stock-prices.alessxdx.workers.dev';
+    const r = await fetch(`${WORKER_URL}?tickers=${missing.join(',')}`, {
+      signal: AbortSignal.timeout(15000)
+    });
+    if (!r.ok) throw new Error('Worker returned ' + r.status);
+    const resp = await r.json();
+    Object.entries(resp.data || {}).forEach(([ticker, d]) => {
+      priceCache[ticker] = d.price;
+      dayChangeCache[ticker] = d.dayChangePct;
+      // Store period % changes from same worker response
+      periodCache[ticker] = {
+        day:         d.dayChangePct         ?? null,
+        week:        d.weekChangePct        ?? null,
+        month:       d.monthChangePct       ?? null,
+        three_month: d.threeMonthChangePct  ?? null,
+        ytd:         d.ytdChangePct         ?? null,
+      };
+    });
+    Object.entries(resp.prices || {}).forEach(([ticker, p]) => {
+      if (!priceCache[ticker]) priceCache[ticker] = p;
+    });
+    console.log('Prices + periods loaded:', Object.keys(priceCache).length, 'tickers');
+  } catch(e) {
+    console.error('Price fetch error:', e.message);
+  }
+}
+
+function price(ticker) { return priceCache[ticker] || 0; }
+
+// ============================================================
+// FORMATTERS
+// ============================================================
+const fmtUSD = v => v != null ? '$' + Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+const fmtSGD = v => v != null ? 'S$' + Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+const fmtNum = v => Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:4});
+const fmtPct = v => (v>=0?'+':'')+Number(v).toFixed(2)+'%';
+const fmtDate = d => d ? new Date(d).toLocaleDateString('en-SG',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+function fmtShares(v) {
+  const n = Number(v);
+  const rounded = Math.round(n);
+  // If very close to an integer (within 0.01), show as integer
+  if (Math.abs(n - rounded) < 0.01) return rounded.toLocaleString('en-US');
+  // Otherwise keep up to 4 decimal places (e.g. VOO 52.1778)
+  return n.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:4});
+}
+function plColor(v) { return v >= 0 ? 'pos' : 'neg'; }
+function plStr(v, prefix='$') { return (v>=0?'+':'')+prefix+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if (id === 'overview') loadOverview();
+  else if (id === 'webull') loadWebull();
+  else if (id === 'syfe') loadSyfe();
+  else if (id === 'cmc') loadCMC();
+  else if (id === 'fx') loadFX();
+  else if (id === 'dividends') loadDividends();
+  else if (id === 'watchlist') loadWatchlistPage();
+}
+
+// ============================================================
+// DATA CACHE
+// ============================================================
+let _wbHoldings=null, _wbTrades=null, _syfeH=null, _cmcTrades=null;
+let _deps=null, _wds=null, _fx=null, _divUS=null, _divSG=null, _divSyfe=null;
+let _dataLoaded = false;
+
+async function loadAllData() {
+  if (_dataLoaded) return;
+  [_wbHoldings, _wbTrades, _syfeH, _cmcTrades,
+   _deps, _wds, _fx, _divUS, _divSG, _divSyfe] = await Promise.all([
+    sb('webull_holdings','GET',null,'?order=ticker.asc'),
+    sb('webull_trades','GET',null,'?order=date.desc'),
+    sb('syfe_holdings','GET',null,'?order=ticker.asc'),
+    sb('cmc_trades','GET',null,'?order=date.desc'),
+    sb('deposits','GET',null,'?order=date.desc'),
+    sb('withdrawals','GET',null,'?order=date.desc'),
+    sb('fx_conversions','GET',null,'?order=date.desc'),
+    sb('dividends_us','GET',null,'?order=date.desc'),
+    sb('dividends_sg','GET',null,'?order=date.desc'),
+    sb('dividends_syfe','GET',null,'?order=date.desc'),
+  ]);
+  _dataLoaded = true;
+}
+
+function invalidateCache() { _dataLoaded = false; }
+
+// ============================================================
+// OVERVIEW
+// ============================================================
+async function loadOverview() {
+  await loadAllData();
+  const active = (_wbHoldings||[]).filter(h => h.status === 'active' && h.shares > 0.01);
+  const wbTickers = active.map(h => h.ticker);
+  const syfeTickers = (_syfeH||[]).map(h => h.ticker);
+  const cmcActive = getCMCActive();
+  const sgTickers = [...new Set(cmcActive.map(h => h.ticker+'.SI'))];
+  await fetchPrices([...wbTickers, ...syfeTickers, ...sgTickers]);
+
+  let wbValue=0, wbCost=0, wbRealised=0;
+  active.forEach(h => { wbValue += h.shares * price(h.ticker); wbCost += h.total_cost; });
+  (_wbHoldings||[]).forEach(h => { wbRealised += (h.total_realised_pl||0); });
+
+  let syValue=0, syCost=0;
+  (_syfeH||[]).forEach(h => { syValue += h.shares * price(h.ticker); syCost += h.total_invested; });
+
+  let cmcValue=0, cmcCost=0;
+  cmcActive.forEach(h => { cmcValue += h.shares * price(h.ticker+'.SI'); cmcCost += h.cost; });
+
+  const divUS = (_divUS||[]).reduce((s,d) => s+d.amount_usd, 0);
+  const divSyfe = (_divSyfe||[]).reduce((s,d) => s+d.amount_usd, 0);
+
+  document.getElementById('ov-total-value').textContent = fmtUSD(wbValue+syValue) + ' + ' + fmtSGD(cmcValue);
+  document.getElementById('ov-total-invested-usd').textContent = fmtUSD(wbCost+syCost);
+  document.getElementById('ov-total-invested-sgd').textContent = fmtSGD(cmcCost);
+  document.getElementById('ov-total-divs').textContent = fmtUSD(divUS+divSyfe) + ' USD';
+
+  const wbPL = wbValue - wbCost;
+  document.getElementById('ov-webull-value').textContent = fmtUSD(wbValue);
+  document.getElementById('ov-webull-pl').innerHTML = `<span class="${plColor(wbPL)}">${plStr(wbPL)} unrealised</span>`;
+  document.getElementById('ov-webull-cost').textContent = `Invested: ${fmtUSD(wbCost)}`;
+
+  const syPL = syValue - syCost;
+  document.getElementById('ov-syfe-value').textContent = fmtUSD(syValue);
+  document.getElementById('ov-syfe-pl').innerHTML = `<span class="${plColor(syPL)}">${plStr(syPL)} unrealised</span>`;
+  document.getElementById('ov-syfe-cost').textContent = `Invested: ${fmtUSD(syCost)}`;
+
+  const cmcPL = cmcValue - cmcCost;
+  document.getElementById('ov-cmc-value').textContent = fmtSGD(cmcValue);
+  document.getElementById('ov-cmc-pl').innerHTML = `<span class="${plColor(cmcPL)}">${plStr(cmcPL,'S$')} unrealised</span>`;
+  document.getElementById('ov-cmc-cost').textContent = `Invested: ${fmtSGD(cmcCost)}`;
+
+  document.getElementById('overview-updated').textContent = 'Live prices as of ' + new Date().toLocaleTimeString('en-SG');
+
+  // Build all positions data
+  _allPositionsData = [];
+  active.forEach(h => {
+    const p = price(h.ticker), val = h.shares * p;
+    const pl = val - h.total_cost, pct = h.total_cost > 0 ? pl/h.total_cost*100 : 0;
+    _allPositionsData.push({ ticker:h.ticker, broker:'webull', shares:h.shares, avg_cost:h.avg_cost, live_price:p, market_value:val, unrealised_pl:pl, return_pct:pct, isSG:false });
+  });
+  (_syfeH||[]).forEach(h => {
+    const p = price(h.ticker), val = h.shares * p;
+    const pl = val - h.total_invested, pct = h.total_invested > 0 ? pl/h.total_invested*100 : 0;
+    _allPositionsData.push({ ticker:h.ticker, broker:'syfe', shares:h.shares, avg_cost:h.avg_cost, live_price:p, market_value:val, unrealised_pl:pl, return_pct:pct, isSG:false });
+  });
+  cmcActive.forEach(h => {
+    const p = price(h.ticker+'.SI'), val = h.shares * p;
+    const pl = val - h.cost, pct = h.cost > 0 ? pl/h.cost*100 : 0;
+    _allPositionsData.push({ ticker:h.ticker, broker:'cmc', shares:h.shares, avg_cost:h.avgPrice, live_price:p, market_value:val, unrealised_pl:pl, return_pct:pct, isSG:true });
+  });
+
+  document.getElementById('all-pos-count').textContent = _allPositionsData.length + ' positions';
+  renderPositions();
+}
+
+let _allPositionsData = [];
+let _posFilter = 'all';
+let _posSort = { key: 'unrealised_pl', dir: -1 };
+
+// Multi-select filter — set of active brokers
+let _posFilters = new Set(['all']);
+
+function filterPositions(broker, el) {
+  if (broker === 'all') {
+    // All resets everything
+    _posFilters = new Set(['all']);
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector('.filter-tab.all').classList.add('active');
+  } else {
+    // Remove 'all' when selecting a specific broker
+    _posFilters.delete('all');
+    document.querySelector('.filter-tab.all').classList.remove('active');
+    if (_posFilters.has(broker)) {
+      _posFilters.delete(broker);
+      el.classList.remove('active');
+      // If nothing selected, reset to all
+      if (_posFilters.size === 0) {
+        _posFilters = new Set(['all']);
+        document.querySelector('.filter-tab.all').classList.add('active');
+      }
+    } else {
+      _posFilters.add(broker);
+      el.classList.add('active');
+    }
+  }
+  renderPositions();
+}
+
+function sortPositions(key) {
+  if (_posSort.key === key) {
+    _posSort.dir *= -1;
+  } else {
+    _posSort = { key, dir: key === 'ticker' ? 1 : -1 };
+  }
+  // Update header indicators
+  document.querySelectorAll('#page-overview th').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    if (th.getAttribute('onclick') === `sortPositions('${key}')`) {
+      th.classList.add(_posSort.dir === 1 ? 'sort-asc' : 'sort-desc');
+    }
+  });
+  renderPositions();
+}
+
+function renderPositions() {
+  let data = _posFilters.has('all') ? [..._allPositionsData] : _allPositionsData.filter(p => _posFilters.has(p.broker));
+  const key = _posSort.key, dir = _posSort.dir;
+  data.sort((a,b) => {
+    const av = typeof a[key] === 'string' ? a[key] : (a[key]||0);
+    const bv = typeof b[key] === 'string' ? b[key] : (b[key]||0);
+    return typeof av === 'string' ? av.localeCompare(bv)*dir : (av-bv)*dir;
+  });
+
+  const rows = data.map(h => {
+    const priceStr = h.live_price > 0 ? (h.isSG ? fmtSGD(h.live_price) : fmtUSD(h.live_price)) : '<span style="color:var(--muted)">—</span>';
+    const valStr = h.market_value > 0 ? (h.isSG ? fmtSGD(h.market_value) : fmtUSD(h.market_value)) : '<span style="color:var(--muted)">—</span>';
+    const avgStr = h.isSG ? fmtSGD(h.avg_cost) : fmtUSD(h.avg_cost);
+    return `<tr>
+      <td><span class="ticker-badge">${h.ticker}</span></td>
+      <td><span class="pill pill-${h.broker}">${h.broker === 'cmc' ? 'CMC' : h.broker.charAt(0).toUpperCase()+h.broker.slice(1)}</span></td>
+      <td>${fmtShares(h.shares)}</td>
+      <td>${avgStr}</td>
+      <td>${priceStr}</td>
+      <td>${valStr}</td>
+      <td class="${plColor(h.unrealised_pl)}" style="font-family:var(--font-num);font-weight:600">${h.market_value>0?(h.isSG?plStr(h.unrealised_pl,'S$'):plStr(h.unrealised_pl)):'—'}</td>
+      <td class="${plColor(h.return_pct)}" style="font-family:var(--font-num);font-weight:600">${h.market_value>0?fmtPct(h.return_pct):'—'}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('all-positions-body').innerHTML = rows || '<tr><td colspan="8" class="empty">No positions found</td></tr>';
+  document.getElementById('all-pos-count').textContent = data.length + ' positions';
+}
+
+// ============================================================
+// WEBULL
+// ============================================================
+async function loadWebull() {
+  await loadAllData();
+  const active = (_wbHoldings||[]).filter(h => h.status==='active' && h.shares > 0.01);
+  const closed = (_wbHoldings||[]).filter(h => h.status==='closed' || h.shares <= 0.01);
+  await fetchPrices(active.map(h => h.ticker));
+
+  let wbValue=0, wbCost=0, wbRealised=0;
+  active.forEach(h => { wbValue += h.shares * price(h.ticker); wbCost += h.total_cost; });
+  (_wbHoldings||[]).forEach(h => { wbRealised += (h.total_realised_pl||0); });
+
+  const wbDeps = (_deps||[]).filter(d => d.brokerage==='webull');
+  const wbWds = (_wds||[]).filter(w => w.brokerage==='webull');
+  const wbDivTotal = (_divUS||[]).reduce((s,d) => s+d.amount_usd, 0);
+
+  document.getElementById('wb-value').textContent = fmtUSD(wbValue);
+  document.getElementById('wb-invested').textContent = fmtUSD(wbCost);
+
+  const depSGD = wbDeps.filter(d=>d.currency==='SGD').reduce((s,d)=>s+d.amount,0);
+  const depUSD = wbDeps.filter(d=>d.currency==='USD').reduce((s,d)=>s+d.amount,0);
+  document.getElementById('wb-dep-sgd').textContent = fmtSGD(depSGD);
+  document.getElementById('wb-dep-usd').textContent = fmtUSD(depUSD) + ' USD';
+  document.getElementById('wb-wd').textContent = fmtSGD(wbWds.reduce((s,d)=>s+d.amount,0));
+  document.getElementById('wb-divs').textContent = fmtUSD(wbDivTotal);
+
+  const unrealised = wbValue - wbCost;
+  const unrealisedPct = wbCost > 0 ? unrealised/wbCost*100 : 0;
+  document.getElementById('wb-unrealised').innerHTML = `<span class="${plColor(unrealised)}">${plStr(unrealised)}</span>`;
+  document.getElementById('wb-unrealised-pct').innerHTML = `<span class="${plColor(unrealisedPct)}">${fmtPct(unrealisedPct)}</span>`;
+  document.getElementById('wb-realised').innerHTML = `<span class="${plColor(wbRealised)}">${plStr(wbRealised)}</span>`;
+  document.getElementById('wb-active-count').textContent = active.length + ' stocks';
+  document.getElementById('wb-closed-count').textContent = closed.length + ' stocks';
+
+  // Active table
+  let aRows = '';
+  active.forEach(h => {
+    const p = price(h.ticker); const val = h.shares*p;
+    const pl = val - h.total_cost; const pct = h.total_cost>0 ? pl/h.total_cost*100 : 0;
+    aRows += `<tr>
+      <td><span class="ticker-badge">${h.ticker}</span></td>
+      <td>${fmtShares(h.shares)}</td><td>${fmtUSD(h.avg_cost)}</td>
+      <td>${fmtUSD(p)}</td><td>${fmtUSD(val)}</td>
+      <td class="${plColor(pl)}">${plStr(pl)}</td>
+      <td class="${plColor(pct)}">${fmtPct(pct)}</td>
+      <td class="${plColor(h.total_realised_pl)}">${plStr(h.total_realised_pl)}</td>
+    </tr>`;
+  });
+  document.getElementById('wb-active-body').innerHTML = aRows || '<tr><td colspan="8" class="empty">No active holdings</td></tr>';
+
+  // Closed table
+  let cRows = '';
+  closed.forEach(h => {
+    cRows += `<tr>
+      <td><span class="ticker-badge">${h.ticker}</span></td>
+      <td class="${plColor(h.total_realised_pl)}">${plStr(h.total_realised_pl)}</td>
+      <td><span class="status-closed">Closed</span></td>
+    </tr>`;
+  });
+  document.getElementById('wb-closed-body').innerHTML = cRows;
+
+  // Trades
+  const wbTrades = (_wbTrades||[]).filter(t => t.brokerage==='webull');
+  document.getElementById('wb-trades-count').textContent = wbTrades.length + ' trades';
+  document.getElementById('wb-trades-body').innerHTML = wbTrades.slice(0,100).map(t => `<tr>
+    <td>${fmtDate(t.date)}</td>
+    <td><span class="ticker-badge">${t.ticker}</span></td>
+    <td class="${t.action==='Buy'?'action-buy':'action-sell'}">${t.action}</td>
+    <td>${fmtShares(t.qty)}</td><td>${fmtUSD(t.price)}</td><td>${fmtUSD(t.amount)}</td>
+    <td class="${t.realised_pl!=0?plColor(t.realised_pl):''}">${t.realised_pl!=0?plStr(t.realised_pl):'—'}</td>
+  </tr>`).join('');
+
+  // Deposits
+  document.getElementById('wb-deposits-body').innerHTML = wbDeps.map(d => `<tr>
+    <td>${fmtDate(d.date)}</td><td>${d.currency}</td><td>${d.currency==='SGD'?fmtSGD(d.amount):fmtUSD(d.amount)}</td>
+  </tr>`).join('');
+
+  // Withdrawals
+  const wbWdList = (_wds||[]).filter(w => w.brokerage==='webull');
+  document.getElementById('wb-withdrawals-body').innerHTML = wbWdList.map(w => `<tr>
+    <td>${fmtDate(w.date)}</td><td>${w.currency}</td><td>${fmtSGD(w.amount)}</td>
+  </tr>`).join('');
+}
+
+// ============================================================
+// SYFE
+// ============================================================
+async function loadSyfe() {
+  await loadAllData();
+  const holdings = _syfeH || [];
+  await fetchPrices(holdings.map(h => h.ticker));
+
+  let totalVal=0, totalInvested=0, totalDivs=0;
+  holdings.forEach(h => { totalVal += h.shares*price(h.ticker); totalInvested += h.total_invested; totalDivs += h.total_dividends; });
+  const totalPL = totalVal - totalInvested;
+
+  document.getElementById('sy-total-value').textContent = fmtUSD(totalVal);
+  document.getElementById('sy-total-pl').innerHTML = `<span class="${plColor(totalPL)}">${plStr(totalPL)} (${fmtPct(totalInvested>0?totalPL/totalInvested*100:0)})</span>`;
+  document.getElementById('sy-total-invested').textContent = fmtUSD(totalInvested);
+  document.getElementById('sy-total-divs').textContent = fmtUSD(totalDivs + (_divSyfe||[]).reduce((s,d)=>s+d.amount_usd,0));
+
+  ['VOO','SCHG','SPYI'].forEach(ticker => {
+    const h = holdings.find(x => x.ticker===ticker);
+    if (!h) return;
+    const p = price(ticker); const val = h.shares*p;
+    const pl = val - h.total_invested; const pct = h.total_invested>0?pl/h.total_invested*100:0;
+    const key = ticker.toLowerCase();
+    document.getElementById(`sy-${key}-shares`).textContent = fmtShares(h.shares);
+    document.getElementById(`sy-${key}-avg`).textContent = fmtUSD(h.avg_cost);
+    document.getElementById(`sy-${key}-price`).textContent = fmtUSD(p);
+    document.getElementById(`sy-${key}-value`).textContent = fmtUSD(val);
+    document.getElementById(`sy-${key}-invested`).textContent = fmtUSD(h.total_invested);
+    document.getElementById(`sy-${key}-pl`).innerHTML = `<span class="${plColor(pl)}">${plStr(pl)} (${fmtPct(pct)})</span>`;
+    const spyiDivs = ticker==='SPYI' ? (_divSyfe||[]).reduce((s,d)=>s+d.amount_usd,0) : h.total_dividends;
+    document.getElementById(`sy-${key}-divs`).textContent = fmtUSD(spyiDivs);
+  });
+
+  // Syfe deposits
+  const syDeps = (_deps||[]).filter(d=>d.brokerage==='syfe');
+  document.getElementById('sy-deposits-body').innerHTML = syDeps.map(d => `<tr>
+    <td>${fmtDate(d.date)}</td><td>${d.currency}</td>
+    <td>${d.currency==='SGD'?fmtSGD(d.amount):fmtUSD(d.amount)}</td>
+    <td>${d.source_note||'—'}</td>
+  </tr>`).join('');
+
+  // SPYI divs
+  document.getElementById('sy-divs-body').innerHTML = (_divSyfe||[]).map(d => `<tr>
+    <td>${fmtDate(d.date)}</td><td class="pos">${fmtUSD(d.amount_usd)}</td>
+  </tr>`).join('');
+}
+
+// ============================================================
+// CMC - aggregate holdings from trades
+// ============================================================
+function getCMCActive() {
+  const trades = (_cmcTrades||[]).filter(t=>t.brokerage==='cmc');
+  const map = {};
+  // Process buys chronologically
+  trades.filter(t=>t.action==='Buy').sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(t => {
+    if (!map[t.ticker]) map[t.ticker] = {ticker:t.ticker, shares:0, cost:0};
+    map[t.ticker].shares += t.qty;
+    map[t.ticker].cost += t.amount;
+  });
+  // Process sells
+  trades.filter(t=>t.action==='Sell').sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(t => {
+    if (map[t.ticker]) {
+      const avgCost = map[t.ticker].cost / map[t.ticker].shares;
+      map[t.ticker].shares -= t.qty;
+      map[t.ticker].cost -= avgCost * t.qty;
+    }
+  });
+  return Object.values(map).filter(h=>h.shares>0).map(h=>({...h, avgPrice:h.cost/h.shares}));
+}
+
+async function loadCMC() {
+  await loadAllData();
+  const active = getCMCActive();
+  const sgTickers = active.map(h => h.ticker+'.SI');
+  await fetchPrices(sgTickers);
+
+  let cmcValue=0, cmcCost=0;
+  active.forEach(h => { cmcValue += h.shares*price(h.ticker+'.SI'); cmcCost += h.cost; });
+  const cmcPL = cmcValue - cmcCost;
+  const cmcPct = cmcCost>0 ? cmcPL/cmcCost*100 : 0;
+  const sgDivTotal = (_divSG||[]).reduce((s,d)=>s+d.total_sgd,0);
+
+  document.getElementById('cmc-value').textContent = fmtSGD(cmcValue);
+  document.getElementById('cmc-invested').textContent = fmtSGD(cmcCost);
+  document.getElementById('cmc-unrealised').innerHTML = `<span class="${plColor(cmcPL)}">${plStr(cmcPL,'S$')}</span>`;
+  document.getElementById('cmc-unrealised-pct').innerHTML = `<span class="${plColor(cmcPct)}">${fmtPct(cmcPct)}</span>`;
+  document.getElementById('cmc-divs').textContent = fmtSGD(sgDivTotal);
+
+  // Active holdings table
+  document.getElementById('cmc-active-body').innerHTML = active.map(h => {
+    const p = price(h.ticker+'.SI'); const val = h.shares*p;
+    const pl = val - h.cost; const pct = h.cost>0?pl/h.cost*100:0;
+    return `<tr>
+      <td><span class="ticker-badge">${h.ticker}</span></td>
+      <td>${fmtShares(h.shares)}</td><td>${fmtSGD(h.avgPrice)}</td>
+      <td>${fmtSGD(p)}</td><td>${fmtSGD(val)}</td>
+      <td class="${plColor(pl)}">${plStr(pl,'S$')}</td>
+      <td class="${plColor(pct)}">${fmtPct(pct)}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" class="empty">No active holdings</td></tr>';
+
+  // Sells
+  const sells = (_cmcTrades||[]).filter(t=>t.action==='Sell');
+  document.getElementById('cmc-sells-body').innerHTML = sells.map(t => `<tr>
+    <td><span class="ticker-badge">${t.ticker}</span></td>
+    <td>${fmtDate(t.date)}</td><td>${fmtShares(t.qty)}</td>
+    <td>${fmtSGD(t.price)}</td><td>${fmtSGD(t.amount)}</td>
+    <td class="${plColor(t.profit)}">${plStr(t.profit,'S$')}</td>
+  </tr>`).join('');
+
+  // SG Dividends
+  document.getElementById('cmc-divs-body').innerHTML = (_divSG||[]).map(d => `<tr>
+    <td><span class="ticker-badge">${d.ticker}</span></td>
+    <td>${fmtDate(d.date)}</td><td>${fmtSGD(d.per_share)}</td>
+    <td>${fmtShares(d.shares)}</td><td class="pos">${fmtSGD(d.total_sgd)}</td>
+  </tr>`).join('');
+
+  // CMC deposits
+  const cmcDeps = (_deps||[]).filter(d=>d.brokerage==='cmc');
+  document.getElementById('cmc-deposits-body').innerHTML = cmcDeps.map(d => `<tr>
+    <td>${fmtDate(d.date)}</td><td>${fmtSGD(d.amount)}</td>
+  </tr>`).join('');
+
+  // CMC withdrawals
+  const cmcWds = (_wds||[]).filter(w=>w.brokerage==='cmc');
+  document.getElementById('cmc-withdrawals-body').innerHTML = cmcWds.map(w => `<tr>
+    <td>${fmtDate(w.date)}</td><td class="neg">${fmtSGD(w.amount)}</td>
+  </tr>`).join('');
+}
+
+// ============================================================
+// FX
+// ============================================================
+let _fxFilter = 'all';
+async function loadFX() {
+  await loadAllData();
+  renderFX();
+}
+
+function filterFX(broker, el) {
+  _fxFilter = broker;
+  document.querySelectorAll('.broker-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  renderFX();
+}
+
+function renderFX() {
+  const all = (_fx||[]);
+  const filtered = _fxFilter==='all' ? all : all.filter(f=>f.brokerage===_fxFilter);
+
+  const sgdToUSD = all.filter(f=>f.from_currency==='SGD'&&f.to_currency==='USD');
+  const usdToSGD = all.filter(f=>f.from_currency==='USD'&&f.to_currency==='SGD');
+  const totalSGDIn = sgdToUSD.reduce((s,f)=>s+f.amount_from,0);
+  const totalUSDOut = sgdToUSD.reduce((s,f)=>s+f.amount_to,0);
+  const totalUSDIn = usdToSGD.reduce((s,f)=>s+f.amount_from,0);
+  const totalSGDOut = usdToSGD.reduce((s,f)=>s+f.amount_to,0);
+  const avgRate = all.length ? all.filter(f=>f.from_currency==='SGD').reduce((s,f)=>s+f.rate,0)/Math.max(all.filter(f=>f.from_currency==='SGD').length,1) : 0;
+
+  document.getElementById('fx-sgd-to-usd-sgd').textContent = fmtSGD(totalSGDIn);
+  document.getElementById('fx-sgd-to-usd-usd').textContent = '→ ' + fmtUSD(totalUSDOut) + ' received';
+  document.getElementById('fx-usd-to-sgd-usd').textContent = fmtUSD(totalUSDIn);
+  document.getElementById('fx-usd-to-sgd-sgd').textContent = '→ ' + fmtSGD(totalSGDOut) + ' received';
+  document.getElementById('fx-avg-rate').textContent = avgRate.toFixed(4);
+
+  document.getElementById('fx-body').innerHTML = filtered.map(f => `<tr>
+    <td>${fmtDate(f.date)}</td>
+    <td><span class="pill pill-${f.brokerage}">${f.brokerage}</span></td>
+    <td class="fx-from">${f.from_currency}</td>
+    <td>${f.from_currency==='SGD'?fmtSGD(f.amount_from):fmtUSD(f.amount_from)}</td>
+    <td class="fx-to">${f.to_currency}</td>
+    <td>${f.to_currency==='SGD'?fmtSGD(f.amount_to):fmtUSD(f.amount_to)}</td>
+    <td class="fx-rate">${f.rate.toFixed(4)}</td>
+  </tr>`).join('') || '<tr><td colspan="7" class="empty">No FX conversions found</td></tr>';
+}
+
+// ============================================================
+// DIVIDENDS
+// ============================================================
+async function loadDividends() {
+  await loadAllData();
+  const usTotal = (_divUS||[]).reduce((s,d)=>s+d.amount_usd,0);
+  const sgTotal = (_divSG||[]).reduce((s,d)=>s+d.total_sgd,0);
+  const syfeTotal = (_divSyfe||[]).reduce((s,d)=>s+d.amount_usd,0);
+
+  document.getElementById('div-us-total').textContent = fmtUSD(usTotal);
+  document.getElementById('div-sg-total').textContent = fmtSGD(sgTotal);
+  document.getElementById('div-syfe-total').textContent = fmtUSD(syfeTotal);
+
+  document.getElementById('div-us-body').innerHTML = (_divUS||[]).map(d => `<tr>
+    <td>${fmtDate(d.date)}</td>
+    <td><span class="ticker-badge">${d.ticker}</span></td>
+    <td class="pos">${fmtUSD(d.amount_usd)}</td>
+  </tr>`).join('');
+
+  document.getElementById('div-sg-body').innerHTML = (_divSG||[]).map(d => `<tr>
+    <td>${fmtDate(d.date)}</td>
+    <td><span class="ticker-badge">${d.ticker}</span></td>
+    <td>${fmtSGD(d.per_share)}</td><td>${fmtShares(d.shares)}</td>
+    <td class="pos">${fmtSGD(d.total_sgd)}</td>
+  </tr>`).join('');
+}
+
+// ============================================================
+// MODALS
+// ============================================================
+let _currentBroker = '';
+function openModal(id, broker) {
+  _currentBroker = broker;
+  const overlay = document.getElementById(id);
+  overlay.classList.add('open');
+  // Set broker field if exists
+  const brokerInput = overlay.querySelector('[id$="-broker"]');
+  if (brokerInput) brokerInput.value = broker;
+  // Default date to today
+  overlay.querySelectorAll('input[type=date]').forEach(el => {
+    el.value = new Date().toISOString().split('T')[0];
+  });
+}
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// Close on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => { if(e.target === overlay) overlay.classList.remove('open'); });
+});
+
+async function submitTrade() {
+  const ticker = document.getElementById('trade-ticker').value.toUpperCase().trim();
+  const action = document.getElementById('trade-action').value;
+  const date = document.getElementById('trade-date').value;
+  const qty = parseFloat(document.getElementById('trade-qty').value);
+  const price_val = parseFloat(document.getElementById('trade-price').value);
+  const rpl = parseFloat(document.getElementById('trade-rpl').value)||0;
+  if (!ticker||!date||!qty||!price_val) return alert('Please fill all required fields');
+  const amount = qty * price_val;
+
+  await sb('webull_trades','POST',{ticker, brokerage:'webull', date, action, qty, price:price_val, amount, realised_pl:rpl});
+  // Update holding
+  const holdings = await sb('webull_holdings','GET',null,`?ticker=eq.${ticker}&brokerage=eq.webull`);
+  if (holdings?.length) {
+    const h = holdings[0];
+    let newShares = h.shares + (action==='Buy'?qty:-qty);
+    let newCost = action==='Buy' ? h.total_cost+amount : h.total_cost-(h.avg_cost*qty);
+    let newAvg = newShares>0 ? newCost/newShares : 0;
+    let newRPL = h.total_realised_pl + (action==='Sell'?rpl:0);
+    let status = newShares > 0.01 ? 'active' : 'closed';
+    await sb('webull_holdings','PATCH',{shares:newShares,total_cost:newCost,avg_cost:newAvg,total_realised_pl:newRPL,status},`?id=eq.${h.id}`);
+  } else if (action==='Buy') {
+    await sb('webull_holdings','POST',{ticker,brokerage:'webull',shares:qty,avg_cost:price_val,total_cost:amount,total_realised_pl:0,status:'active'});
+  }
+  invalidateCache();
+  closeModal('add-trade-modal');
+  loadWebull();
+}
+
+async function submitDeposit() {
+  const broker = document.getElementById('dep-broker').value;
+  const date = document.getElementById('dep-date').value;
+  const currency = document.getElementById('dep-currency').value;
+  const amount = parseFloat(document.getElementById('dep-amount').value);
+  const note = document.getElementById('dep-note').value;
+  if (!date||!amount) return alert('Please fill all required fields');
+  await sb('deposits','POST',{brokerage:broker,date,currency,amount,source_note:note||null});
+  invalidateCache();
+  closeModal('add-deposit-modal');
+  if(broker==='webull') loadWebull();
+  else if(broker==='syfe') loadSyfe();
+  else if(broker==='cmc') loadCMC();
+}
+
+async function submitWithdrawal() {
+  const broker = document.getElementById('wd-broker').value;
+  const date = document.getElementById('wd-date').value;
+  const currency = document.getElementById('wd-currency').value;
+  const amount = parseFloat(document.getElementById('wd-amount').value);
+  if (!date||!amount) return alert('Please fill all required fields');
+  await sb('withdrawals','POST',{brokerage:broker,date,currency,amount});
+  invalidateCache();
+  closeModal('add-withdrawal-modal');
+  loadWebull();
+}
+
+async function submitFX() {
+  const broker = document.getElementById('fx-broker').value;
+  const date = document.getElementById('fx-date').value;
+  const from_currency = document.getElementById('fx-from').value;
+  const to_currency = document.getElementById('fx-to').value;
+  const rate = parseFloat(document.getElementById('fx-rate').value);
+  const amount_from = parseFloat(document.getElementById('fx-amt-from').value);
+  const amount_to = parseFloat(document.getElementById('fx-amt-to').value);
+  if (!date||!rate||!amount_from||!amount_to) return alert('Please fill all fields');
+  await sb('fx_conversions','POST',{brokerage:broker,date,from_currency,to_currency,rate,amount_from,amount_to});
+  invalidateCache();
+  closeModal('add-fx-modal');
+  loadFX();
+}
+
+async function submitSGTrade() {
+  const ticker = document.getElementById('sg-ticker').value.toUpperCase().trim();
+  const action = document.getElementById('sg-action').value;
+  const date = document.getElementById('sg-date').value;
+  const qty = parseFloat(document.getElementById('sg-qty').value);
+  const price_val = parseFloat(document.getElementById('sg-price').value);
+  const profit = parseFloat(document.getElementById('sg-profit').value)||0;
+  if (!ticker||!date||!qty||!price_val) return alert('Please fill all required fields');
+  await sb('cmc_trades','POST',{ticker,brokerage:'cmc',date,action,qty,price:price_val,amount:qty*price_val,profit});
+  invalidateCache();
+  closeModal('add-sg-trade-modal');
+  loadCMC();
+}
+
+
+// ============================================================
+// WATCHLIST PAGE
+// ============================================================
+// ============================================================
+// WATCHLIST PAGE — ticker + live price + period % changes
+// ============================================================
+let _wlSortKey = 'day', _wlSortDir = -1;
+
+async function loadWatchlistPage() {
+  await loadAllData();
+
+  // Collect all tickers — webull (active+closed), syfe, cmc (active+closed), plus custom
+  const wbAll = (_wbHoldings||[]).map(h => ({ticker:h.ticker, isSG:false}));
+  const syAll = (_syfeH||[]).map(h => ({ticker:h.ticker, isSG:false}));
+  const cmcMap = {};
+  (_cmcTrades||[]).filter(t=>t.brokerage==='cmc').forEach(t => {
+    if(!cmcMap[t.ticker]) cmcMap[t.ticker] = {ticker:t.ticker+'.SI', isSG:true};
+  });
+  const cmcAll = Object.values(cmcMap);
+
+  // Include custom watchlist tickers
+  const customTickers = _customWatchlist.map(t => ({
+    ticker: t.ticker,
+    isSG: t.ticker.endsWith('.SI')
+  }));
+
+  const allItems = [...wbAll, ...syAll, ...cmcAll, ...customTickers]
+    .filter((v,i,a) => a.findIndex(x=>x.ticker===v.ticker)===i)
+    .sort((a,b) => a.ticker.localeCompare(b.ticker));
+
+  const tickers = allItems.map(h=>h.ticker);
+  document.getElementById('wl-count').textContent = tickers.length + ' stocks';
+
+  // Always force-fetch all tickers for watchlist so period data is fresh
+  await forceFetchPrices(tickers);
+  renderWatchlistTable(allItems);
+}
+
+// Force fetch — bypasses cache so period data always loads
+async function forceFetchPrices(tickers) {
+  if (!tickers.length) return;
+  try {
+    const r = await fetch(`${WORKER_URL}?tickers=${tickers.join(',')}`, {
+      signal: AbortSignal.timeout(20000)
+    });
+    if (!r.ok) throw new Error('Worker ' + r.status);
+    const resp = await r.json();
+    Object.entries(resp.data || {}).forEach(([ticker, d]) => {
+      priceCache[ticker] = d.price;
+      dayChangeCache[ticker] = d.dayChangePct;
+      periodCache[ticker] = {
+        day:         d.dayChangePct        ?? null,
+        week:        d.weekChangePct       ?? null,
+        month:       d.monthChangePct      ?? null,
+        three_month: d.threeMonthChangePct ?? null,
+        ytd:         d.ytdChangePct        ?? null,
+      };
+    });
+    Object.entries(resp.prices || {}).forEach(([ticker, p]) => {
+      if (!priceCache[ticker]) priceCache[ticker] = p;
+    });
+  } catch(e) { console.error('Force fetch error:', e.message); }
+}
+
+
+
+function wlSort(key) {
+  if(_wlSortKey===key) _wlSortDir*=-1;
+  else { _wlSortKey=key; _wlSortDir=key==='ticker'?1:-1; }
+  document.querySelectorAll('#page-watchlist th').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    if(th.getAttribute('onclick')===`wlSort('${key}')`)
+      th.classList.add(_wlSortDir===1?'sort-asc':'sort-desc');
+  });
+  const wbAll=(_wbHoldings||[]).map(h=>({ticker:h.ticker,isSG:false}));
+  const syAll=(_syfeH||[]).map(h=>({ticker:h.ticker,isSG:false}));
+  const cmcMap={};(_cmcTrades||[]).filter(t=>t.brokerage==='cmc').forEach(t=>{if(!cmcMap[t.ticker])cmcMap[t.ticker]={ticker:t.ticker+'.SI',isSG:true};});
+  const all=[...wbAll,...syAll,...Object.values(cmcMap)].filter((v,i,a)=>a.findIndex(x=>x.ticker===v.ticker)===i);
+  renderWatchlistTable(all);
+}
+
+function renderWatchlistTable(items) {
+  function pct(val) {
+    if(val==null) return '<span style="color:var(--muted)">—</span>';
+    const c = val>=0 ? 'var(--green)' : 'var(--red)';
+    return `<span style="color:${c};font-size:13px;font-weight:500">${val>=0?'+':''}${val.toFixed(2)}%</span>`;
+  }
+
+  const enriched = items.map(h => {
+    const pc = periodCache[h.ticker] || {};
+    return {
+      ...h,
+      price: priceCache[h.ticker] || 0,
+      day: pc.day ?? dayChangeCache[h.ticker] ?? null,
+      week: pc.week ?? null,
+      month: pc.month ?? null,
+      three_month: pc.three_month ?? null,
+      ytd: pc.ytd ?? null,
+    };
+  });
+
+  const sorted = [...enriched].sort((a,b) => {
+    const k = _wlSortKey;
+    const av = k==='ticker' ? a.ticker : (a[k]??-9999);
+    const bv = k==='ticker' ? b.ticker : (b[k]??-9999);
+    return typeof av==='string' ? av.localeCompare(bv)*_wlSortDir : (av-bv)*_wlSortDir;
+  });
+
+  document.getElementById('wl-body').innerHTML = sorted.map(h => {
+    const ps = h.price > 0 ? (h.isSG ? 'S$'+h.price.toFixed(3) : '$'+h.price.toFixed(2)) : '<span style="color:var(--muted)">—</span>';
+    return `<tr>
+      <td><span class="ticker-badge">${h.ticker.replace('.SI','')}</span></td>
+      <td style="font-family:var(--font-num);font-weight:600;font-size:13px">${ps}</td>
+      <td style="font-family:var(--font-num)">${pct(h.day)}</td>
+      <td style="font-family:var(--font-num)">${pct(h.week)}</td>
+      <td style="font-family:var(--font-num)">${pct(h.month)}</td>
+      <td style="font-family:var(--font-num)">${pct(h.three_month)}</td>
+      <td style="font-family:var(--font-num)">${pct(h.ytd)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('wl-page-updated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-SG');
+}
+
+
+
+// ============================================================
+// CUSTOM WATCHLIST MANAGEMENT
+// ============================================================
+function openAddTickerModal() {
+  document.getElementById('add-ticker-modal').classList.add('open');
+  document.getElementById('add-ticker-input').value = '';
+  document.getElementById('add-ticker-input').focus();
+}
+
+function submitAddTicker() {
+  let ticker = document.getElementById('add-ticker-input').value.toUpperCase().trim();
+  const exchange = document.getElementById('add-ticker-exchange').value;
+  if (!ticker) return alert('Please enter a ticker symbol');
+  if (exchange === 'SGX' && !ticker.endsWith('.SI')) ticker = ticker + '.SI';
+  // Check not already in list
+  const existing = [...(_wbHoldings||[]).map(h=>h.ticker), ...(_syfeH||[]).map(h=>h.ticker)];
+  const cmcExisting = (_cmcTrades||[]).filter(t=>t.brokerage==='cmc').map(t=>t.ticker+'.SI');
+  const allExisting = [...existing, ...cmcExisting, ..._customWatchlist.map(x=>x.ticker)];
+  if (allExisting.includes(ticker)) {
+    alert(`${ticker} is already in your watchlist`);
+    return;
+  }
+  _customWatchlist.push({ ticker });
+  localStorage.setItem('wl_custom', JSON.stringify(_customWatchlist));
+  closeModal('add-ticker-modal');
+  loadWatchlistPage();
+}
+
+// ============================================================
+// INIT
+// ============================================================
+loadOverview();
+
+// ============================================================
+// WATCHLIST
+// ============================================================
+async function loadWatchlist() {
+  // Get all unique tickers from holdings
+  await loadAllData();
+  const wbActive = (_wbHoldings||[]).filter(h => h.status==='active' && h.shares > 0.01);
+  const syfe = _syfeH || [];
+  const cmcActive = getCMCActive();
+
+  const usTickers = [
+    ...wbActive.map(h => h.ticker),
+    ...syfe.map(h => h.ticker)
+  ];
+  const sgTickers = cmcActive.map(h => h.ticker + '.SI');
+  const allTickers = [...new Set([...usTickers, ...sgTickers])].sort();
+
+  await fetchPrices(allTickers);
+
+  const container = document.getElementById('watchlist-items');
+  if (!allTickers.length) { container.innerHTML = '<div class="wl-loading">No holdings</div>'; return; }
+
+  container.innerHTML = allTickers.map(ticker => {
+    const p = priceCache[ticker] || 0;
+    const isSG = ticker.endsWith('.SI');
+    const displayTicker = ticker.replace('.SI','');
+
+    // Find avg cost for colour reference
+    let avgCost = 0;
+    if (isSG) {
+      const h = getCMCActive().find(x => x.ticker+'.SI' === ticker);
+      if (h) avgCost = h.avgPrice;
+    } else {
+      const h = (_wbHoldings||[]).find(x => x.ticker === ticker);
+      const sy = (_syfeH||[]).find(x => x.ticker === ticker);
+      avgCost = h?.avg_cost || sy?.avg_cost || 0;
+    }
+
+    const dayChg = dayChangeCache[ticker];
+    const diffColor = dayChg == null ? 'var(--muted)' : dayChg >= 0 ? 'var(--green)' : 'var(--red)';
+    const diffStr = dayChg == null ? '—' : (dayChg >= 0 ? '+' : '') + dayChg.toFixed(2) + '%';
+    const priceStr = isSG ? 'S$' + p.toFixed(3) : '$' + p.toFixed(2);
+
+    return `<div class="wl-item" onclick="showPage('${isSG ? 'cmc' : 'webull'}'); event.stopPropagation()">
+      <span class="wl-ticker">${displayTicker}</span>
+      <div class="wl-right">
+        <div class="wl-price">${p > 0 ? priceStr : '—'}</div>
+        <div class="wl-chg" style="color:${diffColor}">${diffStr}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Auto-refresh watchlist every 60 seconds
+loadWatchlist();
+setInterval(loadWatchlist, 60000);
+
+</script>
+
+<div class="modal-overlay" id="add-ticker-modal">
+  <div class="modal">
+    <div class="modal-title">Add Stock to Watchlist</div>
+    <div class="form-group">
+      <label class="form-label">Ticker Symbol</label>
+      <input class="form-input" id="add-ticker-input" placeholder="e.g. NVDA, D05 (for SGX add .SI)" style="text-transform:uppercase">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Exchange</label>
+      <select class="form-input" id="add-ticker-exchange">
+        <option value="US">US Stock (NASDAQ/NYSE)</option>
+        <option value="SGX">Singapore Stock (SGX — auto adds .SI)</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="closeModal('add-ticker-modal')">Cancel</button>
+      <button class="btn btn-submit" onclick="submitAddTicker()">Add to Watchlist</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
