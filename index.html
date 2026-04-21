@@ -1091,6 +1091,7 @@ tr:hover td { background:var(--surface2); }
 // CONFIG
 // ============================================================
 const SUPABASE_URL = 'https://icoexpnpeinzwhbmyxvi.supabase.co';
+const WORKER_URL = 'https://stock-prices.alessxdx.workers.dev';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljb2V4cG5wZWluendoYm15eHZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MTY1NzIsImV4cCI6MjA5MjA5MjU3Mn0.iLbaAuK--cT3c-z59kDZRxHJPofDogqKzODd2YxpPis';
 
 
@@ -1128,7 +1129,6 @@ async function fetchPrices(tickers) {
 
   try {
     // Cloudflare Worker — fetches Google Finance prices server-side, no CORS issues
-    const WORKER_URL = 'https://stock-prices.alessxdx.workers.dev';
     const r = await fetch(`${WORKER_URL}?tickers=${missing.join(',')}`, {
       signal: AbortSignal.timeout(15000)
     });
@@ -1687,17 +1687,21 @@ async function loadDividends() {
   // Fetch next dividend data from worker for US tickers
   // Pass all tickers — US as-is, SG with .SI appended so worker knows they're SGX
   const allDivTickers = _divAllStocks.map(s => s.isSG ? s.ticker + '.SI' : s.ticker);
+  console.log('Fetching dividends for:', allDivTickers);
   try {
     const r = await fetch(`${WORKER_URL}?tickers=${allDivTickers.join(',')}&mode=dividends`, {
       signal: AbortSignal.timeout(15000)
     });
+    console.log('Dividend fetch status:', r.status);
     if (r.ok) {
       const resp = await r.json();
       const divData = resp.dividends || {};
+      console.log('divData keys:', Object.keys(divData));
+      console.log('divData:', JSON.stringify(divData));
       _divAllStocks.forEach(s => {
-        // Worker returns SG tickers without .SI, US tickers as-is
-        const key = s.ticker; // C38U not C38U.SI
+        const key = s.ticker;
         const d = divData[key];
+        console.log(`${key} -> d:`, d);
         if (d) {
           s.next_date   = d.nextDate   || null;
           s.next_amount = d.nextAmount || null;
@@ -1706,6 +1710,7 @@ async function loadDividends() {
           s.div_source  = d.source     || null;
         }
       });
+      console.log('After mapping, C38U next_date:', _divAllStocks.find(s=>s.ticker==='C38U')?.next_date);
     }
   } catch(e) { console.warn('Dividend forecast fetch failed:', e.message); }
 
