@@ -1632,6 +1632,8 @@ function renderFX() {
 // ============================================================
 async function loadDividends() {
   await loadAllData();
+  // Reset dividend forecast data on each load
+  if (_divAllStocks.length) _divAllStocks.forEach(s => { s.next_date=null; s.next_amount=null; s.last_date=null; s.last_amount=null; });
 
   // Group by ticker
   const usMap = {};
@@ -1693,9 +1695,9 @@ async function loadDividends() {
       const resp = await r.json();
       const divData = resp.dividends || {};
       _divAllStocks.forEach(s => {
-        const ticker = s.isSG ? s.ticker : s.ticker; // SG tickers stored without .SI in results
-        const key = s.isSG ? s.ticker : s.ticker;
-        const d = divData[key] || divData[s.ticker];
+        // Worker returns SG tickers without .SI, US tickers as-is
+        const key = s.ticker; // C38U not C38U.SI
+        const d = divData[key];
         if (d) {
           s.next_date   = d.nextDate   || null;
           s.next_amount = d.nextAmount || null;
