@@ -789,7 +789,7 @@ tr:hover td { background:var(--surface2); }
       <div class="stat-sub" id="div-grand-sub">All brokerages</div>
     </div>
     <div class="stat-card" style="border-top:2px solid var(--webull)">
-      <div class="stat-label">Webull (USD)</div>
+      <div class="stat-label">Webull (USD) <span style="font-size:9px;color:var(--muted)">after 30% tax</span></div>
       <div class="stat-value" id="div-us-total">—</div>
       <div class="stat-sub" id="div-us-count">—</div>
     </div>
@@ -799,7 +799,7 @@ tr:hover td { background:var(--surface2); }
       <div class="stat-sub" id="div-sg-count">—</div>
     </div>
     <div class="stat-card" style="border-top:2px solid var(--syfe)">
-      <div class="stat-label">Syfe (USD)</div>
+      <div class="stat-label">Syfe (USD) <span style="font-size:9px;color:var(--muted)">after 30% tax</span></div>
       <div class="stat-value" id="div-syfe-total-card">—</div>
       <div class="stat-sub">VOO + SCHG + SPYI</div>
     </div>
@@ -1072,6 +1072,7 @@ tr:hover td { background:var(--surface2); }
 // CONFIG
 // ============================================================
 const SUPABASE_URL = 'https://icoexpnpeinzwhbmyxvi.supabase.co';
+const US_TAX = 0.70; // 30% US dividend withholding tax
 const WORKER_URL = 'https://stock-prices.alessxdx.workers.dev';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljb2V4cG5wZWluendoYm15eHZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MTY1NzIsImV4cCI6MjA5MjA5MjU3Mn0.iLbaAuK--cT3c-z59kDZRxHJPofDogqKzODd2YxpPis';
 
@@ -1633,9 +1634,10 @@ async function loadDividends() {
 
   const syMap = {};
   (_divSyfe||[]).forEach(d => {
+    const net = Math.round(d.amount_usd * US_TAX * 100) / 100;
     if (!syMap[d.ticker]) syMap[d.ticker] = {ticker:d.ticker,broker:'syfe',isSG:false,payments:[],total:0};
-    syMap[d.ticker].payments.push({date:d.date,amount:d.amount_usd});
-    syMap[d.ticker].total += d.amount_usd;
+    syMap[d.ticker].payments.push({date:d.date,amount:net,rawAmount:net,id:d.id,rawDate:d.date});
+    syMap[d.ticker].total += net;
   });
 
   const usTotal = Object.values(usMap).reduce((s,x)=>s+x.total,0);
@@ -1747,7 +1749,8 @@ function renderDivTable() {
     // Calculate my personal payout
     const ratePerShare = s.next_amount || s.last_amount || 0;
     const myShares = s.shares || 0;
-    const myPayout = ratePerShare * myShares;
+    const taxFactor = (!s.isSG) ? US_TAX : 1; // 30% tax on US stocks
+    const myPayout = ratePerShare * myShares * taxFactor;
     const myPayoutStr = myShares > 0 && ratePerShare > 0
       ? `<span style="color:var(--gold);font-weight:600;font-family:var(--font-num)">${s.isSG ? fmtSGD(myPayout) : fmtUSD(myPayout)}</span>
          <span style="color:var(--muted);font-size:10px;display:block">${fmtShares(myShares)} shares</span>`
