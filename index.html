@@ -7,21 +7,21 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #0a0a0f;
-  --surface: #111118;
-  --surface2: #1a1a24;
-  --border: #ffffff0f;
-  --border2: #ffffff18;
-  --text: #e8e8f0;
-  --muted: #6b6b80;
-  --accent: #7c6aff;
+  --bg: #0d1117;
+  --surface: #161b27;
+  --surface2: #1e2535;
+  --border: #2a3650;
+  --border2: #3a4d6e;
+  --text: #e2e8f4;
+  --muted: #7a8faf;
+  --accent: #4d8ef0;
   --accent2: #a78bfa;
-  --green: #34d399;
+  --green: #3dd68c;
   --red: #f87171;
-  --gold: #fbbf24;
-  --webull: #00c2e0;
-  --syfe: #7c6aff;
-  --cmc: #34d399;
+  --gold: #f0b429;
+  --webull: #38bdf8;
+  --syfe: #a78bfa;
+  --cmc: #3dd68c;
   --font-head: 'Syne', sans-serif;
   --font-mono: 'DM Mono', monospace;
   --font-num: 'Montserrat', sans-serif;
@@ -32,7 +32,7 @@ body { background:var(--bg); color:var(--text); font-family:var(--font-mono); mi
 /* LAYOUT */
 .app { display:flex; min-height:100vh; }
 .sidebar {
-  width:220px; min-height:100vh; background:var(--surface);
+  width:220px; min-height:100vh; background:#111827;
   border-right:1px solid var(--border); position:fixed; left:0; top:0;
   display:flex; flex-direction:column; padding:24px 0; z-index:100;
 }
@@ -85,7 +85,7 @@ body { background:var(--bg); color:var(--text); font-family:var(--font-mono); mi
 }
 .stat-card::before {
   content:''; position:absolute; top:0; left:0; right:0; height:2px;
-  background:var(--accent); opacity:.4;
+  background:var(--accent); opacity:.7;
 }
 .stat-card.green::before { background:var(--green); }
 .stat-card.red::before { background:var(--red); }
@@ -114,11 +114,13 @@ body { background:var(--bg); color:var(--text); font-family:var(--font-mono); mi
 .table-wrap { overflow-x:auto; }
 table { width:100%; border-collapse:collapse; font-size:13px; font-family:var(--font-num); }
 th {
-  padding:11px 16px; text-align:left; color:var(--text);
+  padding:11px 16px; text-align:left; color:#94a9c9;
   font-size:11px; text-transform:uppercase; letter-spacing:.8px;
   border-bottom:1px solid var(--border); font-weight:700;
   white-space:nowrap; cursor:pointer; user-select:none;
+  background:#131c2e;
 }
+th:hover { color:var(--text); }
 th:hover { color:var(--text); }
 th.sort-asc::after { content:' ▲'; color:var(--accent); font-size:9px; }
 th.sort-desc::after { content:' ▼'; color:var(--accent); font-size:9px; }
@@ -126,11 +128,16 @@ td { padding:12px 16px; border-bottom:1px solid var(--border); white-space:nowra
 tr:last-child td { border-bottom:none; }
 tr:hover td { background:var(--surface2); }
 .ticker-badge {
-  display:inline-block; background:#1e2a3a;
-  border:1px solid #3a6aaa; border-radius:6px;
+  display:inline-block;
+  border-radius:6px;
   padding:4px 11px; font-size:13px; font-weight:700; font-family:var(--font-mono);
-  color:#7eb8f7; letter-spacing:.5px;
+  letter-spacing:.5px;
 }
+/* Broker-colored variants */
+.ticker-badge.webull { background:#0c2a3d; border:1px solid #38bdf8; color:#38bdf8; }
+.ticker-badge.syfe   { background:#1e1535; border:1px solid #a78bfa; color:#a78bfa; }
+.ticker-badge.cmc    { background:#0c2d20; border:1px solid #3dd68c; color:#3dd68c; }
+.ticker-badge.default{ background:#1e2535; border:1px solid #3a4d6e; color:#7eb8f7; }
 .status-active { color:var(--green); }
 .status-closed { color:var(--muted); }
 .action-buy { color:var(--green); }
@@ -165,9 +172,9 @@ tr:hover td { background:var(--surface2); }
   display:inline-block; padding:2px 8px; border-radius:20px;
   font-size:10px; font-weight:500; text-transform:uppercase; letter-spacing:.5px;
 }
-.pill-webull { background:#00c2e015; color:var(--webull); border:1px solid #00c2e030; }
-.pill-syfe { background:#7c6aff15; color:var(--accent2); border:1px solid #7c6aff30; }
-.pill-cmc { background:#34d39915; color:var(--cmc); border:1px solid #34d39930; }
+.pill-webull { background:#0c2a3d; color:#38bdf8; border:1px solid #38bdf840; }
+.pill-syfe { background:#1e1535; color:#a78bfa; border:1px solid #a78bfa40; }
+.pill-cmc { background:#0c2d20; color:#3dd68c; border:1px solid #3dd68c40; }
 
 /* EMPTY STATE */
 .empty { text-align:center; padding:40px; color:var(--muted); font-size:12px; }
@@ -234,9 +241,9 @@ tr:hover td { background:var(--surface2); }
 .filter-tab:hover { color:var(--text); }
 .filter-tab.active { color:#fff; border-color:transparent; }
 .filter-tab.all.active { background:var(--accent); }
-.filter-tab.webull.active { background:var(--webull); }
-.filter-tab.syfe.active { background:var(--syfe); }
-.filter-tab.cmc.active { background:var(--cmc); }
+.filter-tab.webull.active { background:#0c2a3d; color:#38bdf8; border-color:#38bdf8; }
+.filter-tab.syfe.active { background:#1e1535; color:#a78bfa; border-color:#a78bfa; }
+.filter-tab.cmc.active { background:#0c2d20; color:#3dd68c; border-color:#3dd68c; }
 
 /* WATCHLIST */
 .watchlist {
@@ -1308,7 +1315,7 @@ function renderPositions() {
     const valStr = h.market_value > 0 ? (h.isSG ? fmtSGD(h.market_value) : fmtUSD(h.market_value)) : '<span style="color:var(--muted)">—</span>';
     const avgStr = h.isSG ? fmtSGD(h.avg_cost) : fmtUSD(h.avg_cost);
     return `<tr>
-      <td><span class="ticker-badge">${h.ticker}</span></td>
+      <td><span class="ticker-badge ${h.broker || 'default'}">${h.ticker}</span></td>
       <td><span class="pill pill-${h.broker}">${h.broker === 'cmc' ? 'CMC' : h.broker.charAt(0).toUpperCase()+h.broker.slice(1)}</span></td>
       <td>${fmtShares(h.shares)}</td>
       <td>${avgStr}</td>
@@ -1364,7 +1371,7 @@ async function loadWebull() {
     const p = price(h.ticker); const val = h.shares*p;
     const pl = val - h.total_cost; const pct = h.total_cost>0 ? pl/h.total_cost*100 : 0;
     aRows += `<tr>
-      <td><span class="ticker-badge">${h.ticker}</span></td>
+      <td><span class="ticker-badge default">${h.ticker}</span></td>
       <td>${fmtShares(h.shares)}</td><td>${fmtUSD(h.avg_cost)}</td>
       <td>${fmtUSD(p)}</td><td>${fmtUSD(val)}</td>
       <td class="${plColor(pl)}">${plStr(pl)}</td>
@@ -1378,7 +1385,7 @@ async function loadWebull() {
   let cRows = '';
   closed.forEach(h => {
     cRows += `<tr>
-      <td><span class="ticker-badge">${h.ticker}</span></td>
+      <td><span class="ticker-badge webull">${h.ticker}</span></td>
       <td class="${plColor(h.total_realised_pl)}">${plStr(h.total_realised_pl)}</td>
       <td><span class="status-closed">Closed</span></td>
     </tr>`;
@@ -1390,7 +1397,7 @@ async function loadWebull() {
   document.getElementById('wb-trades-count').textContent = wbTrades.length + ' trades';
   document.getElementById('wb-trades-body').innerHTML = wbTrades.slice(0,100).map(t => `<tr>
     <td>${fmtDate(t.date)}</td>
-    <td><span class="ticker-badge">${t.ticker}</span></td>
+    <td><span class="ticker-badge webull">${t.ticker}</span></td>
     <td class="${t.action==='Buy'?'action-buy':'action-sell'}">${t.action}</td>
     <td>${fmtShares(t.qty)}</td><td>${fmtUSD(t.price)}</td><td>${fmtUSD(t.amount)}</td>
     <td class="${t.realised_pl!=0?plColor(t.realised_pl):''}">${t.realised_pl!=0?plStr(t.realised_pl):'—'}</td>
@@ -1501,7 +1508,7 @@ async function loadCMC() {
     const p = price(h.ticker+'.SI'); const val = h.shares*p;
     const pl = val - h.cost; const pct = h.cost>0?pl/h.cost*100:0;
     return `<tr>
-      <td><span class="ticker-badge">${h.ticker}</span></td>
+      <td><span class="ticker-badge default">${h.ticker}</span></td>
       <td>${fmtShares(h.shares)}</td><td>${fmtSGD(h.avgPrice)}</td>
       <td>${fmtSGD(p)}</td><td>${fmtSGD(val)}</td>
       <td class="${plColor(pl)}">${plStr(pl,'S$')}</td>
@@ -1512,7 +1519,7 @@ async function loadCMC() {
   // Sells
   const sells = (_cmcTrades||[]).filter(t=>t.action==='Sell');
   document.getElementById('cmc-sells-body').innerHTML = sells.map(t => `<tr>
-    <td><span class="ticker-badge">${t.ticker}</span></td>
+    <td><span class="ticker-badge webull">${t.ticker}</span></td>
     <td>${fmtDate(t.date)}</td><td>${fmtShares(t.qty)}</td>
     <td>${fmtSGD(t.price)}</td><td>${fmtSGD(t.amount)}</td>
     <td class="${plColor(t.profit)}">${plStr(t.profit,'S$')}</td>
@@ -1520,7 +1527,7 @@ async function loadCMC() {
 
   // SG Dividends
   document.getElementById('cmc-divs-body').innerHTML = (_divSG||[]).map(d => `<tr>
-    <td><span class="ticker-badge">${d.ticker}</span></td>
+    <td><span class="ticker-badge default">${d.ticker}</span></td>
     <td>${fmtDate(d.date)}</td><td>${fmtSGD(d.per_share)}</td>
     <td>${fmtShares(d.shares)}</td><td class="pos">${fmtSGD(d.total_sgd)}</td>
   </tr>`).join('');
@@ -1598,13 +1605,13 @@ async function loadDividends() {
 
   document.getElementById('div-us-body').innerHTML = (_divUS||[]).map(d => `<tr>
     <td>${fmtDate(d.date)}</td>
-    <td><span class="ticker-badge">${d.ticker}</span></td>
+    <td><span class="ticker-badge webull">${d.ticker}</span></td>
     <td class="pos">${fmtUSD(d.amount_usd)}</td>
   </tr>`).join('');
 
   document.getElementById('div-sg-body').innerHTML = (_divSG||[]).map(d => `<tr>
     <td>${fmtDate(d.date)}</td>
-    <td><span class="ticker-badge">${d.ticker}</span></td>
+    <td><span class="ticker-badge webull">${d.ticker}</span></td>
     <td>${fmtSGD(d.per_share)}</td><td>${fmtShares(d.shares)}</td>
     <td class="pos">${fmtSGD(d.total_sgd)}</td>
   </tr>`).join('');
@@ -1830,7 +1837,7 @@ function renderWatchlistTable(items) {
   document.getElementById('wl-body').innerHTML = sorted.map(h => {
     const ps = h.price > 0 ? (h.isSG ? 'S$'+h.price.toFixed(3) : '$'+h.price.toFixed(2)) : '<span style="color:var(--muted)">—</span>';
     return `<tr>
-      <td><span class="ticker-badge">${h.ticker.replace('.SI','')}</span></td>
+      <td><span class="ticker-badge ${h.isSG ? 'cmc' : 'webull'}">${h.ticker.replace('.SI','')}</span></td>
       <td style="font-family:var(--font-num);font-weight:600;font-size:13px">${ps}</td>
       <td style="font-family:var(--font-num)">${pct(h.day)}</td>
       <td style="font-family:var(--font-num)">${pct(h.week)}</td>
