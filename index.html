@@ -831,27 +831,7 @@ tr:hover td { background:var(--surface2); }
   </div>
 </div>
 
-<!-- Dividend History Modal -->
-<div class="modal-overlay" id="div-history-modal">
-  <div class="modal" style="width:520px;max-height:80vh;display:flex;flex-direction:column">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-      <div class="modal-title" id="div-modal-title" style="margin:0">—</div>
-      <div id="div-modal-total" style="font-family:var(--font-num);font-size:18px;font-weight:700;color:var(--green)">—</div>
-    </div>
-    <div style="overflow-y:auto;flex:1">
-      <table style="width:100%;border-collapse:collapse;font-family:var(--font-num);font-size:13px">
-        <thead><tr>
-          <th style="padding:10px 12px;text-align:left;color:#94a9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:#131c2e;font-weight:700">Date</th>
-          <th style="padding:10px 12px;text-align:left;color:#94a9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:#131c2e;font-weight:700">Amount</th>
-        </tr></thead>
-        <tbody id="div-modal-body"></tbody>
-      </table>
-    </div>
-    <div class="modal-actions" style="margin-top:16px">
-      <button class="btn btn-cancel" onclick="closeModal('div-history-modal')">Close</button>
-    </div>
-  </div>
-</div>
+
 
 <!-- ===================== WATCHLIST PAGE ===================== -->
 <div id="page-watchlist" class="page">
@@ -1710,6 +1690,7 @@ async function loadDividends() {
           s.last_date     = d.lastDate     || null;
           s.last_amount   = d.lastAmount   || null;
           s.last_pay_date = d.lastPayDate  || null;
+          s.is_estimate   = d.isEstimate   || false;
           s.div_source    = d.source       || null;
         }
       });
@@ -1748,6 +1729,7 @@ function renderDivTable() {
     else if (k === 'total') { av=a.total; bv=b.total; }
     else if (k === 'payments') { av=a.payments.length; bv=b.payments.length; }
     else if (k === 'next_date') { av=a.next_date||'9999'; bv=b.next_date||'9999'; }
+    else if (k === 'next_date') { av=a.next_date||'9999'; bv=b.next_date||'9999'; }
     else if (k === 'next_amount') { av=a.next_amount||0; bv=b.next_amount||0; }
     else if (k === 'my_payout') { av=(a.next_amount||a.last_amount||0)*(a.shares||0); bv=(b.next_amount||b.last_amount||0)*(b.shares||0); }
     else { av=a.total; bv=b.total; }
@@ -1756,16 +1738,11 @@ function renderDivTable() {
 
   document.getElementById('div-stocks-body').innerHTML = sorted.map(s => {
     const totalStr = s.isSG ? fmtSGD(s.total) : fmtUSD(s.total);
-    // For SG stocks: show future date if available, else show last date in muted style
-    const hasNext = !!s.next_date;
-    const displayDate = s.next_date || s.last_date;
-    const displayAmt  = s.next_amount || s.last_amount;
-    const soon = hasNext && (new Date(s.next_date) - new Date()) < 30*86400*1000;
-    const nextDate = displayDate
-      ? `<span style="${!hasNext?'color:var(--muted)':''}">${!hasNext?'Last: ':''}${fmtDate(displayDate)}</span>`
-      : '<span style="color:var(--muted)">—</span>';
-    const nextAmt = displayAmt
-      ? `<span style="${!hasNext?'color:var(--muted)':''}">${s.isSG ? fmtSGD(displayAmt) : fmtUSD(displayAmt)}</span>`
+    // Show data if we have any upcoming info
+    const hasNext = !!(s.next_pay_date || s.next_amount);
+    const isEst = !!s.is_estimate;
+    const nextAmt = s.next_amount
+      ? `<span style="font-size:12px">${s.isSG ? fmtSGD(s.next_amount) : fmtUSD(s.next_amount)}${isEst?' <span style="font-size:9px;color:var(--muted)">(est)</span>':''}</span>`
       : '<span style="color:var(--muted)">—</span>';
     // Calculate my personal payout
     const ratePerShare = s.next_amount || s.last_amount || 0;
@@ -1782,13 +1759,22 @@ function renderDivTable() {
       <td style="color:var(--muted);font-size:12px">${s.isSG?'SGD':'USD'}</td>
       <td class="pos" style="font-family:var(--font-num);font-weight:600">${totalStr}</td>
       <td style="color:var(--muted)">${s.payments.length}</td>
-      <td style="font-family:var(--font-num);${soon?'color:var(--gold);font-weight:600':''}">${soon?'⚡ ':''} ${nextDate}</td>
-      <td style="font-family:var(--font-num);color:var(--muted);font-size:12px">${(() => { const pd = s.next_pay_date; const today = new Date().toISOString().split('T')[0]; return pd && pd >= today ? fmtDate(pd) : '<span style=\'color:var(--muted)\'>—</span>'; })()}</td>
+      <td style="font-family:var(--font-num)">${(() => {
+        if (!s.isSG || !s.next_date) return '<span style="color:var(--muted)">—</span>';
+        const soon = (new Date(s.next_date) - new Date()) < 30*86400*1000;
+        return `<span style="color:${soon?'var(--gold)':'var(--text)'};font-weight:${soon?'600':'400'}">${soon?'⚡ ':''}${fmtDate(s.next_date)}</span>`;
+      })()}</td>
+      <td style="font-family:var(--font-num);color:var(--muted);font-size:12px">${s.next_pay_date ? fmtDate(s.next_pay_date)+(s.is_estimate?'<span style="font-size:9px;color:var(--muted)"> (est)</span>':'') : '<span style=\'color:var(--muted)\'>—</span>'}</td>
       <td style="font-family:var(--font-num);color:var(--muted);font-size:12px">${nextAmt}</td>
       <td>${myPayoutStr}</td>
-      <td style="color:var(--accent);font-size:12px">View →</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm" onclick="event.stopPropagation();showDivHistory('${s.ticker}','${s.broker}')" style="font-size:10px">View</button>
+          <button class="btn btn-sm" onclick="event.stopPropagation();openDivModal('${s.ticker}','${s.broker}')" style="font-size:10px;color:var(--gold);border-color:var(--gold)40">+ Add</button>
+        </div>
+      </td>
     </tr>`;
-  }).join('') || '<tr><td colspan="8" class="empty">No dividend data</td></tr>';
+  }).join('') || '<tr><td colspan="9" class="empty">No dividend data</td></tr>';
 }
 
 async function showDivHistory(ticker, broker) {
@@ -1799,22 +1785,22 @@ async function showDivHistory(ticker, broker) {
   if (broker === 'webull') {
     payments = (_divUS||[]).filter(d=>d.ticker===ticker)
       .sort((a,b)=>new Date(b.date)-new Date(a.date))
-      .map(d=>({date:d.date, amount:fmtUSD(d.amount_usd)}));
+      .map(d=>({id:d.id, date:fmtDate(d.date), rawDate:d.date, amount:fmtUSD(d.amount_usd), rawAmount:d.amount_usd}));
   } else if (broker === 'cmc') {
     isSG = true;
     payments = (_divSG||[]).filter(d=>d.ticker===ticker)
       .sort((a,b)=>new Date(b.date)-new Date(a.date))
-      .map(d=>({date:d.date, amount:fmtSGD(d.total_sgd), extra:fmtSGD(d.per_share)+' per share'}));
+      .map(d=>({id:d.id, date:fmtDate(d.date), rawDate:d.date, amount:fmtSGD(d.total_sgd), rawAmount:d.total_sgd, rawPerShare:d.per_share, rawShares:d.shares, extra:fmtSGD(d.per_share)+' per share'}));
   } else if (broker === 'syfe') {
     payments = (_divSyfe||[]).filter(d=>d.ticker===ticker)
       .sort((a,b)=>new Date(b.date)-new Date(a.date))
-      .map(d=>({date:d.date, amount:fmtUSD(d.amount_usd)}));
+      .map(d=>({id:d.id, date:fmtDate(d.date), rawDate:d.date, amount:fmtUSD(d.amount_usd), rawAmount:d.amount_usd}));
   }
 
   // Find next dividend info
   const stockData = _divAllStocks.find(s=>s.ticker===ticker && s.broker===broker);
-  const showDate = stockData?.next_date || stockData?.last_date;
-  const showAmt  = stockData?.next_amount || stockData?.last_amount;
+  const showDate = stockData?.next_date || null;
+  const showAmt  = stockData?.next_amount || null;
   const isFuture = !!stockData?.next_date;
   const myShares = stockData?.shares || 0;
   const myPayout = showAmt && myShares > 0 ? showAmt * myShares : 0;
@@ -1844,7 +1830,7 @@ async function showDivHistory(ticker, broker) {
       </div>
     </div>` : '';
 
-  const totalNum = payments.reduce((s,p)=>s+parseFloat(p.amount.replace(/[^0-9.-]/g,'')),0);
+  const totalNum = payments.reduce((s,p)=>s+(p.rawAmount||parseFloat(p.amount.replace(/[^0-9.-]/g,''))||0),0);
   document.getElementById('div-modal-title').innerHTML =
     `<span class="ticker-badge ${broker}">${ticker}</span>&nbsp; Dividend History`;
   document.getElementById('div-modal-total').textContent = (isSG?fmtSGD(totalNum):fmtUSD(totalNum)) + ' total';
@@ -1853,7 +1839,13 @@ async function showDivHistory(ticker, broker) {
     <td style="padding:10px 12px;border-bottom:1px solid var(--border)" class="pos">
       ${p.amount}${p.extra?'<br><span style="font-size:11px;color:var(--muted)">'+p.extra+'</span>':''}
     </td>
-  </tr>`).join('') || '<tr><td colspan="2" style="padding:20px;text-align:center;color:var(--muted)">No history</td></tr>';
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40" onclick="openDivEditModal('${p.id}','${broker}','${p.rawDate}',${p.rawAmount}${p.rawPerShare?','+p.rawPerShare:''}${p.rawShares?','+p.rawShares:''})">Edit</button>
+        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40" onclick="deleteDivEntry('${p.id}','${broker}')">Del</button>
+      </div>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--muted)">No history</td></tr>';
 
   document.getElementById('div-history-modal').classList.add('open');
 }
@@ -2121,6 +2113,89 @@ function submitAddTicker() {
   loadWatchlistPage();
 }
 
+
+// ============================================================
+// DIVIDEND CRUD
+// ============================================================
+function updateDivCMCFields() {
+  const broker = document.getElementById('div-add-broker').value;
+  document.getElementById('div-cmc-fields').style.display = broker === 'cmc' ? 'block' : 'none';
+}
+
+function openDivModal(ticker='', broker='webull') {
+  document.getElementById('div-add-modal-title').textContent = 'Add Dividend';
+  document.getElementById('div-edit-id').value = '';
+  document.getElementById('div-add-broker').value = broker;
+  document.getElementById('div-add-ticker').value = ticker;
+  document.getElementById('div-add-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('div-add-amount').value = '';
+  document.getElementById('div-add-per-share').value = '';
+  document.getElementById('div-add-shares').value = '';
+  updateDivCMCFields();
+  document.getElementById('div-add-modal').classList.add('open');
+}
+
+function openDivEditModal(id, broker, date, amount, perShare, shares) {
+  document.getElementById('div-add-modal-title').textContent = 'Edit Dividend';
+  document.getElementById('div-edit-id').value = id;
+  document.getElementById('div-add-broker').value = broker;
+  document.getElementById('div-add-date').value = date;
+  document.getElementById('div-add-amount').value = amount;
+  if (perShare) document.getElementById('div-add-per-share').value = perShare;
+  if (shares) document.getElementById('div-add-shares').value = shares;
+  updateDivCMCFields();
+  document.getElementById('div-add-modal').classList.add('open');
+}
+
+async function submitDivEntry() {
+  const editId = document.getElementById('div-edit-id').value;
+  const broker = document.getElementById('div-add-broker').value;
+  const ticker = document.getElementById('div-add-ticker').value.toUpperCase().trim();
+  const date = document.getElementById('div-add-date').value;
+  const amount = parseFloat(document.getElementById('div-add-amount').value);
+
+  if (!ticker || !date || isNaN(amount)) return alert('Please fill all required fields');
+
+  if (broker === 'cmc') {
+    const perShare = parseFloat(document.getElementById('div-add-per-share').value) || 0;
+    const shares = parseFloat(document.getElementById('div-add-shares').value) || 0;
+    const body = { ticker, brokerage:'cmc', date, per_share: perShare, shares, total_sgd: amount };
+    if (editId) {
+      await sb('dividends_sg', 'PATCH', body, `?id=eq.${editId}`);
+    } else {
+      await sb('dividends_sg', 'POST', body);
+    }
+  } else if (broker === 'syfe') {
+    const body = { ticker, brokerage:'syfe', date, amount_usd: amount };
+    if (editId) {
+      await sb('dividends_syfe', 'PATCH', body, `?id=eq.${editId}`);
+    } else {
+      await sb('dividends_syfe', 'POST', body);
+    }
+  } else {
+    const body = { ticker, brokerage:'webull', date, amount_usd: amount };
+    if (editId) {
+      await sb('dividends_us', 'PATCH', body, `?id=eq.${editId}`);
+    } else {
+      await sb('dividends_us', 'POST', body);
+    }
+  }
+
+  invalidateCache();
+  closeModal('div-add-modal');
+  closeModal('div-history-modal');
+  await loadDividends();
+}
+
+async function deleteDivEntry(id, broker) {
+  if (!confirm('Delete this dividend entry?')) return;
+  const table = broker === 'cmc' ? 'dividends_sg' : broker === 'syfe' ? 'dividends_syfe' : 'dividends_us';
+  await sb(table, 'DELETE', null, `?id=eq.${id}`);
+  invalidateCache();
+  closeModal('div-history-modal');
+  await loadDividends();
+}
+
 // ============================================================
 // INIT
 // ============================================================
@@ -2202,6 +2277,78 @@ setInterval(loadWatchlist, 60000);
     <div class="modal-actions">
       <button class="btn btn-cancel" onclick="closeModal('add-ticker-modal')">Cancel</button>
       <button class="btn btn-submit" onclick="submitAddTicker()">Add to Watchlist</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Dividend Modal -->
+<div class="modal-overlay" id="div-add-modal">
+  <div class="modal" style="width:460px">
+    <div class="modal-title" id="div-add-modal-title">Add Dividend</div>
+    <input type="hidden" id="div-edit-id">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Broker</label>
+        <select class="form-input" id="div-add-broker" onchange="updateDivTickerOptions()">
+          <option value="webull">Webull</option>
+          <option value="cmc">CMC Invest</option>
+          <option value="syfe">Syfe</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ticker</label>
+        <input class="form-input" id="div-add-ticker" placeholder="e.g. MA" style="text-transform:uppercase">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input class="form-input" type="date" id="div-add-date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Amount</label>
+        <input class="form-input" type="number" id="div-add-amount" step="0.0001" placeholder="0.00">
+      </div>
+    </div>
+    <!-- Extra fields for CMC -->
+    <div id="div-cmc-fields" style="display:none">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Per Share (SGD)</label>
+          <input class="form-input" type="number" id="div-add-per-share" step="0.0001" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Shares</label>
+          <input class="form-input" type="number" id="div-add-shares" placeholder="0">
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="closeModal('div-add-modal')">Cancel</button>
+      <button class="btn btn-submit" onclick="submitDivEntry()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit/Delete Dividend History Modal -->
+<div class="modal-overlay" id="div-history-modal">
+  <div class="modal" style="width:520px;max-height:80vh;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="modal-title" id="div-modal-title" style="margin:0">—</div>
+      <div id="div-modal-total" style="font-family:var(--font-num);font-size:18px;font-weight:700;color:var(--green)">—</div>
+    </div>
+    <div style="overflow-y:auto;flex:1">
+      <table style="width:100%;border-collapse:collapse;font-family:var(--font-num);font-size:13px">
+        <thead><tr>
+          <th style="padding:10px 12px;text-align:left;color:#94a9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:#131c2e;font-weight:700">Date</th>
+          <th style="padding:10px 12px;text-align:left;color:#94a9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:#131c2e;font-weight:700">Amount</th>
+          <th style="padding:10px 12px;text-align:left;color:#94a9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:#131c2e;font-weight:700">Actions</th>
+        </tr></thead>
+        <tbody id="div-modal-body"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn btn-cancel" onclick="closeModal('div-history-modal')">Close</button>
     </div>
   </div>
 </div>
