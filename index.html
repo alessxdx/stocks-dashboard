@@ -1783,7 +1783,7 @@ function renderDivTable() {
       <td class="pos" style="font-family:var(--font-num);font-weight:600">${totalStr}</td>
       <td style="color:var(--muted)">${s.payments.length}</td>
       <td style="font-family:var(--font-num);${soon?'color:var(--gold);font-weight:600':''}">${soon?'⚡ ':''} ${nextDate}</td>
-      <td style="font-family:var(--font-num);color:var(--muted);font-size:12px">${(() => { const pd = s.next_pay_date || s.last_pay_date; return pd ? fmtDate(pd) : '<span style=\'color:var(--muted)\'>—</span>'; })()}</td>
+      <td style="font-family:var(--font-num);color:var(--muted);font-size:12px">${(() => { const pd = s.next_pay_date; const today = new Date().toISOString().split('T')[0]; return pd && pd >= today ? fmtDate(pd) : '<span style=\'color:var(--muted)\'>—</span>'; })()}</td>
       <td style="font-family:var(--font-num);color:var(--muted);font-size:12px">${nextAmt}</td>
       <td>${myPayoutStr}</td>
       <td style="color:var(--accent);font-size:12px">View →</td>
@@ -1829,10 +1829,10 @@ async function showDivHistory(ticker, broker) {
           <div style="font-size:10px;color:var(--muted)">Ex-Date</div>
           <div style="font-family:var(--font-num);font-size:15px;font-weight:600;color:${isFuture?'var(--gold)':'var(--muted)'}">${fmtDate(showDate)}</div>
         </div>
-        ${(stockData?.next_pay_date || stockData?.last_pay_date) ? `<div>
+        ${(() => { const pd = stockData?.next_pay_date; const today = new Date().toISOString().split('T')[0]; return pd && pd >= today ? `<div>
           <div style="font-size:10px;color:var(--muted)">Pay Date</div>
-          <div style="font-family:var(--font-num);font-size:15px;font-weight:600;color:var(--muted)">${fmtDate(stockData.next_pay_date || stockData.last_pay_date)}</div>
-        </div>` : ''}
+          <div style="font-family:var(--font-num);font-size:15px;font-weight:600;color:var(--muted)">${fmtDate(pd)}</div>
+        </div>` : ''; })()}
         ${showAmt ? `<div>
           <div style="font-size:10px;color:var(--muted)">Rate / Share</div>
           <div style="font-family:var(--font-num);font-size:15px;font-weight:600;color:var(--muted)">${isSG?fmtSGD(showAmt):fmtUSD(showAmt)}</div>
