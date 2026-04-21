@@ -820,6 +820,7 @@ tr:hover td { background:var(--surface2); }
           <th onclick="sortDivTable('total')">Total Dividends</th>
           <th onclick="sortDivTable('payments')">Payments</th>
           <th onclick="sortDivTable('next_date')">Next Ex-Date</th>
+          <th>Pay Date</th>
           <th onclick="sortDivTable('next_amount')">Rate / Share</th>
           <th onclick="sortDivTable('my_payout')">My Est. Payout</th>
           <th></th>
@@ -1703,11 +1704,13 @@ async function loadDividends() {
         const d = divData[key];
         console.log(`${key} -> d:`, d);
         if (d) {
-          s.next_date   = d.nextDate   || null;
-          s.next_amount = d.nextAmount || null;
-          s.last_date   = d.lastDate   || null;
-          s.last_amount = d.lastAmount || null;
-          s.div_source  = d.source     || null;
+          s.next_date     = d.nextDate     || null;
+          s.next_amount   = d.nextAmount   || null;
+          s.next_pay_date = d.nextPayDate  || null;
+          s.last_date     = d.lastDate     || null;
+          s.last_amount   = d.lastAmount   || null;
+          s.last_pay_date = d.lastPayDate  || null;
+          s.div_source    = d.source       || null;
         }
       });
       console.log('After mapping, C38U next_date:', _divAllStocks.find(s=>s.ticker==='C38U')?.next_date);
@@ -1780,6 +1783,7 @@ function renderDivTable() {
       <td class="pos" style="font-family:var(--font-num);font-weight:600">${totalStr}</td>
       <td style="color:var(--muted)">${s.payments.length}</td>
       <td style="font-family:var(--font-num);${soon?'color:var(--gold);font-weight:600':''}">${soon?'⚡ ':''} ${nextDate}</td>
+      <td style="font-family:var(--font-num);color:var(--muted);font-size:12px">${(() => { const pd = s.next_pay_date || s.last_pay_date; return pd ? fmtDate(pd) : '<span style=\'color:var(--muted)\'>—</span>'; })()}</td>
       <td style="font-family:var(--font-num);color:var(--muted);font-size:12px">${nextAmt}</td>
       <td>${myPayoutStr}</td>
       <td style="color:var(--accent);font-size:12px">View →</td>
@@ -1825,6 +1829,10 @@ async function showDivHistory(ticker, broker) {
           <div style="font-size:10px;color:var(--muted)">Ex-Date</div>
           <div style="font-family:var(--font-num);font-size:15px;font-weight:600;color:${isFuture?'var(--gold)':'var(--muted)'}">${fmtDate(showDate)}</div>
         </div>
+        ${(stockData?.next_pay_date || stockData?.last_pay_date) ? `<div>
+          <div style="font-size:10px;color:var(--muted)">Pay Date</div>
+          <div style="font-family:var(--font-num);font-size:15px;font-weight:600;color:var(--muted)">${fmtDate(stockData.next_pay_date || stockData.last_pay_date)}</div>
+        </div>` : ''}
         ${showAmt ? `<div>
           <div style="font-size:10px;color:var(--muted)">Rate / Share</div>
           <div style="font-family:var(--font-num);font-size:15px;font-weight:600;color:var(--muted)">${isSG?fmtSGD(showAmt):fmtUSD(showAmt)}</div>
