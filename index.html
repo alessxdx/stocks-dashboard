@@ -627,10 +627,11 @@ tr:hover td { background:var(--surface2); }
     <div class="section" style="margin:0">
       <div class="section-header">
         <div class="section-title">SPYI Dividend History</div>
+        <button class="btn btn-sm" onclick="openDivModal('SPYI','syfe')">+ Add</button>
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Date</th><th>Amount (USD)</th></tr></thead>
+          <thead><tr><th>Date</th><th>Amount (USD)</th><th></th></tr></thead>
           <tbody id="sy-divs-body"></tbody>
         </table>
       </div>
@@ -1469,16 +1470,33 @@ async function loadSyfe() {
 
   // Syfe deposits
   const syDeps = (_deps||[]).filter(d=>d.brokerage==='syfe');
-  document.getElementById('sy-deposits-body').innerHTML = syDeps.map(d => `<tr>
+  document.getElementById('sy-deposits-body').innerHTML = syDeps.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(d => `<tr>
     <td>${fmtDate(d.date)}</td><td>${d.currency}</td>
     <td>${d.currency==='SGD'?fmtSGD(d.amount):fmtUSD(d.amount)}</td>
     <td>${d.source_note||'—'}</td>
-  </tr>`).join('');
+    <td>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
+          onclick="openEditDepositModal(${d.id},'syfe','${d.date}','${d.currency}',${d.amount},'${d.source_note||''}')">Edit</button>
+        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
+          onclick="deleteDepositEntry(${d.id},'syfe')">Del</button>
+      </div>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="5" class="empty">No deposits</td></tr>';
 
   // SPYI divs
-  document.getElementById('sy-divs-body').innerHTML = (_divSyfe||[]).map(d => `<tr>
-    <td>${fmtDate(d.date)}</td><td class="pos">${fmtUSD(d.amount_usd)}</td>
-  </tr>`).join('');
+  document.getElementById('sy-divs-body').innerHTML = (_divSyfe||[]).sort((a,b)=>new Date(b.date)-new Date(a.date)).map(d => `<tr>
+    <td>${fmtDate(d.date)}</td>
+    <td class="pos">${fmtUSD(d.amount_usd)}</td>
+    <td>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
+          onclick="openSyfeEditDivModal(${d.id},'${d.date}',${d.amount_usd})">Edit</button>
+        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
+          onclick="deleteSyfeDivEntry(${d.id})">Del</button>
+      </div>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="3" class="empty">No dividends yet</td></tr>';
 }
 
 // ============================================================
@@ -2197,6 +2215,49 @@ async function deleteDivEntry(id, broker) {
   invalidateCache();
   closeModal('div-history-modal');
   await loadDividends();
+}
+
+
+// ============================================================
+// SYFE EDIT HELPERS
+// ============================================================
+function openSyfeEditDivModal(id, date, amount) {
+  document.getElementById('div-add-modal-title').textContent = 'Edit SPYI Dividend';
+  document.getElementById('div-edit-id').value = id;
+  document.getElementById('div-add-broker').value = 'syfe';
+  document.getElementById('div-add-ticker').value = 'SPYI';
+  document.getElementById('div-add-date').value = date;
+  document.getElementById('div-add-amount').value = amount;
+  updateDivCMCFields();
+  document.getElementById('div-add-modal').classList.add('open');
+}
+
+async function deleteSyfeDivEntry(id) {
+  if (!confirm('Delete this dividend entry?')) return;
+  await sb('dividends_syfe', 'DELETE', null, `?id=eq.${id}`);
+  invalidateCache();
+  loadSyfe();
+}
+
+function openEditDepositModal(id, broker, date, currency, amount, note) {
+  const overlay = document.getElementById('add-deposit-modal');
+  overlay.classList.add('open');
+  document.getElementById('dep-broker').value = broker;
+  document.getElementById('dep-date').value = date;
+  document.getElementById('dep-currency').value = currency;
+  document.getElementById('dep-amount').value = amount;
+  document.getElementById('dep-note').value = note;
+  // Store edit id on modal
+  overlay.dataset.editId = id;
+}
+
+async function deleteDepositEntry(id, broker) {
+  if (!confirm('Delete this deposit entry?')) return;
+  await sb('deposits', 'DELETE', null, `?id=eq.${id}`);
+  invalidateCache();
+  if (broker === 'syfe') loadSyfe();
+  else if (broker === 'webull') loadWebull();
+  else loadCMC();
 }
 
 // ============================================================
