@@ -555,8 +555,8 @@ tr:hover td { background:var(--surface2); }
 
   <!-- VOO -->
   <div class="section">
-    <div class="section-header">
-      <div class="section-title">VOO — Vanguard S&P 500 ETF</div>
+    <div class="section-header" style="cursor:pointer" onclick="showSyfeTradeHistory('VOO')">
+      <div class="section-title">VOO — Vanguard S&P 500 ETF <span style="font-size:11px;color:var(--accent);margin-left:8px">View trades →</span></div>
       <span class="pill pill-syfe">Recurring $250–$500/buy</span>
     </div>
     <div class="stat-grid stat-grid-4" style="padding:16px;margin:0">
@@ -574,8 +574,8 @@ tr:hover td { background:var(--surface2); }
 
   <!-- SCHG -->
   <div class="section">
-    <div class="section-header">
-      <div class="section-title">SCHG — Schwab US Large-Cap Growth ETF</div>
+    <div class="section-header" style="cursor:pointer" onclick="showSyfeTradeHistory('SCHG')">
+      <div class="section-title">SCHG — Schwab US Large-Cap Growth ETF <span style="font-size:11px;color:var(--accent);margin-left:8px">View trades →</span></div>
       <span class="pill pill-syfe">Recurring $350–$500/buy</span>
     </div>
     <div class="stat-grid stat-grid-4" style="padding:16px;margin:0">
@@ -593,8 +593,8 @@ tr:hover td { background:var(--surface2); }
 
   <!-- SPYI -->
   <div class="section">
-    <div class="section-header">
-      <div class="section-title">SPYI — NEOS S&P 500 High Income ETF</div>
+    <div class="section-header" style="cursor:pointer" onclick="showSyfeTradeHistory('SPYI')">
+      <div class="section-title">SPYI — NEOS S&P 500 High Income ETF <span style="font-size:11px;color:var(--accent);margin-left:8px">View trades →</span></div>
       <span class="pill pill-syfe">Lump Sum · Monthly Cash Dividends</span>
     </div>
     <div class="stat-grid stat-grid-4" style="padding:16px;margin:0">
@@ -626,12 +626,17 @@ tr:hover td { background:var(--surface2); }
     </div>
     <div class="section" style="margin:0">
       <div class="section-header">
-        <div class="section-title">SPYI Dividend History</div>
-        <button class="btn btn-sm" onclick="openDivModal('SPYI','syfe')">+ Add</button>
+        <div class="section-title">Dividends Received</div>
+        <button class="btn btn-sm" onclick="openDivModal('','syfe')">+ Add</button>
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Date</th><th>Amount (USD)</th><th></th></tr></thead>
+          <thead><tr>
+            <th>Ticker</th>
+            <th>Total Received</th>
+            <th>Payments</th>
+            <th></th>
+          </tr></thead>
           <tbody id="sy-divs-body"></tbody>
         </table>
       </div>
@@ -1185,8 +1190,9 @@ let _dataLoaded = false;
 
 async function loadAllData() {
   if (_dataLoaded) return;
+  let _syfeTrades;
   [_wbHoldings, _wbTrades, _syfeH, _cmcTrades,
-   _deps, _wds, _fx, _divUS, _divSG, _divSyfe] = await Promise.all([
+   _deps, _wds, _fx, _divUS, _divSG, _divSyfe, _syfeTrades] = await Promise.all([
     sb('webull_holdings','GET',null,'?order=ticker.asc'),
     sb('webull_trades','GET',null,'?order=date.desc'),
     sb('syfe_holdings','GET',null,'?order=ticker.asc'),
@@ -1197,7 +1203,9 @@ async function loadAllData() {
     sb('dividends_us','GET',null,'?order=date.desc'),
     sb('dividends_sg','GET',null,'?order=date.desc'),
     sb('dividends_syfe','GET',null,'?order=date.desc'),
+    sb('syfe_trades','GET',null,'?order=date.desc'),
   ]);
+  window._syfeTrades = _syfeTrades;
   _dataLoaded = true;
 }
 
@@ -1485,18 +1493,25 @@ async function loadSyfe() {
   </tr>`).join('') || '<tr><td colspan="5" class="empty">No deposits</td></tr>';
 
   // SPYI divs
-  document.getElementById('sy-divs-body').innerHTML = (_divSyfe||[]).sort((a,b)=>new Date(b.date)-new Date(a.date)).map(d => `<tr>
-    <td>${fmtDate(d.date)}</td>
-    <td class="pos">${fmtUSD(d.amount_usd)}</td>
-    <td>
-      <div style="display:flex;gap:6px">
-        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
-          onclick="openSyfeEditDivModal(${d.id},'${d.date}',${d.amount_usd})">Edit</button>
-        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
-          onclick="deleteSyfeDivEntry(${d.id})">Del</button>
-      </div>
-    </td>
-  </tr>`).join('') || '<tr><td colspan="3" class="empty">No dividends yet</td></tr>';
+  // Group Syfe divs by ticker — VOO, SCHG, SPYI
+  const syfeDivMap = {};
+  (_divSyfe||[]).forEach(d => {
+    if (!syfeDivMap[d.ticker]) syfeDivMap[d.ticker] = {ticker:d.ticker, total:0, payments:[]};
+    syfeDivMap[d.ticker].total += d.amount_usd;
+    syfeDivMap[d.ticker].payments.push(d);
+  });
+  const syfeOrder = ['VOO','SCHG','SPYI'];
+  const syfeRows = syfeOrder.filter(t => syfeDivMap[t]).map(t => {
+    const s = syfeDivMap[t];
+    const netTotal = s.total * US_TAX;
+    return `<tr style="cursor:pointer" onclick="showSyfeDivHistory('${t}')">
+      <td><span class="ticker-badge syfe">${t}</span></td>
+      <td class="pos" style="font-family:var(--font-num);font-weight:600">${fmtUSD(netTotal)} <span style="font-size:10px;color:var(--muted)">(after 30% tax)</span></td>
+      <td style="color:var(--muted)">${s.payments.length} payments</td>
+      <td style="color:var(--accent);font-size:12px">View →</td>
+    </tr>`;
+  });
+  document.getElementById('sy-divs-body').innerHTML = syfeRows.join('') || '<tr><td colspan="4" class="empty">No dividends yet</td></tr>';
 }
 
 // ============================================================
@@ -2221,11 +2236,11 @@ async function deleteDivEntry(id, broker) {
 // ============================================================
 // SYFE EDIT HELPERS
 // ============================================================
-function openSyfeEditDivModal(id, date, amount) {
-  document.getElementById('div-add-modal-title').textContent = 'Edit SPYI Dividend';
+function openSyfeEditDivModal(id, ticker, date, amount) {
+  document.getElementById('div-add-modal-title').textContent = 'Edit ' + ticker + ' Dividend';
   document.getElementById('div-edit-id').value = id;
   document.getElementById('div-add-broker').value = 'syfe';
-  document.getElementById('div-add-ticker').value = 'SPYI';
+  document.getElementById('div-add-ticker').value = ticker;
   document.getElementById('div-add-date').value = date;
   document.getElementById('div-add-amount').value = amount;
   updateDivCMCFields();
@@ -2236,6 +2251,7 @@ async function deleteSyfeDivEntry(id) {
   if (!confirm('Delete this dividend entry?')) return;
   await sb('dividends_syfe', 'DELETE', null, `?id=eq.${id}`);
   invalidateCache();
+  closeModal('div-history-modal');
   loadSyfe();
 }
 
@@ -2258,6 +2274,150 @@ async function deleteDepositEntry(id, broker) {
   if (broker === 'syfe') loadSyfe();
   else if (broker === 'webull') loadWebull();
   else loadCMC();
+}
+
+
+// ── Syfe dividend history modal ──
+async function showSyfeDivHistory(ticker) {
+  await loadAllData();
+  const payments = (_divSyfe||[])
+    .filter(d => d.ticker === ticker)
+    .sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  const totalGross = payments.reduce((s,d) => s+d.amount_usd, 0);
+  const totalNet = totalGross * US_TAX;
+
+  // Reuse div-history-modal
+  document.getElementById('div-modal-title').innerHTML =
+    `<span class="ticker-badge syfe">${ticker}</span>&nbsp; Dividend History`;
+  document.getElementById('div-modal-total').innerHTML =
+    `<span style="font-size:14px">${fmtUSD(totalNet)} <span style="font-size:10px;color:var(--muted)">after tax</span></span>`;
+
+  document.getElementById('div-modal-body').innerHTML = payments.map(d => {
+    const net = d.amount_usd * US_TAX;
+    return `<tr>
+      <td style="padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted)">${fmtDate(d.date)}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid var(--border)" class="pos">
+        ${fmtUSD(net)}
+        <span style="font-size:10px;color:var(--muted);display:block">Gross: ${fmtUSD(d.amount_usd)}</span>
+      </td>
+      <td style="padding:10px 12px;border-bottom:1px solid var(--border)">
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
+            onclick="openSyfeEditDivModal(${d.id},'${d.ticker}','${d.date}',${d.amount_usd})">Edit</button>
+          <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
+            onclick="deleteSyfeDivEntry(${d.id})">Del</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--muted)">No history</td></tr>';
+
+  document.getElementById('div-history-modal').classList.add('open');
+}
+
+
+// ── Syfe Trade History ──
+let _currentSyfeTicker = '';
+
+async function showSyfeTradeHistory(ticker) {
+  await loadAllData();
+  _currentSyfeTicker = ticker;
+  const trades = (window._syfeTrades||[]).filter(t => t.ticker === ticker)
+    .sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  const totalShares = trades.reduce((s,t) => s+parseFloat(t.shares), 0);
+  const totalSpent  = trades.reduce((s,t) => s+parseFloat(t.amount_usd), 0);
+  const avgPrice    = totalShares > 0 ? totalSpent/totalShares : 0;
+
+  document.getElementById('syfe-trade-modal-title').innerHTML =
+    `<span class="ticker-badge syfe">${ticker}</span>&nbsp; Trade History`;
+  document.getElementById('syfe-add-trade-btn').onclick = () => openSyfeAddTrade(ticker);
+
+  document.getElementById('syfe-trade-summary').innerHTML = `
+    <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)">
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Total Trades</div>
+      <div style="font-family:var(--font-num);font-size:16px;font-weight:700">${trades.length}</div>
+    </div>
+    <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)">
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Total Shares</div>
+      <div style="font-family:var(--font-num);font-size:16px;font-weight:700">${totalShares.toFixed(4)}</div>
+    </div>
+    <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)">
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Total Invested</div>
+      <div style="font-family:var(--font-num);font-size:16px;font-weight:700">${fmtUSD(totalSpent)}</div>
+    </div>
+    <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)">
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Avg Cost/Share</div>
+      <div style="font-family:var(--font-num);font-size:16px;font-weight:700">${fmtUSD(avgPrice)}</div>
+    </div>`;
+
+  document.getElementById('syfe-trade-body').innerHTML = trades.map(t => `<tr>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted)">${fmtDate(t.date)}</td>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-num)">${parseFloat(t.shares).toFixed(4)}</td>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-num)">${fmtUSD(t.price_usd)}</td>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-num)">${fmtUSD(t.amount_usd)}</td>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
+          onclick="openSyfeEditTrade(${t.id},'${t.ticker}','${t.date}',${t.shares},${t.price_usd},${t.amount_usd})">Edit</button>
+        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
+          onclick="deleteSyfeTrade(${t.id},'${t.ticker}')">Del</button>
+      </div>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--muted)">No trades</td></tr>';
+
+  document.getElementById('syfe-trade-modal').classList.add('open');
+}
+
+function openSyfeAddTrade(ticker) {
+  document.getElementById('syfe-add-trade-title').textContent = 'Add Trade — ' + (ticker||_currentSyfeTicker);
+  document.getElementById('syfe-trade-edit-id').value = '';
+  document.getElementById('syfe-trade-ticker').value = ticker||_currentSyfeTicker;
+  document.getElementById('syfe-trade-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('syfe-trade-shares').value = '';
+  document.getElementById('syfe-trade-price').value = '';
+  document.getElementById('syfe-trade-amount').value = '';
+  document.getElementById('syfe-add-trade-modal').classList.add('open');
+}
+
+function openSyfeEditTrade(id, ticker, date, shares, price, amount) {
+  document.getElementById('syfe-add-trade-title').textContent = 'Edit Trade — ' + ticker;
+  document.getElementById('syfe-trade-edit-id').value = id;
+  document.getElementById('syfe-trade-ticker').value = ticker;
+  document.getElementById('syfe-trade-date').value = date;
+  document.getElementById('syfe-trade-shares').value = shares;
+  document.getElementById('syfe-trade-price').value = price;
+  document.getElementById('syfe-trade-amount').value = amount;
+  document.getElementById('syfe-add-trade-modal').classList.add('open');
+}
+
+async function submitSyfeTrade() {
+  const editId = document.getElementById('syfe-trade-edit-id').value;
+  const ticker = document.getElementById('syfe-trade-ticker').value;
+  const date = document.getElementById('syfe-trade-date').value;
+  const shares = parseFloat(document.getElementById('syfe-trade-shares').value);
+  const price_usd = parseFloat(document.getElementById('syfe-trade-price').value);
+  const amount_usd = parseFloat(document.getElementById('syfe-trade-amount').value);
+  if (!ticker||!date||isNaN(shares)||isNaN(price_usd)||isNaN(amount_usd)) return alert('Please fill all fields');
+  const body = {ticker, date, shares, price_usd, amount_usd};
+  if (editId) {
+    await sb('syfe_trades','PATCH',body,`?id=eq.${editId}`);
+  } else {
+    await sb('syfe_trades','POST',body);
+  }
+  invalidateCache();
+  closeModal('syfe-add-trade-modal');
+  await loadAllData();
+  showSyfeTradeHistory(ticker);
+}
+
+async function deleteSyfeTrade(id, ticker) {
+  if (!confirm('Delete this trade?')) return;
+  await sb('syfe_trades','DELETE',null,`?id=eq.${id}`);
+  invalidateCache();
+  closeModal('syfe-trade-modal');
+  await loadAllData();
+  showSyfeTradeHistory(ticker);
 }
 
 // ============================================================
@@ -2413,6 +2573,65 @@ setInterval(loadWatchlist, 60000);
     </div>
     <div class="modal-actions" style="margin-top:16px">
       <button class="btn btn-cancel" onclick="closeModal('div-history-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Syfe Trade History Modal -->
+<div class="modal-overlay" id="syfe-trade-modal">
+  <div class="modal" style="width:600px;max-height:85vh;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="modal-title" id="syfe-trade-modal-title" style="margin:0">Trade History</div>
+      <button class="btn btn-sm" id="syfe-add-trade-btn" onclick="openSyfeAddTrade()">+ Add Trade</button>
+    </div>
+    <div style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap" id="syfe-trade-summary"></div>
+    <div style="overflow-y:auto;flex:1">
+      <table style="width:100%;border-collapse:collapse;font-family:var(--font-num);font-size:13px">
+        <thead><tr>
+          <th style="padding:10px 12px;text-align:left;color:#94a9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:#131c2e;font-weight:700">Date</th>
+          <th style="padding:10px 12px;text-align:left;color:#94a9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:#131c2e;font-weight:700">Shares</th>
+          <th style="padding:10px 12px;text-align:left;color:#94a9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:#131c2e;font-weight:700">Price (USD)</th>
+          <th style="padding:10px 12px;text-align:left;color:#94a9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:#131c2e;font-weight:700">Amount (USD)</th>
+          <th style="padding:10px 12px;text-align:left;color:#94a9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:#131c2e;font-weight:700"></th>
+        </tr></thead>
+        <tbody id="syfe-trade-body"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn btn-cancel" onclick="closeModal('syfe-trade-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Syfe Add/Edit Trade Modal -->
+<div class="modal-overlay" id="syfe-add-trade-modal">
+  <div class="modal" style="width:420px">
+    <div class="modal-title" id="syfe-add-trade-title">Add Trade</div>
+    <input type="hidden" id="syfe-trade-edit-id">
+    <input type="hidden" id="syfe-trade-ticker">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input class="form-input" type="date" id="syfe-trade-date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Shares</label>
+        <input class="form-input" type="number" id="syfe-trade-shares" step="0.0001" placeholder="0.0000">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Price (USD)</label>
+        <input class="form-input" type="number" id="syfe-trade-price" step="0.01" placeholder="0.00">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Amount Spent (USD)</label>
+        <input class="form-input" type="number" id="syfe-trade-amount" step="0.01" placeholder="0.00">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="closeModal('syfe-add-trade-modal')">Cancel</button>
+      <button class="btn btn-submit" onclick="submitSyfeTrade()">Save</button>
     </div>
   </div>
 </div>
