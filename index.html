@@ -1190,7 +1190,6 @@ let _dataLoaded = false;
 
 async function loadAllData() {
   if (_dataLoaded) return;
-  let _syfeTrades;
   [_wbHoldings, _wbTrades, _syfeH, _cmcTrades,
    _deps, _wds, _fx, _divUS, _divSG, _divSyfe, _syfeTrades] = await Promise.all([
     sb('webull_holdings','GET',null,'?order=ticker.asc'),
@@ -1205,11 +1204,10 @@ async function loadAllData() {
     sb('dividends_syfe','GET',null,'?order=date.desc'),
     sb('syfe_trades','GET',null,'?order=date.desc'),
   ]);
-  window._syfeTrades = _syfeTrades;
   _dataLoaded = true;
 }
 
-function invalidateCache() { _dataLoaded = false; }
+function invalidateCache() { _dataLoaded = false; _syfeTrades = null; }
 
 // ============================================================
 // OVERVIEW
@@ -2322,7 +2320,7 @@ let _currentSyfeTicker = '';
 async function showSyfeTradeHistory(ticker) {
   await loadAllData();
   _currentSyfeTicker = ticker;
-  const trades = (window._syfeTrades||[]).filter(t => t.ticker === ticker)
+  const trades = (_syfeTrades||[]).filter(t => t.ticker === ticker)
     .sort((a,b) => new Date(b.date) - new Date(a.date));
 
   const totalShares = trades.reduce((s,t) => s+parseFloat(t.shares), 0);
