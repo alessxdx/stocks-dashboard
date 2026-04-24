@@ -805,7 +805,7 @@ tr:hover td { background:var(--surface2); }
       <div class="stat-sub" id="div-sg-count">—</div>
     </div>
     <div class="stat-card" style="border-top:2px solid var(--syfe)">
-      <div class="stat-label">Syfe (USD) <span style="font-size:9px;color:var(--muted)">after 30% tax</span></div>
+      <div class="stat-label">Syfe (USD)</div>
       <div class="stat-value" id="div-syfe-total-card">—</div>
       <div class="stat-sub">VOO + SCHG + SPYI</div>
     </div>
@@ -1501,10 +1501,9 @@ async function loadSyfe() {
   const syfeOrder = ['VOO','SCHG','SPYI'];
   const syfeRows = syfeOrder.filter(t => syfeDivMap[t]).map(t => {
     const s = syfeDivMap[t];
-    const netTotal = s.total * US_TAX;
     return `<tr style="cursor:pointer" onclick="showSyfeDivHistory('${t}')">
       <td><span class="ticker-badge syfe">${t}</span></td>
-      <td class="pos" style="font-family:var(--font-num);font-weight:600">${fmtUSD(netTotal)} <span style="font-size:10px;color:var(--muted)">(after 30% tax)</span></td>
+      <td class="pos" style="font-family:var(--font-num);font-weight:600">${fmtUSD(s.total)}</td>
       <td style="color:var(--muted)">${s.payments.length} payments</td>
       <td style="color:var(--accent);font-size:12px">View →</td>
     </tr>`;
@@ -1665,10 +1664,9 @@ async function loadDividends() {
 
   const syMap = {};
   (_divSyfe||[]).forEach(d => {
-    const net = Math.round(d.amount_usd * US_TAX * 100) / 100;
     if (!syMap[d.ticker]) syMap[d.ticker] = {ticker:d.ticker,broker:'syfe',isSG:false,payments:[],total:0};
-    syMap[d.ticker].payments.push({date:d.date,amount:net,rawAmount:net,id:d.id,rawDate:d.date});
-    syMap[d.ticker].total += net;
+    syMap[d.ticker].payments.push({date:d.date,amount:d.amount_usd,rawAmount:d.amount_usd,id:d.id,rawDate:d.date});
+    syMap[d.ticker].total += d.amount_usd;
   });
 
   const usTotal = Object.values(usMap).reduce((s,x)=>s+x.total,0);
@@ -2282,22 +2280,19 @@ async function showSyfeDivHistory(ticker) {
     .filter(d => d.ticker === ticker)
     .sort((a,b) => new Date(b.date) - new Date(a.date));
 
-  const totalGross = payments.reduce((s,d) => s+d.amount_usd, 0);
-  const totalNet = totalGross * US_TAX;
+  const totalNet = payments.reduce((s,d) => s+d.amount_usd, 0);
 
   // Reuse div-history-modal
   document.getElementById('div-modal-title').innerHTML =
     `<span class="ticker-badge syfe">${ticker}</span>&nbsp; Dividend History`;
   document.getElementById('div-modal-total').innerHTML =
-    `<span style="font-size:14px">${fmtUSD(totalNet)} <span style="font-size:10px;color:var(--muted)">after tax</span></span>`;
+    `<span style="font-size:14px">${fmtUSD(totalNet)}</span>`;
 
   document.getElementById('div-modal-body').innerHTML = payments.map(d => {
-    const net = d.amount_usd * US_TAX;
     return `<tr>
       <td style="padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted)">${fmtDate(d.date)}</td>
       <td style="padding:10px 12px;border-bottom:1px solid var(--border)" class="pos">
-        ${fmtUSD(net)}
-        <span style="font-size:10px;color:var(--muted);display:block">Gross: ${fmtUSD(d.amount_usd)}</span>
+        ${fmtUSD(d.amount_usd)}
       </td>
       <td style="padding:10px 12px;border-bottom:1px solid var(--border)">
         <div style="display:flex;gap:6px">
@@ -2319,6 +2314,8 @@ let _currentSyfeTicker = '';
 
 async function showSyfeTradeHistory(ticker) {
   await loadAllData();
+  // Always fetch fresh syfe_trades directly
+  _syfeTrades = await sb('syfe_trades','GET',null,'?order=date.desc');
   _currentSyfeTicker = ticker;
   const trades = (_syfeTrades||[]).filter(t => t.ticker === ticker)
     .sort((a,b) => new Date(b.date) - new Date(a.date));
