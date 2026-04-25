@@ -1396,7 +1396,7 @@ async function loadWebull() {
     const p = price(h.ticker); const val = h.shares*p;
     const pl = val - h.total_cost; const pct = h.total_cost>0 ? pl/h.total_cost*100 : 0;
     aRows += `<tr>
-      <td><span class="ticker-badge default">${h.ticker}</span></td>
+      <td><span class="ticker-badge default" style="cursor:pointer" onclick="showWbTradeHistory('${h.ticker}')">${h.ticker}</span></td>
       <td>${fmtShares(h.shares)}</td><td>${fmtUSD(h.avg_cost)}</td>
       <td>${fmtUSD(p)}</td><td>${fmtUSD(val)}</td>
       <td class="${plColor(pl)}">${plStr(pl)}</td>
@@ -2535,6 +2535,58 @@ async function deleteWbTrade(id, ticker) {
   loadWebull();
 }
 
+
+// ── Webull ticker trade history modal ──
+async function showWbTradeHistory(ticker) {
+  await loadAllData();
+  const trades = (_wbTrades||[])
+    .filter(t => t.ticker === ticker)
+    .sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  const buyTrades  = trades.filter(t => t.action === 'Buy');
+  const sellTrades = trades.filter(t => t.action === 'Sell');
+  const totalBought = buyTrades.reduce((s,t) => s + parseFloat(t.amount), 0);
+  const totalSold   = sellTrades.reduce((s,t) => s + parseFloat(t.amount), 0);
+  const totalRPL    = sellTrades.reduce((s,t) => s + parseFloat(t.realised_pl||0), 0);
+
+  document.getElementById('wb-trade-modal-title').innerHTML =
+    `<span class="ticker-badge webull">${ticker}</span>&nbsp; Trade History`;
+
+  document.getElementById('wb-trade-modal-stats').innerHTML = `
+    <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)">
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Total Trades</div>
+      <div style="font-family:var(--font-num);font-size:16px;font-weight:700">${trades.length}</div>
+    </div>
+    <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)">
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Total Bought</div>
+      <div style="font-family:var(--font-num);font-size:16px;font-weight:700">${fmtUSD(totalBought)}</div>
+    </div>
+    <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)">
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Total Sold</div>
+      <div style="font-family:var(--font-num);font-size:16px;font-weight:700">${fmtUSD(totalSold)}</div>
+    </div>
+    ${totalRPL !== 0 ? `<div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)">
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Realised P&L</div>
+      <div style="font-family:var(--font-num);font-size:16px;font-weight:700" class="${plColor(totalRPL)}">${plStr(totalRPL)}</div>
+    </div>` : ''}
+  `;
+
+  document.getElementById('wb-trade-modal-body').innerHTML = trades.map(t => {
+    const isSell = t.action === 'Sell';
+    const rpl = parseFloat(t.realised_pl || 0);
+    return `<tr>
+      <td style="padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted)">${fmtDate(t.date)}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-weight:600;color:${isSell?'var(--red)':'var(--green)'}">${t.action}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-num)">${fmtShares(t.qty)}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-num)">${fmtUSD(t.price)}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-num)">${fmtUSD(t.amount)}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-num)" class="${rpl!==0?plColor(rpl):''}">${rpl!==0?plStr(rpl):'—'}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--muted)">No trades found</td></tr>';
+
+  document.getElementById('wb-trade-history-modal').classList.add('open');
+}
+
 // ============================================================
 // INIT
 // ============================================================
@@ -2747,6 +2799,33 @@ setInterval(loadWatchlist, 60000);
     <div class="modal-actions">
       <button class="btn btn-cancel" onclick="closeModal('syfe-add-trade-modal')">Cancel</button>
       <button class="btn btn-submit" onclick="submitSyfeTrade()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Webull Ticker Trade History Modal -->
+<div class="modal-overlay" id="wb-trade-history-modal">
+  <div class="modal" style="width:640px;max-height:85vh;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="modal-title" id="wb-trade-modal-title" style="margin:0">Trade History</div>
+      <div id="wb-trade-modal-summary" style="text-align:right"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap" id="wb-trade-modal-stats"></div>
+    <div style="overflow-y:auto;flex:1">
+      <table style="width:100%;border-collapse:collapse;font-family:var(--font-num);font-size:13px">
+        <thead><tr>
+          <th style="padding:10px 12px;text-align:left;color:#94a9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:#131c2e;font-weight:700">Date</th>
+          <th style="padding:10px 12px;text-align:left;color:#94a9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:#131c2e;font-weight:700">Action</th>
+          <th style="padding:10px 12px;text-align:left;color:#94a9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:#131c2e;font-weight:700">Qty</th>
+          <th style="padding:10px 12px;text-align:left;color:#94a9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:#131c2e;font-weight:700">Price</th>
+          <th style="padding:10px 12px;text-align:left;color:#94a9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:#131c2e;font-weight:700">Amount</th>
+          <th style="padding:10px 12px;text-align:left;color:#94a9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:#131c2e;font-weight:700">Realised P&L</th>
+        </tr></thead>
+        <tbody id="wb-trade-modal-body"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn btn-cancel" onclick="closeModal('wb-trade-history-modal')">Close</button>
     </div>
   </div>
 </div>
