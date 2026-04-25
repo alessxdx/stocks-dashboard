@@ -2499,11 +2499,14 @@ async function recalculateAllPL() {
     await sb('webull_trades','PATCH',{ realised_pl: u.realised_pl },`?id=eq.${u.id}`);
   }
 
-  // Update webull_holdings total_realised_pl
-  const allHoldings = await sb('webull_holdings','GET',null,'?brokerage=eq.webull');
-  for (const h of (allHoldings||[])) {
-    const totalRPL = Math.round((holdingRPL[h.ticker] || 0) * 100) / 100;
-    await sb('webull_holdings','PATCH',{ total_realised_pl: totalRPL },`?id=eq.${h.id}`);
+  // Update webull_holdings total_realised_pl — update by ticker directly
+  for (const [ticker, rpl] of Object.entries(holdingRPL)) {
+    const totalRPL = Math.round(rpl * 100) / 100;
+    await sb('webull_holdings','PATCH',
+      { total_realised_pl: totalRPL },
+      `?ticker=eq.${ticker}&brokerage=eq.webull`
+    );
+    console.log(`Updated ${ticker} holdings RPL: ${totalRPL}`);
   }
 
   invalidateCache();
