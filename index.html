@@ -744,10 +744,13 @@ tr:hover td { background:var(--surface2); }
       </div>
     </div>
     <div class="section" style="margin:0">
-      <div class="section-header"><div class="section-title">CMC Withdrawals</div></div>
+      <div class="section-header">
+        <div class="section-title">CMC Withdrawals</div>
+        <button class="btn btn-sm" onclick="openModal('add-withdrawal-modal','cmc')">+ Add</button>
+      </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Date</th><th>Amount (SGD)</th></tr></thead>
+          <thead><tr><th>Date</th><th>Amount (SGD)</th><th></th></tr></thead>
           <tbody id="cmc-withdrawals-body"></tbody>
         </table>
       </div>
@@ -1688,15 +1691,33 @@ async function loadCMC() {
 
   // CMC deposits
   const cmcDeps = (_deps||[]).filter(d=>d.brokerage==='cmc');
-  document.getElementById('cmc-deposits-body').innerHTML = cmcDeps.map(d => `<tr>
-    <td>${fmtDate(d.date)}</td><td>${fmtSGD(d.amount)}</td>
-  </tr>`).join('');
+  document.getElementById('cmc-deposits-body').innerHTML = cmcDeps.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(d => `<tr>
+    <td>${fmtDate(d.date)}</td>
+    <td>${fmtSGD(d.amount)}</td>
+    <td>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
+          onclick="openEditDepositModal(${d.id},'cmc','${d.date}','${d.currency||'SGD'}',${d.amount},'${d.source_note||''}')">Edit</button>
+        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
+          onclick="deleteDepositEntry(${d.id},'cmc')">Del</button>
+      </div>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="3" class="empty">No deposits</td></tr>';
 
   // CMC withdrawals
   const cmcWds = (_wds||[]).filter(w=>w.brokerage==='cmc');
-  document.getElementById('cmc-withdrawals-body').innerHTML = cmcWds.map(w => `<tr>
-    <td>${fmtDate(w.date)}</td><td class="neg">${fmtSGD(w.amount)}</td>
-  </tr>`).join('');
+  document.getElementById('cmc-withdrawals-body').innerHTML = cmcWds.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(w => `<tr>
+    <td>${fmtDate(w.date)}</td>
+    <td class="neg">${fmtSGD(w.amount)}</td>
+    <td>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
+          onclick="openEditWithdrawalModal(${w.id},'cmc','${w.date}','${w.currency||'SGD'}',${w.amount})">Edit</button>
+        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
+          onclick="deleteWithdrawalEntry(${w.id},'cmc')">Del</button>
+      </div>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="3" class="empty">No withdrawals</td></tr>';
 }
 
 // ============================================================
@@ -2307,21 +2328,74 @@ function submitAddTicker() {
 // DIVIDEND CRUD
 // ============================================================
 function updateDivCMCFields() {
+  // Legacy - now handled by openDivModal
   const broker = document.getElementById('div-add-broker').value;
   document.getElementById('div-cmc-fields').style.display = broker === 'cmc' ? 'block' : 'none';
 }
 
 function openDivModal(ticker='', broker='webull') {
-  document.getElementById('div-add-modal-title').textContent = 'Add Dividend';
+  document.getElementById('div-add-modal-title').textContent =
+    broker === 'cmc' ? 'Add Dividend — CMC Invest' :
+    broker === 'syfe' ? 'Add Dividend — Syfe' : 'Add Dividend — Webull';
   document.getElementById('div-edit-id').value = '';
   document.getElementById('div-add-broker').value = broker;
+  document.getElementById('div-add-broker-select').value = broker;
   document.getElementById('div-add-ticker').value = ticker;
+  document.getElementById('div-add-ticker-cmc').value = ticker;
   document.getElementById('div-add-date').value = new Date().toISOString().split('T')[0];
   document.getElementById('div-add-amount').value = '';
   document.getElementById('div-add-per-share').value = '';
   document.getElementById('div-add-shares').value = '';
-  updateDivCMCFields();
+  document.getElementById('div-shares-hint').textContent = '';
+
+  // Show/hide broker selector based on context
+  const isCMC = broker === 'cmc';
+  document.getElementById('div-broker-row').style.display = isCMC ? 'none' : '';
+  document.getElementById('div-cmc-ticker-row').style.display = isCMC ? 'block' : 'none';
+  document.getElementById('div-cmc-fields').style.display = isCMC ? 'block' : 'none';
+
+  // Auto-fill shares if CMC and ticker known
+  if (isCMC && ticker) autoFillCMCShares(ticker);
+
   document.getElementById('div-add-modal').classList.add('open');
+}
+
+function onDivBrokerChange(broker) {
+  document.getElementById('div-add-broker').value = broker;
+  const isCMC = broker === 'cmc';
+  document.getElementById('div-cmc-fields').style.display = isCMC ? 'block' : 'none';
+  document.getElementById('div-add-modal-title').textContent =
+    isCMC ? 'Add Dividend — CMC Invest' :
+    broker === 'syfe' ? 'Add Dividend — Syfe' : 'Add Dividend — Webull';
+}
+
+function onDivTickerInput() {
+  const broker = document.getElementById('div-add-broker').value;
+  if (broker === 'cmc') {
+    const ticker = document.getElementById('div-add-ticker').value.toUpperCase();
+    autoFillCMCShares(ticker);
+  }
+}
+
+function autoFillCMCShares(ticker) {
+  // Look up current shares from CMC active holdings
+  const active = getCMCActive();
+  const holding = active.find(h => h.ticker === ticker);
+  if (holding) {
+    document.getElementById('div-add-shares').value = holding.shares;
+    document.getElementById('div-shares-hint').textContent = '(auto-filled)';
+    autoCalcDivAmount();
+  } else {
+    document.getElementById('div-shares-hint').textContent = '';
+  }
+}
+
+function autoCalcDivAmount() {
+  const perShare = parseFloat(document.getElementById('div-add-per-share').value) || 0;
+  const shares = parseFloat(document.getElementById('div-add-shares').value) || 0;
+  if (perShare > 0 && shares > 0) {
+    document.getElementById('div-add-amount').value = (perShare * shares).toFixed(4);
+  }
 }
 
 function openDivEditModal(id, broker, date, amount, perShare, shares) {
@@ -2866,12 +2940,25 @@ async function showCMCTradeHistory(ticker) {
     .filter(t => t.ticker === ticker && t.brokerage === 'cmc')
     .sort((a,b) => new Date(b.date) - new Date(a.date));
 
-  const buyTrades  = trades.filter(t => t.action === 'Buy');
   const sellTrades = trades.filter(t => t.action === 'Sell');
-  const totalBought = buyTrades.reduce((s,t) => s + parseFloat(t.amount), 0);
-  const totalSold   = sellTrades.reduce((s,t) => s + parseFloat(t.amount), 0);
-  const totalShares = buyTrades.reduce((s,t) => s + parseFloat(t.qty), 0) - sellTrades.reduce((s,t) => s + parseFloat(t.qty), 0);
-  const avgCost     = totalShares > 0 ? totalBought / (buyTrades.reduce((s,t) => s+parseFloat(t.qty),0)) : 0;
+  const totalSold = sellTrades.reduce((s,t) => s + parseFloat(t.amount), 0);
+  let totalBought = 0;
+
+  // Compute running avg cost chronologically to get correct current avg + shares
+  let runShares = 0, runCost = 0, runRPL = 0;
+  [...trades].sort((a,b) => new Date(a.date) - new Date(b.date)).forEach(t => {
+    const qty = parseFloat(t.qty), amount = parseFloat(t.amount);
+    if (t.action === 'Buy') {
+      runShares += qty; runCost += amount; totalBought += amount;
+    } else if (t.action === 'Sell' && runShares > 0) {
+      const avg = runCost / runShares;
+      runRPL += (amount/qty - avg) * qty;
+      runShares -= qty; runCost -= avg * qty;
+    }
+  });
+  const totalShares = Math.max(0, runShares);
+  const avgCost = totalShares > 0 ? runCost / totalShares : 0;
+  const realisedPL = Math.round(runRPL * 100) / 100;
 
   document.getElementById('cmc-trade-modal-header').innerHTML =
     `<span class="ticker-badge cmc">${ticker}</span>&nbsp; Trade History`;
@@ -2904,7 +2991,11 @@ async function showCMCTradeHistory(ticker) {
     <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)">
       <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Avg Cost/Share</div>
       <div style="font-family:var(--font-num);font-size:16px;font-weight:700">${fmtSGD(avgCost)}</div>
-    </div>`;
+    </div>
+    ${realisedPL !== 0 ? `<div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)">
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Realised P&L</div>
+      <div style="font-family:var(--font-num);font-size:16px;font-weight:700" class="${plColor(realisedPL)}">${plStr(realisedPL,'S$')}</div>
+    </div>` : ''}`;
 
   document.getElementById('cmc-trade-modal-body').innerHTML = trades.map(t => {
     const isSell = t.action === 'Sell';
@@ -3038,10 +3129,12 @@ setInterval(loadWatchlist, 60000);
   <div class="modal" style="width:460px">
     <div class="modal-title" id="div-add-modal-title">Add Dividend</div>
     <input type="hidden" id="div-edit-id">
-    <div class="form-row">
+    <input type="hidden" id="div-add-broker" value="webull">
+    <!-- Broker selector — shown only for non-CMC context -->
+    <div id="div-broker-row" class="form-row">
       <div class="form-group">
         <label class="form-label">Broker</label>
-        <select class="form-input" id="div-add-broker" onchange="updateDivTickerOptions()">
+        <select class="form-input" id="div-add-broker-select" onchange="onDivBrokerChange(this.value)">
           <option value="webull">Webull</option>
           <option value="cmc">CMC Invest</option>
           <option value="syfe">Syfe</option>
@@ -3049,8 +3142,13 @@ setInterval(loadWatchlist, 60000);
       </div>
       <div class="form-group">
         <label class="form-label">Ticker</label>
-        <input class="form-input" id="div-add-ticker" placeholder="e.g. MA" style="text-transform:uppercase">
+        <input class="form-input" id="div-add-ticker" placeholder="e.g. MA" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase();onDivTickerInput()">
       </div>
+    </div>
+    <!-- CMC-only: ticker without broker selector -->
+    <div id="div-cmc-ticker-row" style="display:none" class="form-group">
+      <label class="form-label">Ticker</label>
+      <input class="form-input" id="div-add-ticker-cmc" placeholder="e.g. D05" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase();document.getElementById('div-add-ticker').value=this.value;onDivTickerInput()">
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -3067,11 +3165,11 @@ setInterval(loadWatchlist, 60000);
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Per Share (SGD)</label>
-          <input class="form-input" type="number" id="div-add-per-share" step="0.0001" placeholder="0.00">
+          <input class="form-input" type="number" id="div-add-per-share" step="0.0001" placeholder="0.00" oninput="autoCalcDivAmount()">
         </div>
         <div class="form-group">
-          <label class="form-label">Shares</label>
-          <input class="form-input" type="number" id="div-add-shares" placeholder="0">
+          <label class="form-label">Shares <span id="div-shares-hint" style="color:var(--muted);font-size:10px"></span></label>
+          <input class="form-input" type="number" id="div-add-shares" placeholder="0" oninput="autoCalcDivAmount()">
         </div>
       </div>
     </div>
