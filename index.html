@@ -686,7 +686,7 @@ tr:hover td { background:var(--surface2); }
 
   <div class="section">
     <div class="section-header">
-      <div class="section-title">Active SG Holdings</div>
+      <div class="section-title">Active Holdings</div>
       <button class="btn btn-sm" onclick="openModal('add-sg-trade-modal','cmc')">+ Add Trade</button>
     </div>
     <div class="table-wrap">
@@ -1117,11 +1117,8 @@ let periodCache = {};
 let _customWatchlist = JSON.parse(localStorage.getItem('wl_custom')||'[]');
 
 async function fetchPrices(tickers) {
-  // If prices were fetched recently, only fetch truly missing ones
-  const cacheExpired = (Date.now() - _priceCacheAt) > PRICE_CACHE_MS;
-  const missing = tickers.filter(t => t && (!priceCache[t] || cacheExpired));
+  const missing = tickers.filter(t => t && !priceCache[t]);
   if (!missing.length) return;
-  _priceCacheAt = Date.now();
 
   try {
     // Cloudflare Worker — fetches Google Finance prices server-side, no CORS issues
@@ -1215,8 +1212,7 @@ let _deps=null, _wds=null, _fx=null, _divUS=null, _divSG=null, _divSyfe=null;
 let _dataLoaded = false;
 
 async function loadAllData() {
-  // Use cache if loaded within last 5 minutes
-  if (_dataLoaded && (Date.now() - _dataLoadedAt) < DATA_CACHE_MS) return;
+  if (_dataLoaded) return;
   [_wbHoldings, _wbTrades, _syfeH, _cmcTrades,
    _deps, _wds, _fx, _divUS, _divSG, _divSyfe, _syfeTrades] = await Promise.all([
     sb('webull_holdings','GET',null,'?order=ticker.asc'),
@@ -1232,10 +1228,9 @@ async function loadAllData() {
     sb('syfe_trades','GET',null,'?order=date.desc'),
   ]);
   _dataLoaded = true;
-  _dataLoadedAt = Date.now();
 }
 
-function invalidateCache() { _dataLoaded = false; _dataLoadedAt = 0; _syfeTrades = null; priceCache = {}; dayChangeCache = {}; periodCache = {}; _priceCacheAt = 0; }
+function invalidateCache() { _dataLoaded = false; _syfeTrades = null; priceCache = {}; dayChangeCache = {}; periodCache = {}; }
 
 // ============================================================
 // OVERVIEW
@@ -1614,7 +1609,7 @@ async function loadCMC() {
     const p = price(h.ticker+'.SI'); const val = h.shares*p;
     const pl = val - h.cost; const pct = h.cost>0?pl/h.cost*100:0;
     return `<tr>
-      <td><span class="ticker-badge default">${h.ticker}</span></td>
+      <td><span class="ticker-badge default" style="cursor:pointer" onclick="showCMCTradeHistory('${h.ticker}')">${h.ticker}</span></td>
       <td>${fmtShares(h.shares)}</td><td>${fmtSGD(h.avgPrice)}</td>
       <td>${fmtSGD(p)}</td><td>${fmtSGD(val)}</td>
       <td class="${plColor(pl)}">${plStr(pl,'S$')}</td>
@@ -2765,6 +2760,99 @@ function renderWbActiveHoldings() {
   </tr>`).join('') || '<tr><td colspan="8" class="empty">No active holdings</td></tr>';
 }
 
+
+// ── CMC Trade History Modal ──
+let _currentCMCTicker = '';
+
+async function showCMCTradeHistory(ticker) {
+  await loadAllData();
+  _currentCMCTicker = ticker;
+  const trades = (_cmcTrades||[])
+    .filter(t => t.ticker === ticker && t.brokerage === 'cmc')
+    .sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  const buyTrades  = trades.filter(t => t.action === 'Buy');
+  const sellTrades = trades.filter(t => t.action === 'Sell');
+  const totalBought = buyTrades.reduce((s,t) => s + parseFloat(t.amount), 0);
+  const totalSold   = sellTrades.reduce((s,t) => s + parseFloat(t.amount), 0);
+  const totalShares = buyTrades.reduce((s,t) => s + parseFloat(t.qty), 0) - sellTrades.reduce((s,t) => s + parseFloat(t.qty), 0);
+  const avgCost     = totalShares > 0 ? totalBought / (buyTrades.reduce((s,t) => s+parseFloat(t.qty),0)) : 0;
+
+  document.getElementById('cmc-trade-modal-header').innerHTML =
+    `<span class="ticker-badge cmc">${ticker}</span>&nbsp; Trade History`;
+
+  document.getElementById('cmc-add-trade-btn').onclick = () => {
+    closeModal('cmc-trade-history-modal');
+    // Pre-fill ticker in add trade modal
+    openModal('add-sg-trade-modal','cmc');
+    document.getElementById('sg-ticker').value = ticker;
+    document.getElementById('cmc-trade-modal-title').textContent = 'Add Trade — CMC Invest';
+  };
+
+  document.getElementById('cmc-trade-modal-stats').innerHTML = `
+    <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)">
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Total Trades</div>
+      <div style="font-family:var(--font-num);font-size:16px;font-weight:700">${trades.length}</div>
+    </div>
+    <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)">
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Shares Held</div>
+      <div style="font-family:var(--font-num);font-size:16px;font-weight:700">${fmtShares(totalShares)}</div>
+    </div>
+    <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)">
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Total Bought</div>
+      <div style="font-family:var(--font-num);font-size:16px;font-weight:700">${fmtSGD(totalBought)}</div>
+    </div>
+    ${totalSold > 0 ? `<div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)">
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Total Sold</div>
+      <div style="font-family:var(--font-num);font-size:16px;font-weight:700">${fmtSGD(totalSold)}</div>
+    </div>` : ''}
+    <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)">
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Avg Cost/Share</div>
+      <div style="font-family:var(--font-num);font-size:16px;font-weight:700">${fmtSGD(avgCost)}</div>
+    </div>`;
+
+  document.getElementById('cmc-trade-modal-body').innerHTML = trades.map(t => {
+    const isSell = t.action === 'Sell';
+    return `<tr>
+      <td style="padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted)">${fmtDate(t.date)}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-weight:600;color:${isSell?'var(--red)':'var(--green)'}">${t.action}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-num)">${fmtShares(t.qty)}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-num)">${fmtSGD(t.price)}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-num)">${fmtSGD(t.amount)}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid var(--border)">
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
+            onclick="openCMCEditTrade(${t.id},'${t.ticker}','${t.date}','${t.action}',${t.qty},${t.price},${t.amount})">Edit</button>
+          <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
+            onclick="deleteCMCTrade(${t.id},'${t.ticker}')">Del</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--muted)">No trades found</td></tr>';
+
+  document.getElementById('cmc-trade-history-modal').classList.add('open');
+}
+
+function openCMCEditTrade(id, ticker, date, action, qty, price, amount) {
+  closeModal('cmc-trade-history-modal');
+  document.getElementById('cmc-trade-modal-title').textContent = 'Edit Trade — CMC Invest';
+  document.getElementById('sg-edit-id').value = id;
+  document.getElementById('sg-ticker').value = ticker;
+  document.getElementById('sg-action').value = action;
+  document.getElementById('sg-date').value = date;
+  document.getElementById('sg-qty').value = qty;
+  document.getElementById('sg-price').value = price;
+  document.getElementById('add-sg-trade-modal').classList.add('open');
+}
+
+async function deleteCMCTrade(id, ticker) {
+  if (!confirm('Delete this trade?')) return;
+  await sb('cmc_trades','DELETE',null,`?id=eq.${id}`);
+  invalidateCache();
+  closeModal('cmc-trade-history-modal');
+  loadCMC();
+}
+
 // ============================================================
 // INIT
 // ============================================================
@@ -2825,7 +2913,7 @@ async function loadWatchlist() {
 
 // Auto-refresh watchlist every 60 seconds
 loadWatchlist();
-setInterval(loadWatchlist, 180000); // refresh every 3 mins
+setInterval(loadWatchlist, 60000);
 
 </script>
 
@@ -3033,6 +3121,33 @@ setInterval(loadWatchlist, 180000); // refresh every 3 mins
     <div class="modal-actions">
       <button class="btn btn-cancel" onclick="closeModal('edit-withdrawal-modal')">Cancel</button>
       <button class="btn btn-submit" onclick="submitEditWithdrawal()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- CMC Trade History Modal -->
+<div class="modal-overlay" id="cmc-trade-history-modal">
+  <div class="modal" style="width:620px;max-height:85vh;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="modal-title" id="cmc-trade-modal-header" style="margin:0">Trade History</div>
+      <button class="btn btn-sm" id="cmc-add-trade-btn">+ Add Trade</button>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap" id="cmc-trade-modal-stats"></div>
+    <div style="overflow-y:auto;flex:1">
+      <table style="width:100%;border-collapse:collapse;font-family:var(--font-num);font-size:13px">
+        <thead><tr>
+          <th style="padding:10px 12px;text-align:left;color:#94a9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:#131c2e;font-weight:700">Date</th>
+          <th style="padding:10px 12px;text-align:left;color:#94a9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:#131c2e;font-weight:700">Action</th>
+          <th style="padding:10px 12px;text-align:left;color:#94a9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:#131c2e;font-weight:700">Qty</th>
+          <th style="padding:10px 12px;text-align:left;color:#94a9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:#131c2e;font-weight:700">Price (SGD)</th>
+          <th style="padding:10px 12px;text-align:left;color:#94a9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:#131c2e;font-weight:700">Amount (SGD)</th>
+          <th style="padding:10px 12px;text-align:left;color:#94a9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:#131c2e;font-weight:700"></th>
+        </tr></thead>
+        <tbody id="cmc-trade-modal-body"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn btn-cancel" onclick="closeModal('cmc-trade-history-modal')">Close</button>
     </div>
   </div>
 </div>
