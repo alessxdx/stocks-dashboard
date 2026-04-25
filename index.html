@@ -718,10 +718,13 @@ tr:hover td { background:var(--surface2); }
 
 
   <div class="section">
-    <div class="section-header"><div class="section-title">SG Dividend History</div></div>
+    <div class="section-header">
+        <div class="section-title">SG Dividend History</div>
+        <button class="btn btn-sm" onclick="openDivModal('','cmc')">+ Add</button>
+      </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Ticker</th><th>Date</th><th>Per Share</th><th>Shares</th><th>Total (SGD)</th></tr></thead>
+        <thead><tr><th>Ticker</th><th>Total Dividends</th><th>Payments</th><th></th></tr></thead>
         <tbody id="cmc-divs-body"></tbody>
       </table>
     </div>
@@ -1580,9 +1583,10 @@ function getCMCActive() {
     map[t.ticker].cost += t.amount;
   });
   trades.filter(t=>t.action==='Sell').sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(t => {
-    if (map[t.ticker]) {
-      const avgCost = map[t.ticker].shares > 0 ? map[t.ticker].cost / map[t.ticker].shares : 0;
-      const rpl = (t.price - avgCost) * t.qty;
+    if (map[t.ticker] && map[t.ticker].shares > 0) {
+      const avgCost = map[t.ticker].cost / map[t.ticker].shares;
+      const sellPricePerShare = t.amount / t.qty; // use actual amount for accuracy
+      const rpl = (sellPricePerShare - avgCost) * t.qty;
       map[t.ticker].shares -= t.qty;
       map[t.ticker].cost -= avgCost * t.qty;
       map[t.ticker].realisedPL += rpl;
@@ -1602,9 +1606,10 @@ function getCMCClosed() {
     map[t.ticker].cost += t.amount;
   });
   trades.filter(t=>t.action==='Sell').sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(t => {
-    if (map[t.ticker]) {
-      const avgCost = map[t.ticker].shares > 0 ? map[t.ticker].cost / map[t.ticker].shares : 0;
-      const rpl = (t.price - avgCost) * t.qty;
+    if (map[t.ticker] && map[t.ticker].shares > 0) {
+      const avgCost = map[t.ticker].cost / map[t.ticker].shares;
+      const sellPricePerShare = t.amount / t.qty;
+      const rpl = (sellPricePerShare - avgCost) * t.qty;
       map[t.ticker].shares -= t.qty;
       map[t.ticker].cost -= avgCost * t.qty;
       map[t.ticker].realisedPL += rpl;
@@ -1658,12 +1663,21 @@ async function loadCMC() {
 
 
 
-  // SG Dividends
-  document.getElementById('cmc-divs-body').innerHTML = (_divSG||[]).map(d => `<tr>
-    <td><span class="ticker-badge default">${d.ticker}</span></td>
-    <td>${fmtDate(d.date)}</td><td>${fmtSGD(d.per_share)}</td>
-    <td>${fmtShares(d.shares)}</td><td class="pos">${fmtSGD(d.total_sgd)}</td>
-  </tr>`).join('');
+  // SG Dividends — grouped by ticker
+  const sgDivMap = {};
+  (_divSG||[]).forEach(d => {
+    if (!sgDivMap[d.ticker]) sgDivMap[d.ticker] = {ticker:d.ticker, total:0, payments:[]};
+    sgDivMap[d.ticker].total += d.total_sgd;
+    sgDivMap[d.ticker].payments.push(d);
+  });
+  document.getElementById('cmc-divs-body').innerHTML = Object.values(sgDivMap)
+    .sort((a,b)=>a.ticker.localeCompare(b.ticker))
+    .map(s => `<tr style="cursor:pointer" onclick="showCMCDivHistory('${s.ticker}')">
+      <td><span class="ticker-badge cmc">${s.ticker}</span></td>
+      <td class="pos" style="font-family:var(--font-num);font-weight:600">${fmtSGD(s.total)}</td>
+      <td style="color:var(--muted)">${s.payments.length} payments</td>
+      <td style="color:var(--accent);font-size:12px">View →</td>
+    </tr>`).join('') || '<tr><td colspan="4" class="empty">No dividends yet</td></tr>';
 
   // CMC deposits
   const cmcDeps = (_deps||[]).filter(d=>d.brokerage==='cmc');
@@ -2792,6 +2806,48 @@ function renderWbActiveHoldings() {
   </tr>`).join('') || '<tr><td colspan="8" class="empty">No active holdings</td></tr>';
 }
 
+
+
+// ── CMC SG Dividend History Modal ──
+async function showCMCDivHistory(ticker) {
+  await loadAllData();
+  const payments = (_divSG||[])
+    .filter(d => d.ticker === ticker)
+    .sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  const total = payments.reduce((s,d) => s + d.total_sgd, 0);
+
+  document.getElementById('div-modal-title').innerHTML =
+    `<span class="ticker-badge cmc">${ticker}</span>&nbsp; Dividend History`;
+  document.getElementById('div-modal-total').innerHTML =
+    `<span style="font-size:14px">${fmtSGD(total)}</span>`;
+
+  document.getElementById('div-modal-body').innerHTML = payments.map(p => `<tr>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted)">${fmtDate(p.date)}</td>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border)" class="pos">
+      ${fmtSGD(p.total_sgd)}
+      <span style="font-size:11px;color:var(--muted);display:block">${fmtSGD(p.per_share)} per share · ${fmtShares(p.shares)} shares</span>
+    </td>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
+          onclick="openDivEditModal('${p.id}','cmc','${p.date}',${p.total_sgd},${p.per_share},${p.shares})">Edit</button>
+        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
+          onclick="deleteCMCDivEntry(${p.id},'${ticker}')">Del</button>
+      </div>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--muted)">No history</td></tr>';
+
+  document.getElementById('div-history-modal').classList.add('open');
+}
+
+async function deleteCMCDivEntry(id, ticker) {
+  if (!confirm('Delete this dividend entry?')) return;
+  await sb('dividends_sg','DELETE',null,`?id=eq.${id}`);
+  invalidateCache();
+  closeModal('div-history-modal');
+  loadCMC();
+}
 
 // ── CMC Trade History Modal ──
 let _currentCMCTicker = '';
