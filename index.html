@@ -1702,7 +1702,7 @@ async function loadCMC() {
   const cmcWds = (_wds||[]).filter(w=>w.brokerage==='cmc');
   document.getElementById('cmc-withdrawals-body').innerHTML = cmcWds.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(w => `<tr>
     <td>${fmtDate(w.date)}</td>
-    <td class="neg">${fmtSGD(w.amount)}</td>
+    <td style="font-family:var(--font-num)">${fmtSGD(w.amount)}</td>
     <td>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
