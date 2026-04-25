@@ -459,9 +459,14 @@ tr:hover td { background:var(--surface2); }
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>Ticker</th><th>Shares</th><th>Avg Cost</th>
-          <th>Live Price</th><th>Market Value</th><th>Unrealised P&L</th>
-          <th>Return %</th><th>Realised P&L</th>
+          <th onclick="sortWbHoldings('ticker')" class="sort-asc">Ticker</th>
+          <th onclick="sortWbHoldings('shares')">Shares</th>
+          <th onclick="sortWbHoldings('avg_cost')">Avg Cost</th>
+          <th onclick="sortWbHoldings('live_price')">Live Price</th>
+          <th onclick="sortWbHoldings('market_value')">Market Value</th>
+          <th onclick="sortWbHoldings('unrealised_pl')">Unrealised P&L</th>
+          <th onclick="sortWbHoldings('return_pct')">Return %</th>
+          <th onclick="sortWbHoldings('realised_pl')">Realised P&L</th>
         </tr></thead>
         <tbody id="wb-active-body">
           <tr><td colspan="8" class="loading"><div class="spinner"></div></td></tr>
@@ -1391,26 +1396,22 @@ async function loadWebull() {
   document.getElementById('wb-closed-count').textContent = closed.length + ' stocks';
 
   // Active table
-  let aRows = '';
-  active.forEach(h => {
-    const p = price(h.ticker); const val = h.shares*p;
-    const pl = val - h.total_cost; const pct = h.total_cost>0 ? pl/h.total_cost*100 : 0;
-    aRows += `<tr>
-      <td><span class="ticker-badge default" style="cursor:pointer" onclick="showWbTradeHistory('${h.ticker}')">${h.ticker}</span></td>
-      <td>${fmtShares(h.shares)}</td><td>${fmtUSD(h.avg_cost)}</td>
-      <td>${fmtUSD(p)}</td><td>${fmtUSD(val)}</td>
-      <td class="${plColor(pl)}">${plStr(pl)}</td>
-      <td class="${plColor(pct)}">${fmtPct(pct)}</td>
-      <td class="${h.total_realised_pl != 0 ? plColor(h.total_realised_pl) : ''}" style="${h.total_realised_pl == 0 ? 'color:var(--text)' : ''}">${h.total_realised_pl != 0 ? plStr(h.total_realised_pl) : '—'}</td>
-    </tr>`;
+  // Build enriched active holdings data for sorting
+  _wbActiveData = active.map(h => {
+    const p = price(h.ticker), val = h.shares*p;
+    const pl = val - h.total_cost, pct = h.total_cost>0 ? pl/h.total_cost*100 : 0;
+    return { ticker:h.ticker, shares:h.shares, avg_cost:h.avg_cost, live_price:p,
+             market_value:val, unrealised_pl:pl, return_pct:pct,
+             realised_pl:h.total_realised_pl||0 };
   });
-  document.getElementById('wb-active-body').innerHTML = aRows || '<tr><td colspan="8" class="empty">No active holdings</td></tr>';
+  _wbHoldSort = { key:'ticker', dir:1 };
+  renderWbActiveHoldings();
 
   // Closed table
   let cRows = '';
   closed.forEach(h => {
     cRows += `<tr>
-      <td><span class="ticker-badge webull">${h.ticker}</span></td>
+      <td><span class="ticker-badge webull" style="cursor:pointer" onclick="showWbTradeHistory('${h.ticker}')">${h.ticker}</span></td>
       <td class="${h.total_realised_pl != 0 ? plColor(h.total_realised_pl) : ''}" style="${h.total_realised_pl == 0 ? 'color:var(--text)' : ''}">${h.total_realised_pl != 0 ? plStr(h.total_realised_pl) : '—'}</td>
       <td><span class="status-closed">Closed</span></td>
     </tr>`;
@@ -2585,6 +2586,41 @@ async function showWbTradeHistory(ticker) {
   }).join('') || '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--muted)">No trades found</td></tr>';
 
   document.getElementById('wb-trade-history-modal').classList.add('open');
+}
+
+
+// ── Webull Active Holdings Sort ──
+let _wbActiveData = [];
+let _wbHoldSort = { key: 'ticker', dir: 1 };
+
+function sortWbHoldings(key) {
+  if (_wbHoldSort.key === key) { _wbHoldSort.dir *= -1; }
+  else { _wbHoldSort = { key, dir: key === 'ticker' ? 1 : -1 }; }
+  document.querySelectorAll('#page-webull th').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    if (th.getAttribute('onclick') === `sortWbHoldings('${key}')`)
+      th.classList.add(_wbHoldSort.dir === 1 ? 'sort-asc' : 'sort-desc');
+  });
+  renderWbActiveHoldings();
+}
+
+function renderWbActiveHoldings() {
+  const sorted = [..._wbActiveData].sort((a,b) => {
+    const av = typeof a[_wbHoldSort.key] === 'string' ? a[_wbHoldSort.key] : (a[_wbHoldSort.key]||0);
+    const bv = typeof b[_wbHoldSort.key] === 'string' ? b[_wbHoldSort.key] : (b[_wbHoldSort.key]||0);
+    return typeof av === 'string' ? av.localeCompare(bv)*_wbHoldSort.dir : (av-bv)*_wbHoldSort.dir;
+  });
+
+  document.getElementById('wb-active-body').innerHTML = sorted.map(h => `<tr>
+    <td><span class="ticker-badge default" style="cursor:pointer" onclick="showWbTradeHistory('${h.ticker}')">${h.ticker}</span></td>
+    <td style="font-family:var(--font-num)">${fmtShares(h.shares)}</td>
+    <td style="font-family:var(--font-num)">${fmtUSD(h.avg_cost)}</td>
+    <td style="font-family:var(--font-num)">${h.live_price>0?fmtUSD(h.live_price):'<span style="color:var(--muted)">—</span>'}</td>
+    <td style="font-family:var(--font-num);font-weight:600">${h.market_value>0?fmtUSD(h.market_value):'<span style="color:var(--muted)">—</span>'}</td>
+    <td class="${plColor(h.unrealised_pl)}" style="font-family:var(--font-num);font-weight:600">${h.market_value>0?plStr(h.unrealised_pl):'—'}</td>
+    <td class="${plColor(h.return_pct)}" style="font-family:var(--font-num);font-weight:600">${h.market_value>0?fmtPct(h.return_pct):'—'}</td>
+    <td class="${h.realised_pl!==0?plColor(h.realised_pl):''}" style="${h.realised_pl===0?'color:var(--text)':''};font-family:var(--font-num)">${h.realised_pl!==0?plStr(h.realised_pl):'—'}</td>
+  </tr>`).join('') || '<tr><td colspan="8" class="empty">No active holdings</td></tr>';
 }
 
 // ============================================================
