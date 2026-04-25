@@ -488,7 +488,10 @@ tr:hover td { background:var(--surface2); }
   <div class="section">
     <div class="section-header">
       <div class="section-title">Trade History</div>
-      <span class="section-badge" id="wb-trades-count">—</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="section-badge" id="wb-trades-count">—</span>
+        <button class="btn btn-sm" onclick="recalculateAllPL()" title="Recalculate P&L for all sell trades">↻ Calc P&amp;L</button>
+      </div>
     </div>
     <div class="table-wrap">
       <table>
@@ -1101,7 +1104,10 @@ async function sb(table, method='GET', body=null, query='') {
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(url, opts);
   if (!r.ok) { console.error('Supabase error:', await r.text()); return null; }
-  return method==='DELETE' ? null : r.json();
+  if (method==='DELETE' || method==='PATCH') return null;
+  const text = await r.text();
+  if (!text || text.trim() === '') return null;
+  return JSON.parse(text);
 }
 
 // ============================================================
@@ -2436,8 +2442,11 @@ async function deleteSyfeTrade(id, ticker) {
 // RECALCULATE REALISED P&L FOR ALL SELL TRADES
 // ============================================================
 async function recalculateAllPL() {
-  await loadAllData();
-  const trades = [...(_wbTrades||[])].sort((a,b) => new Date(a.date) - new Date(b.date));
+  // Force fresh fetch of all trades
+  const allTrades = await sb('webull_trades','GET',null,'?order=date.asc');
+  const trades = [...(allTrades||[])];
+  console.log('Total trades fetched:', trades.length);
+  console.log('Sell trades:', trades.filter(t=>t.action==='Sell').length);
   
   // Group by ticker and compute running avg cost
   const tickerState = {}; // { ticker: { shares, totalCost } }
