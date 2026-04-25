@@ -1434,6 +1434,14 @@ async function loadWebull() {
     <td class="${t.action==='Buy'?'action-buy':'action-sell'}">${t.action}</td>
     <td>${fmtShares(t.qty)}</td><td>${fmtUSD(t.price)}</td><td>${fmtUSD(t.amount)}</td>
     <td class="${t.realised_pl!=0?plColor(t.realised_pl):''}">${t.realised_pl!=0?plStr(t.realised_pl):'—'}</td>
+    <td>
+      <div style="display:flex;gap:5px">
+        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
+          onclick="openEditTradeModal(${t.id},'${t.ticker}','${t.date}','${t.action}',${t.qty},${t.price},${t.amount},${t.realised_pl})">Edit</button>
+        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
+          onclick="deleteWbTrade(${t.id},'${t.ticker}')">Del</button>
+      </div>
+    </td>
   </tr>`).join('');
 
   // Deposits
@@ -1913,6 +1921,7 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
 });
 
 async function submitTrade() {
+  const editId = document.getElementById('trade-edit-id').value;
   const ticker = document.getElementById('trade-ticker').value.toUpperCase().trim();
   const action = document.getElementById('trade-action').value;
   const date = document.getElementById('trade-date').value;
@@ -1928,6 +1937,16 @@ async function submitTrade() {
     if (holdings?.length && holdings[0].avg_cost > 0) {
       rpl = Math.round((price_val - holdings[0].avg_cost) * qty * 100) / 100;
     }
+  }
+
+  if (editId) {
+    await sb('webull_trades','PATCH',{ticker, brokerage:'webull', date, action, qty, price:price_val, amount, realised_pl:rpl},`?id=eq.${editId}`);
+    document.getElementById('trade-edit-id').value = '';
+    document.getElementById('trade-modal-title').textContent = 'Add Trade';
+    invalidateCache();
+    closeModal('add-trade-modal');
+    loadWebull();
+    return;
   }
 
   await sb('webull_trades','POST',{ticker, brokerage:'webull', date, action, qty, price:price_val, amount, realised_pl:rpl});
@@ -2500,6 +2519,27 @@ async function recalculateAllPL() {
 
   invalidateCache();
   alert(`Updated ${count} sell trade(s) with correct P&L!`);
+  loadWebull();
+}
+
+
+// ── Webull Trade Edit/Delete ──
+function openEditTradeModal(id, ticker, date, action, qty, price, amount, rpl) {
+  document.getElementById('trade-modal-title').textContent = 'Edit Trade';
+  document.getElementById('trade-edit-id').value = id;
+  document.getElementById('trade-broker').value = 'webull';
+  document.getElementById('trade-ticker').value = ticker;
+  document.getElementById('trade-date').value = date;
+  document.getElementById('trade-action').value = action;
+  document.getElementById('trade-qty').value = qty;
+  document.getElementById('trade-price').value = price;
+  document.getElementById('add-trade-modal').classList.add('open');
+}
+
+async function deleteWbTrade(id, ticker) {
+  if (!confirm('Delete this trade? This will affect P&L calculations.')) return;
+  await sb('webull_trades','DELETE',null,`?id=eq.${id}`);
+  invalidateCache();
   loadWebull();
 }
 
