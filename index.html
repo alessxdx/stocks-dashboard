@@ -946,10 +946,7 @@ tr:hover td { background:var(--surface2); }
   <div class="modal">
     <div class="modal-title" id="dep-modal-title">Add Deposit</div>
     <input type="hidden" id="dep-edit-id">
-    <div class="form-group">
-      <label class="form-label">Broker</label>
-      <input class="form-input" id="dep-broker" readonly>
-    </div>
+    <input type="hidden" id="dep-broker">
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Date</label>
@@ -981,11 +978,8 @@ tr:hover td { background:var(--surface2); }
 
 <div class="modal-overlay" id="add-withdrawal-modal">
   <div class="modal">
-    <div class="modal-title">Add Withdrawal</div>
-    <div class="form-group">
-      <label class="form-label">Broker</label>
-      <input class="form-input" id="wd-broker" readonly>
-    </div>
+    <div class="modal-title" id="wd-modal-add-title">Add Withdrawal</div>
+    <input type="hidden" id="wd-broker">
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Date</label>
@@ -2016,13 +2010,26 @@ function openModal(id, broker) {
   _currentBroker = broker;
   const overlay = document.getElementById(id);
   overlay.classList.add('open');
-  // Set broker field if exists
+  // Set broker hidden field
   const brokerInput = overlay.querySelector('[id$="-broker"]');
   if (brokerInput) brokerInput.value = broker;
   // Default date to today
   overlay.querySelectorAll('input[type=date]').forEach(el => {
     el.value = new Date().toISOString().split('T')[0];
   });
+  // Set dynamic title based on broker
+  const brokerLabel = broker === 'cmc' ? 'CMC Invest' : broker === 'syfe' ? 'Syfe' : 'Webull';
+  if (id === 'add-deposit-modal') {
+    document.getElementById('dep-modal-title').textContent = `Add Deposit — ${brokerLabel}`;
+    document.getElementById('dep-edit-id').value = '';
+  }
+  if (id === 'add-withdrawal-modal') {
+    document.getElementById('wd-modal-add-title').textContent = `Add Withdrawal — ${brokerLabel}`;
+  }
+  if (id === 'add-trade-modal') {
+    document.getElementById('trade-modal-title').textContent = 'Add Trade';
+    document.getElementById('trade-edit-id').value = '';
+  }
 }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
@@ -2129,7 +2136,9 @@ async function submitWithdrawal() {
   await sb('withdrawals','POST',{brokerage:broker,date,currency,amount});
   invalidateCache();
   closeModal('add-withdrawal-modal');
-  loadWebull();
+  if (broker==='syfe') loadSyfe();
+  else if (broker==='cmc') loadCMC();
+  else loadWebull();
 }
 
 async function submitFX() {
