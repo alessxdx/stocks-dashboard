@@ -693,7 +693,7 @@ tr:hover td { background:var(--surface2); }
       <table>
         <thead><tr>
           <th>Ticker</th><th>Shares</th><th>Avg Cost (SGD)</th>
-          <th>Live Price</th><th>Market Value</th><th>Unrealised P&L</th><th>Return %</th>
+          <th>Live Price</th><th>Market Value</th><th>Unrealised P&L</th><th>Return %</th><th>Realised P&L</th>
         </tr></thead>
         <tbody id="cmc-active-body">
           <tr><td colspan="7" class="loading"><div class="spinner"></div></td></tr>
@@ -703,14 +703,19 @@ tr:hover td { background:var(--surface2); }
   </div>
 
   <div class="section">
-    <div class="section-header"><div class="section-title">Sell History</div></div>
+    <div class="section-header">
+      <div class="section-title">Closed Positions</div>
+      <span class="section-badge" id="cmc-closed-count">—</span>
+    </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Ticker</th><th>Date</th><th>Shares</th><th>Price</th><th>Received</th><th>Profit/Loss</th></tr></thead>
-        <tbody id="cmc-sells-body"></tbody>
+        <thead><tr><th>Ticker</th><th>Realised P&L</th><th>Status</th></tr></thead>
+        <tbody id="cmc-closed-body"></tbody>
       </table>
     </div>
   </div>
+
+
 
   <div class="section">
     <div class="section-header"><div class="section-title">SG Dividend History</div></div>
@@ -1569,21 +1574,43 @@ async function loadSyfe() {
 function getCMCActive() {
   const trades = (_cmcTrades||[]).filter(t=>t.brokerage==='cmc');
   const map = {};
-  // Process buys chronologically
   trades.filter(t=>t.action==='Buy').sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(t => {
-    if (!map[t.ticker]) map[t.ticker] = {ticker:t.ticker, shares:0, cost:0};
+    if (!map[t.ticker]) map[t.ticker] = {ticker:t.ticker, shares:0, cost:0, realisedPL:0};
     map[t.ticker].shares += t.qty;
     map[t.ticker].cost += t.amount;
   });
-  // Process sells
   trades.filter(t=>t.action==='Sell').sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(t => {
     if (map[t.ticker]) {
-      const avgCost = map[t.ticker].cost / map[t.ticker].shares;
+      const avgCost = map[t.ticker].shares > 0 ? map[t.ticker].cost / map[t.ticker].shares : 0;
+      const rpl = (t.price - avgCost) * t.qty;
       map[t.ticker].shares -= t.qty;
       map[t.ticker].cost -= avgCost * t.qty;
+      map[t.ticker].realisedPL += rpl;
     }
   });
-  return Object.values(map).filter(h=>h.shares>0).map(h=>({...h, avgPrice:h.cost/h.shares}));
+  return Object.values(map).filter(h=>h.shares>0.001).map(h=>({
+    ...h, avgPrice:h.cost/h.shares, realisedPL: Math.round(h.realisedPL*100)/100
+  }));
+}
+
+function getCMCClosed() {
+  const trades = (_cmcTrades||[]).filter(t=>t.brokerage==='cmc');
+  const map = {};
+  trades.filter(t=>t.action==='Buy').sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(t => {
+    if (!map[t.ticker]) map[t.ticker] = {ticker:t.ticker, shares:0, cost:0, realisedPL:0};
+    map[t.ticker].shares += t.qty;
+    map[t.ticker].cost += t.amount;
+  });
+  trades.filter(t=>t.action==='Sell').sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(t => {
+    if (map[t.ticker]) {
+      const avgCost = map[t.ticker].shares > 0 ? map[t.ticker].cost / map[t.ticker].shares : 0;
+      const rpl = (t.price - avgCost) * t.qty;
+      map[t.ticker].shares -= t.qty;
+      map[t.ticker].cost -= avgCost * t.qty;
+      map[t.ticker].realisedPL += rpl;
+    }
+  });
+  return Object.values(map).filter(h=>h.shares<=0.001).map(h=>({...h, realisedPL: Math.round(h.realisedPL*100)/100}));
 }
 
 async function loadCMC() {
@@ -1614,17 +1641,22 @@ async function loadCMC() {
       <td>${fmtSGD(p)}</td><td>${fmtSGD(val)}</td>
       <td class="${plColor(pl)}">${plStr(pl,'S$')}</td>
       <td class="${plColor(pct)}">${fmtPct(pct)}</td>
+      <td class="${h.realisedPL!==0?plColor(h.realisedPL):''}" style="${h.realisedPL===0?'color:var(--text)':''}">
+        ${h.realisedPL!==0?plStr(h.realisedPL,'S$'):'—'}
+      </td>
     </tr>`;
   }).join('') || '<tr><td colspan="7" class="empty">No active holdings</td></tr>';
 
-  // Sells
-  const sells = (_cmcTrades||[]).filter(t=>t.action==='Sell');
-  document.getElementById('cmc-sells-body').innerHTML = sells.map(t => `<tr>
-    <td><span class="ticker-badge webull">${t.ticker}</span></td>
-    <td>${fmtDate(t.date)}</td><td>${fmtShares(t.qty)}</td>
-    <td>${fmtSGD(t.price)}</td><td>${fmtSGD(t.amount)}</td>
-    <td class="${plColor(t.profit)}">${plStr(t.profit,'S$')}</td>
-  </tr>`).join('');
+  // Closed positions
+  const closed = getCMCClosed();
+  document.getElementById('cmc-closed-count').textContent = closed.length + ' stocks';
+  document.getElementById('cmc-closed-body').innerHTML = closed.map(h => `<tr>
+    <td><span class="ticker-badge cmc" style="cursor:pointer" onclick="showCMCTradeHistory('${h.ticker}')">${h.ticker}</span></td>
+    <td class="${h.realisedPL!==0?plColor(h.realisedPL):''}" style="${h.realisedPL===0?'color:var(--text)':''};font-family:var(--font-num)">${h.realisedPL!==0?plStr(h.realisedPL,'S$'):'—'}</td>
+    <td><span class="status-closed">Closed</span></td>
+  </tr>`).join('') || '<tr><td colspan="3" class="empty">No closed positions</td></tr>';
+
+
 
   // SG Dividends
   document.getElementById('cmc-divs-body').innerHTML = (_divSG||[]).map(d => `<tr>
