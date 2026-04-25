@@ -1577,22 +1577,22 @@ async function loadSyfe() {
 function getCMCActive() {
   const trades = (_cmcTrades||[]).filter(t=>t.brokerage==='cmc');
   const map = {};
-  trades.filter(t=>t.action==='Buy').sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(t => {
-    if (!map[t.ticker]) map[t.ticker] = {ticker:t.ticker, shares:0, cost:0, realisedPL:0};
-    map[t.ticker].shares += parseFloat(t.qty);
-    map[t.ticker].cost += parseFloat(t.amount);
-  });
-  trades.filter(t=>t.action==='Sell').sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(t => {
-    if (map[t.ticker] && map[t.ticker].shares > 0) {
-      const qty = parseFloat(t.qty);
-      const amount = parseFloat(t.amount);
-      const avgCost = map[t.ticker].cost / map[t.ticker].shares;
-      const sellPricePerShare = amount / qty;
-      const rpl = (sellPricePerShare - avgCost) * qty;
-      map[t.ticker].shares -= qty;
-      map[t.ticker].cost -= avgCost * qty;
-      map[t.ticker].realisedPL += rpl;
-      console.log(`CMC ${t.ticker} sell: avgCost=${avgCost.toFixed(4)}, sellPrice=${sellPricePerShare.toFixed(4)}, qty=${qty}, rpl=${rpl.toFixed(2)}`);
+  // Process ALL trades chronologically (buys AND sells in date order)
+  [...trades].sort((a,b) => new Date(a.date) - new Date(b.date)).forEach(t => {
+    const ticker = t.ticker;
+    if (!map[ticker]) map[ticker] = {ticker, shares:0, cost:0, realisedPL:0};
+    const qty = parseFloat(t.qty);
+    const amount = parseFloat(t.amount);
+    if (t.action === 'Buy') {
+      map[ticker].shares += qty;
+      map[ticker].cost += amount;
+    } else if (t.action === 'Sell' && map[ticker].shares > 0) {
+      const avgCost = map[ticker].cost / map[ticker].shares;
+      const sellPrice = amount / qty;
+      const rpl = (sellPrice - avgCost) * qty;
+      map[ticker].shares -= qty;
+      map[ticker].cost -= avgCost * qty;
+      map[ticker].realisedPL += rpl;
     }
   });
   return Object.values(map).filter(h=>h.shares>0.001).map(h=>({
@@ -1603,22 +1603,26 @@ function getCMCActive() {
 function getCMCClosed() {
   const trades = (_cmcTrades||[]).filter(t=>t.brokerage==='cmc');
   const map = {};
-  trades.filter(t=>t.action==='Buy').sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(t => {
-    if (!map[t.ticker]) map[t.ticker] = {ticker:t.ticker, shares:0, cost:0, realisedPL:0};
-    map[t.ticker].shares += t.qty;
-    map[t.ticker].cost += t.amount;
-  });
-  trades.filter(t=>t.action==='Sell').sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(t => {
-    if (map[t.ticker] && map[t.ticker].shares > 0) {
-      const avgCost = map[t.ticker].cost / map[t.ticker].shares;
-      const sellPricePerShare = t.amount / t.qty;
-      const rpl = (sellPricePerShare - avgCost) * t.qty;
-      map[t.ticker].shares -= t.qty;
-      map[t.ticker].cost -= avgCost * t.qty;
-      map[t.ticker].realisedPL += rpl;
+  [...trades].sort((a,b) => new Date(a.date) - new Date(b.date)).forEach(t => {
+    const ticker = t.ticker;
+    if (!map[ticker]) map[ticker] = {ticker, shares:0, cost:0, realisedPL:0};
+    const qty = parseFloat(t.qty);
+    const amount = parseFloat(t.amount);
+    if (t.action === 'Buy') {
+      map[ticker].shares += qty;
+      map[ticker].cost += amount;
+    } else if (t.action === 'Sell' && map[ticker].shares > 0) {
+      const avgCost = map[ticker].cost / map[ticker].shares;
+      const sellPrice = amount / qty;
+      const rpl = (sellPrice - avgCost) * qty;
+      map[ticker].shares -= qty;
+      map[ticker].cost -= avgCost * qty;
+      map[ticker].realisedPL += rpl;
     }
   });
-  return Object.values(map).filter(h=>h.shares<=0.001).map(h=>({...h, realisedPL: Math.round(h.realisedPL*100)/100}));
+  return Object.values(map).filter(h=>h.shares<=0.001).map(h=>({
+    ...h, realisedPL: Math.round(h.realisedPL*100)/100
+  }));
 }
 
 async function loadCMC() {
