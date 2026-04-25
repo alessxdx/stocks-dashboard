@@ -1042,11 +1042,12 @@ tr:hover td { background:var(--surface2); }
 
 <div class="modal-overlay" id="add-sg-trade-modal">
   <div class="modal">
-    <div class="modal-title">Add SG Trade (CMC)</div>
+    <div class="modal-title" id="cmc-trade-modal-title">Add Trade — CMC Invest</div>
+    <input type="hidden" id="sg-edit-id">
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Ticker (SGX)</label>
-        <input class="form-input" id="sg-ticker" placeholder="e.g. D05, ME8U">
+        <input class="form-input" id="sg-ticker" placeholder="e.g. D05, ME8U" oninput="this.value=this.value.toUpperCase()">
       </div>
       <div class="form-group">
         <label class="form-label">Action</label>
@@ -1059,19 +1060,13 @@ tr:hover td { background:var(--surface2); }
         <input class="form-input" type="date" id="sg-date">
       </div>
       <div class="form-group">
-        <label class="form-label">Quantity (Shares)</label>
-        <input class="form-input" type="number" id="sg-qty">
+        <label class="form-label">Quantity</label>
+        <input class="form-input" type="number" id="sg-qty" placeholder="0">
       </div>
     </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Price (SGD)</label>
-        <input class="form-input" type="number" id="sg-price" step="0.001">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Profit/Loss (if Sell)</label>
-        <input class="form-input" type="number" id="sg-profit">
-      </div>
+    <div class="form-group">
+      <label class="form-label">Price per Share (SGD S$)</label>
+      <input class="form-input" type="number" id="sg-price" step="0.001" placeholder="0.000">
     </div>
     <div class="modal-actions">
       <button class="btn btn-cancel" onclick="closeModal('add-sg-trade-modal')">Cancel</button>
@@ -1122,8 +1117,11 @@ let periodCache = {};
 let _customWatchlist = JSON.parse(localStorage.getItem('wl_custom')||'[]');
 
 async function fetchPrices(tickers) {
-  const missing = tickers.filter(t => t && !priceCache[t]);
+  // If prices were fetched recently, only fetch truly missing ones
+  const cacheExpired = (Date.now() - _priceCacheAt) > PRICE_CACHE_MS;
+  const missing = tickers.filter(t => t && (!priceCache[t] || cacheExpired));
   if (!missing.length) return;
+  _priceCacheAt = Date.now();
 
   try {
     // Cloudflare Worker — fetches Google Finance prices server-side, no CORS issues
@@ -1217,7 +1215,8 @@ let _deps=null, _wds=null, _fx=null, _divUS=null, _divSG=null, _divSyfe=null;
 let _dataLoaded = false;
 
 async function loadAllData() {
-  if (_dataLoaded) return;
+  // Use cache if loaded within last 5 minutes
+  if (_dataLoaded && (Date.now() - _dataLoadedAt) < DATA_CACHE_MS) return;
   [_wbHoldings, _wbTrades, _syfeH, _cmcTrades,
    _deps, _wds, _fx, _divUS, _divSG, _divSyfe, _syfeTrades] = await Promise.all([
     sb('webull_holdings','GET',null,'?order=ticker.asc'),
@@ -1233,9 +1232,10 @@ async function loadAllData() {
     sb('syfe_trades','GET',null,'?order=date.desc'),
   ]);
   _dataLoaded = true;
+  _dataLoadedAt = Date.now();
 }
 
-function invalidateCache() { _dataLoaded = false; _syfeTrades = null; }
+function invalidateCache() { _dataLoaded = false; _dataLoadedAt = 0; _syfeTrades = null; priceCache = {}; dayChangeCache = {}; periodCache = {}; _priceCacheAt = 0; }
 
 // ============================================================
 // OVERVIEW
@@ -2079,14 +2079,21 @@ async function submitFX() {
 }
 
 async function submitSGTrade() {
+  const editId = document.getElementById('sg-edit-id').value;
   const ticker = document.getElementById('sg-ticker').value.toUpperCase().trim();
   const action = document.getElementById('sg-action').value;
   const date = document.getElementById('sg-date').value;
   const qty = parseFloat(document.getElementById('sg-qty').value);
   const price_val = parseFloat(document.getElementById('sg-price').value);
-  const profit = parseFloat(document.getElementById('sg-profit').value)||0;
   if (!ticker||!date||!qty||!price_val) return alert('Please fill all required fields');
-  await sb('cmc_trades','POST',{ticker,brokerage:'cmc',date,action,qty,price:price_val,amount:qty*price_val,profit});
+  const body = {ticker, brokerage:'cmc', date, action, qty, price:price_val, amount:qty*price_val, profit:0};
+  if (editId) {
+    await sb('cmc_trades','PATCH',body,`?id=eq.${editId}`);
+    document.getElementById('sg-edit-id').value = '';
+    document.getElementById('cmc-trade-modal-title').textContent = 'Add Trade — CMC Invest';
+  } else {
+    await sb('cmc_trades','POST',body);
+  }
   invalidateCache();
   closeModal('add-sg-trade-modal');
   loadCMC();
@@ -2818,7 +2825,7 @@ async function loadWatchlist() {
 
 // Auto-refresh watchlist every 60 seconds
 loadWatchlist();
-setInterval(loadWatchlist, 60000);
+setInterval(loadWatchlist, 180000); // refresh every 3 mins
 
 </script>
 
