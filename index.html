@@ -2454,10 +2454,8 @@ async function recalculateAllPL() {
       if (state.shares < 0) state.shares = 0;
       if (state.totalCost < 0) state.totalCost = 0;
 
-      // Only update if value is different
-      if (Math.abs(rounded - parseFloat(t.realised_pl)) > 0.01) {
-        updates.push({ id: t.id, realised_pl: rounded });
-      }
+      // Always push update to ensure accuracy
+      updates.push({ id: t.id, ticker: t.ticker, realised_pl: rounded });
     }
   });
 
