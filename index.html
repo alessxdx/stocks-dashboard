@@ -883,15 +883,13 @@ tr:hover td { background:var(--surface2); }
 <!-- ===================== MODALS ===================== -->
 <div class="modal-overlay" id="add-trade-modal">
   <div class="modal">
-    <div class="modal-title">Add Trade</div>
-    <div class="form-group">
-      <label class="form-label">Broker</label>
-      <input class="form-input" id="trade-broker" readonly>
-    </div>
+    <div class="modal-title" id="trade-modal-title">Add Trade — Webull</div>
+    <input type="hidden" id="trade-edit-id">
+    <input type="hidden" id="trade-broker" value="webull">
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Ticker</label>
-        <input class="form-input" id="trade-ticker" placeholder="e.g. NVDA">
+        <input class="form-input" id="trade-ticker" placeholder="e.g. NVDA" oninput="this.value=this.value.toUpperCase()">
       </div>
       <div class="form-group">
         <label class="form-label">Action</label>
@@ -911,15 +909,9 @@ tr:hover td { background:var(--surface2); }
         <input class="form-input" type="number" id="trade-qty" placeholder="0">
       </div>
     </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Price per Share</label>
-        <input class="form-input" type="number" id="trade-price" placeholder="0.00">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Realised P&L</label>
-        <div style="padding:9px 11px;background:var(--surface2);border:1px solid var(--border2);border-radius:7px;font-size:12px;color:var(--muted)">Auto-calculated from avg cost</div>
-      </div>
+    <div class="form-group">
+      <label class="form-label">Price per Share (USD $)</label>
+      <input class="form-input" type="number" id="trade-price" placeholder="0.00" step="0.01">
     </div>
     <div class="modal-actions">
       <button class="btn btn-cancel" onclick="closeModal('add-trade-modal')">Cancel</button>
@@ -1409,7 +1401,7 @@ async function loadWebull() {
       <td>${fmtUSD(p)}</td><td>${fmtUSD(val)}</td>
       <td class="${plColor(pl)}">${plStr(pl)}</td>
       <td class="${plColor(pct)}">${fmtPct(pct)}</td>
-      <td class="${plColor(h.total_realised_pl)}">${plStr(h.total_realised_pl)}</td>
+      <td class="${h.total_realised_pl != 0 ? plColor(h.total_realised_pl) : ''}" style="${h.total_realised_pl == 0 ? 'color:var(--text)' : ''}">${h.total_realised_pl != 0 ? plStr(h.total_realised_pl) : '—'}</td>
     </tr>`;
   });
   document.getElementById('wb-active-body').innerHTML = aRows || '<tr><td colspan="8" class="empty">No active holdings</td></tr>';
@@ -1419,7 +1411,7 @@ async function loadWebull() {
   closed.forEach(h => {
     cRows += `<tr>
       <td><span class="ticker-badge webull">${h.ticker}</span></td>
-      <td class="${plColor(h.total_realised_pl)}">${plStr(h.total_realised_pl)}</td>
+      <td class="${h.total_realised_pl != 0 ? plColor(h.total_realised_pl) : ''}" style="${h.total_realised_pl == 0 ? 'color:var(--text)' : ''}">${h.total_realised_pl != 0 ? plStr(h.total_realised_pl) : '—'}</td>
       <td><span class="status-closed">Closed</span></td>
     </tr>`;
   });
@@ -2461,15 +2453,16 @@ async function deleteSyfeTrade(id, ticker) {
 // RECALCULATE REALISED P&L FOR ALL SELL TRADES
 // ============================================================
 async function recalculateAllPL() {
-  // Force fresh fetch of all trades
+  // Force fresh fetch of all trades sorted oldest first
   const allTrades = await sb('webull_trades','GET',null,'?order=date.asc');
   const trades = [...(allTrades||[])];
   console.log('Total trades fetched:', trades.length);
   console.log('Sell trades:', trades.filter(t=>t.action==='Sell').length);
-  
+
   // Group by ticker and compute running avg cost
-  const tickerState = {}; // { ticker: { shares, totalCost } }
-  const updates = [];
+  const tickerState = {};
+  const tradeUpdates = [];
+  const holdingRPL = {}; // accumulate total realised PL per ticker
 
   trades.forEach(t => {
     const ticker = t.ticker;
@@ -2481,44 +2474,40 @@ async function recalculateAllPL() {
       state.totalCost += parseFloat(t.amount);
     } else if (t.action === 'Sell') {
       const avgCost = state.shares > 0 ? state.totalCost / state.shares : 0;
-      const realisedPL = (parseFloat(t.price) - avgCost) * parseFloat(t.qty);
-      const rounded = Math.round(realisedPL * 100) / 100;
-      
-      // Update running state
-      const costReduced = avgCost * parseFloat(t.qty);
-      state.shares -= parseFloat(t.qty);
-      state.totalCost -= costReduced;
-      if (state.shares < 0) state.shares = 0;
-      if (state.totalCost < 0) state.totalCost = 0;
+      const realisedPL = Math.round((parseFloat(t.price) - avgCost) * parseFloat(t.qty) * 100) / 100;
 
-      // Always push update to ensure accuracy
-      updates.push({ id: t.id, ticker: t.ticker, realised_pl: rounded });
+      // Update running state
+      state.shares -= parseFloat(t.qty);
+      state.totalCost -= avgCost * parseFloat(t.qty);
+      if (state.shares < 0.001) { state.shares = 0; state.totalCost = 0; }
+
+      tradeUpdates.push({ id: t.id, realised_pl: realisedPL });
+
+      // Accumulate for holdings
+      if (!holdingRPL[ticker]) holdingRPL[ticker] = 0;
+      holdingRPL[ticker] += realisedPL;
     }
   });
 
-  if (updates.length === 0) {
-    alert('All P&L values are already up to date!');
+  if (tradeUpdates.length === 0) {
+    alert('No sell trades found!');
     return;
   }
 
-  // Update Supabase for each sell trade
-  let count = 0;
-  for (const u of updates) {
-    await sb('webull_trades', 'PATCH', { realised_pl: u.realised_pl }, `?id=eq.${u.id}`);
-    count++;
+  // Update webull_trades
+  for (const u of tradeUpdates) {
+    await sb('webull_trades','PATCH',{ realised_pl: u.realised_pl },`?id=eq.${u.id}`);
   }
 
-  // Also update webull_holdings total_realised_pl
-  const holdingUpdates = {};
-  trades.filter(t => t.action === 'Sell').forEach(t => {
-    const holding = (_wbHoldings||[]).find(h => h.ticker === t.ticker);
-    if (holding) {
-      if (!holdingUpdates[holding.id]) holdingUpdates[holding.id] = 0;
-    }
-  });
+  // Update webull_holdings total_realised_pl
+  const allHoldings = await sb('webull_holdings','GET',null,'?brokerage=eq.webull');
+  for (const h of (allHoldings||[])) {
+    const totalRPL = Math.round((holdingRPL[h.ticker] || 0) * 100) / 100;
+    await sb('webull_holdings','PATCH',{ total_realised_pl: totalRPL },`?id=eq.${h.id}`);
+  }
 
   invalidateCache();
-  alert(`Updated ${count} sell trade(s) with correct P&L!`);
+  alert(`Updated ${tradeUpdates.length} sell trade(s) and holdings P&L!`);
   loadWebull();
 }
 
