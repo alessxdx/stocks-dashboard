@@ -927,7 +927,8 @@ tr:hover td { background:var(--surface2); }
 
 <div class="modal-overlay" id="add-deposit-modal">
   <div class="modal">
-    <div class="modal-title">Add Deposit</div>
+    <div class="modal-title" id="dep-modal-title">Add Deposit</div>
+    <input type="hidden" id="dep-edit-id">
     <div class="form-group">
       <label class="form-label">Broker</label>
       <input class="form-input" id="dep-broker" readonly>
@@ -1935,15 +1936,23 @@ async function submitTrade() {
 }
 
 async function submitDeposit() {
+  const editId = document.getElementById('dep-edit-id').value;
   const broker = document.getElementById('dep-broker').value;
   const date = document.getElementById('dep-date').value;
   const currency = document.getElementById('dep-currency').value;
   const amount = parseFloat(document.getElementById('dep-amount').value);
   const note = document.getElementById('dep-note').value;
   if (!date||!amount) return alert('Please fill all required fields');
-  await sb('deposits','POST',{brokerage:broker,date,currency,amount,source_note:note||null});
+  const body = {brokerage:broker, date, currency, amount, source_note:note||null};
+  if (editId) {
+    await sb('deposits','PATCH',body,`?id=eq.${editId}`);
+    document.getElementById('dep-edit-id').value = '';
+  } else {
+    await sb('deposits','POST',body);
+  }
   invalidateCache();
   closeModal('add-deposit-modal');
+  document.getElementById('dep-modal-title').textContent = 'Add Deposit';
   if(broker==='webull') loadWebull();
   else if(broker==='syfe') loadSyfe();
   else if(broker==='cmc') loadCMC();
@@ -2215,7 +2224,6 @@ async function submitDivEntry() {
 
   invalidateCache();
   closeModal('div-add-modal');
-  closeModal('div-history-modal');
   await loadDividends();
 }
 
@@ -2252,15 +2260,14 @@ async function deleteSyfeDivEntry(id) {
 }
 
 function openEditDepositModal(id, broker, date, currency, amount, note) {
-  const overlay = document.getElementById('add-deposit-modal');
-  overlay.classList.add('open');
+  document.getElementById('dep-modal-title').textContent = 'Edit Deposit';
+  document.getElementById('dep-edit-id').value = id;
   document.getElementById('dep-broker').value = broker;
   document.getElementById('dep-date').value = date;
   document.getElementById('dep-currency').value = currency;
   document.getElementById('dep-amount').value = amount;
-  document.getElementById('dep-note').value = note;
-  // Store edit id on modal
-  overlay.dataset.editId = id;
+  document.getElementById('dep-note').value = note || '';
+  document.getElementById('add-deposit-modal').classList.add('open');
 }
 
 async function deleteDepositEntry(id, broker) {
@@ -2402,7 +2409,8 @@ async function submitSyfeTrade() {
   }
   invalidateCache();
   closeModal('syfe-add-trade-modal');
-  await loadAllData();
+  // Refresh the trade history modal with updated data
+  _syfeTrades = await sb('syfe_trades','GET',null,'?order=date.desc');
   showSyfeTradeHistory(ticker);
 }
 
@@ -2410,9 +2418,73 @@ async function deleteSyfeTrade(id, ticker) {
   if (!confirm('Delete this trade?')) return;
   await sb('syfe_trades','DELETE',null,`?id=eq.${id}`);
   invalidateCache();
-  closeModal('syfe-trade-modal');
-  await loadAllData();
+  _syfeTrades = await sb('syfe_trades','GET',null,'?order=date.desc');
   showSyfeTradeHistory(ticker);
+}
+
+
+// ============================================================
+// RECALCULATE REALISED P&L FOR ALL SELL TRADES
+// ============================================================
+async function recalculateAllPL() {
+  await loadAllData();
+  const trades = [...(_wbTrades||[])].sort((a,b) => new Date(a.date) - new Date(b.date));
+  
+  // Group by ticker and compute running avg cost
+  const tickerState = {}; // { ticker: { shares, totalCost } }
+  const updates = [];
+
+  trades.forEach(t => {
+    const ticker = t.ticker;
+    if (!tickerState[ticker]) tickerState[ticker] = { shares: 0, totalCost: 0 };
+    const state = tickerState[ticker];
+
+    if (t.action === 'Buy') {
+      state.shares += parseFloat(t.qty);
+      state.totalCost += parseFloat(t.amount);
+    } else if (t.action === 'Sell') {
+      const avgCost = state.shares > 0 ? state.totalCost / state.shares : 0;
+      const realisedPL = (parseFloat(t.price) - avgCost) * parseFloat(t.qty);
+      const rounded = Math.round(realisedPL * 100) / 100;
+      
+      // Update running state
+      const costReduced = avgCost * parseFloat(t.qty);
+      state.shares -= parseFloat(t.qty);
+      state.totalCost -= costReduced;
+      if (state.shares < 0) state.shares = 0;
+      if (state.totalCost < 0) state.totalCost = 0;
+
+      // Only update if value is different
+      if (Math.abs(rounded - parseFloat(t.realised_pl)) > 0.01) {
+        updates.push({ id: t.id, realised_pl: rounded });
+      }
+    }
+  });
+
+  if (updates.length === 0) {
+    alert('All P&L values are already up to date!');
+    return;
+  }
+
+  // Update Supabase for each sell trade
+  let count = 0;
+  for (const u of updates) {
+    await sb('webull_trades', 'PATCH', { realised_pl: u.realised_pl }, `?id=eq.${u.id}`);
+    count++;
+  }
+
+  // Also update webull_holdings total_realised_pl
+  const holdingUpdates = {};
+  trades.filter(t => t.action === 'Sell').forEach(t => {
+    const holding = (_wbHoldings||[]).find(h => h.ticker === t.ticker);
+    if (holding) {
+      if (!holdingUpdates[holding.id]) holdingUpdates[holding.id] = 0;
+    }
+  });
+
+  invalidateCache();
+  alert(`Updated ${count} sell trade(s) with correct P&L!`);
+  loadWebull();
 }
 
 // ============================================================
