@@ -668,15 +668,32 @@ tr:hover td { background:var(--surface2); }
     <div class="stat-card cmc">
       <div class="stat-label">Portfolio Value (SGD)</div>
       <div class="stat-value" id="cmc-value">—</div>
+      <div class="stat-sub">Active positions SGD</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Total Invested (SGD)</div>
       <div class="stat-value" id="cmc-invested">—</div>
+      <div class="stat-sub" id="cmc-invested-sub">—</div>
     </div>
     <div class="stat-card green">
       <div class="stat-label">Unrealised P&L (SGD)</div>
       <div class="stat-value" id="cmc-unrealised">—</div>
       <div class="stat-change" id="cmc-unrealised-pct">—</div>
+    </div>
+    <div class="stat-card gold">
+      <div class="stat-label">Realised P&L (All Time)</div>
+      <div class="stat-value" id="cmc-realised">—</div>
+      <div class="stat-sub">Closed trades</div>
+    </div>
+  </div>
+  <div class="stat-grid stat-grid-3">
+    <div class="stat-card" style="cursor:pointer" onclick="showCMCDepositBreakdown()" title="Click for yearly breakdown">
+      <div class="stat-label">Total Deposits <span style="font-size:9px;color:var(--muted)">↗ breakdown</span></div>
+      <div class="stat-value" id="cmc-dep-total">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Withdrawals (SGD)</div>
+      <div class="stat-value" id="cmc-wd-total">—</div>
     </div>
     <div class="stat-card gold">
       <div class="stat-label">SG Dividends (SGD)</div>
@@ -1634,10 +1651,37 @@ async function loadCMC() {
   const cmcPct = cmcCost>0 ? cmcPL/cmcCost*100 : 0;
   const sgDivTotal = (_divSG||[]).reduce((s,d)=>s+d.total_sgd,0);
 
+  // Realised P&L from all closed + partial sells
+  const allCMCTrades = (_cmcTrades||[]).filter(t=>t.brokerage==='cmc');
+  const allMap = {};
+  [...allCMCTrades].sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(t => {
+    const ticker = t.ticker;
+    if (!allMap[ticker]) allMap[ticker] = {shares:0, cost:0, rpl:0};
+    const qty = parseFloat(t.qty), amount = parseFloat(t.amount);
+    if (t.action==='Buy') { allMap[ticker].shares+=qty; allMap[ticker].cost+=amount; }
+    else if (t.action==='Sell' && allMap[ticker].shares>0) {
+      const avg = allMap[ticker].cost/allMap[ticker].shares;
+      allMap[ticker].rpl += (amount/qty - avg)*qty;
+      allMap[ticker].shares-=qty; allMap[ticker].cost-=avg*qty;
+    }
+  });
+  const cmcRealisedTotal = Math.round(Object.values(allMap).reduce((s,h)=>s+h.rpl,0)*100)/100;
+
+  const cmcDeps = (_deps||[]).filter(d=>d.brokerage==='cmc');
+  const cmcWds  = (_wds||[]).filter(w=>w.brokerage==='cmc');
+  const cmcDepTotal = cmcDeps.reduce((s,d)=>s+d.amount,0);
+  const cmcWdTotal  = cmcWds.reduce((s,w)=>s+w.amount,0);
+  const activeCount = active.length;
+  const closedCount = getCMCClosed().length;
+
   document.getElementById('cmc-value').textContent = fmtSGD(cmcValue);
   document.getElementById('cmc-invested').textContent = fmtSGD(cmcCost);
+  document.getElementById('cmc-invested-sub').textContent = `${activeCount} active · ${closedCount} closed`;
   document.getElementById('cmc-unrealised').innerHTML = `<span class="${plColor(cmcPL)}">${plStr(cmcPL,'S$')}</span>`;
   document.getElementById('cmc-unrealised-pct').innerHTML = `<span class="${plColor(cmcPct)}">${fmtPct(cmcPct)}</span>`;
+  document.getElementById('cmc-realised').innerHTML = `<span class="${cmcRealisedTotal!==0?plColor(cmcRealisedTotal):''}">${cmcRealisedTotal!==0?plStr(cmcRealisedTotal,'S$'):'—'}</span>`;
+  document.getElementById('cmc-dep-total').textContent = fmtSGD(cmcDepTotal);
+  document.getElementById('cmc-wd-total').textContent = fmtSGD(cmcWdTotal);
   document.getElementById('cmc-divs').textContent = fmtSGD(sgDivTotal);
 
   // Active holdings table
@@ -2925,6 +2969,34 @@ async function showDepositBreakdown() {
     <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-weight:600">${r.year}</td>
     <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-num)">${r.sgd > 0 ? fmtSGD(r.sgd) : '<span style="color:var(--muted)">—</span>'}</td>
     <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-num)">${r.usd > 0 ? fmtUSD(r.usd) : '<span style="color:var(--muted)">—</span>'}</td>
+  </tr>`).join('') || '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--muted)">No deposits</td></tr>';
+
+  document.getElementById('deposit-breakdown-modal').classList.add('open');
+}
+
+
+// ── CMC Deposit Breakdown by Year ──
+async function showCMCDepositBreakdown() {
+  await loadAllData();
+  const deps = (_deps||[]).filter(d => d.brokerage === 'cmc');
+
+  const byYear = {};
+  deps.forEach(d => {
+    const year = d.date.substring(0,4);
+    if (!byYear[year]) byYear[year] = {year, sgd:0};
+    byYear[year].sgd += d.amount;
+  });
+
+  const rows = Object.values(byYear).sort((a,b) => b.year.localeCompare(a.year));
+  const total = deps.reduce((s,d)=>s+d.amount,0);
+
+  document.getElementById('dep-breakdown-total').textContent = fmtSGD(total);
+  document.getElementById('deposit-breakdown-modal').querySelector('.modal-title').textContent = 'CMC Invest Deposits by Year';
+
+  document.getElementById('dep-breakdown-body').innerHTML = rows.map(r => `<tr>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-weight:600">${r.year}</td>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-num)">${fmtSGD(r.sgd)}</td>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border)">—</td>
   </tr>`).join('') || '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--muted)">No deposits</td></tr>';
 
   document.getElementById('deposit-breakdown-modal').classList.add('open');
