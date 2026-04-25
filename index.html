@@ -1728,8 +1728,7 @@ async function loadCMC() {
     </tr>`).join('') || '<tr><td colspan="4" class="empty">No dividends yet</td></tr>';
 
   // CMC deposits
-  const cmcDeps = (_deps||[]).filter(d=>d.brokerage==='cmc');
-  document.getElementById('cmc-deposits-body').innerHTML = cmcDeps.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(d => `<tr>
+    document.getElementById('cmc-deposits-body').innerHTML = cmcDeps.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(d => `<tr>
     <td>${fmtDate(d.date)}</td>
     <td>${fmtSGD(d.amount)}</td>
     <td>
@@ -1743,7 +1742,6 @@ async function loadCMC() {
   </tr>`).join('') || '<tr><td colspan="3" class="empty">No deposits</td></tr>';
 
   // CMC withdrawals
-  const cmcWds = (_wds||[]).filter(w=>w.brokerage==='cmc');
   document.getElementById('cmc-withdrawals-body').innerHTML = cmcWds.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(w => `<tr>
     <td>${fmtDate(w.date)}</td>
     <td style="font-family:var(--font-num)">${fmtSGD(w.amount)}</td>
