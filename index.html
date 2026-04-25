@@ -1579,17 +1579,20 @@ function getCMCActive() {
   const map = {};
   trades.filter(t=>t.action==='Buy').sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(t => {
     if (!map[t.ticker]) map[t.ticker] = {ticker:t.ticker, shares:0, cost:0, realisedPL:0};
-    map[t.ticker].shares += t.qty;
-    map[t.ticker].cost += t.amount;
+    map[t.ticker].shares += parseFloat(t.qty);
+    map[t.ticker].cost += parseFloat(t.amount);
   });
   trades.filter(t=>t.action==='Sell').sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(t => {
     if (map[t.ticker] && map[t.ticker].shares > 0) {
+      const qty = parseFloat(t.qty);
+      const amount = parseFloat(t.amount);
       const avgCost = map[t.ticker].cost / map[t.ticker].shares;
-      const sellPricePerShare = t.amount / t.qty; // use actual amount for accuracy
-      const rpl = (sellPricePerShare - avgCost) * t.qty;
-      map[t.ticker].shares -= t.qty;
-      map[t.ticker].cost -= avgCost * t.qty;
+      const sellPricePerShare = amount / qty;
+      const rpl = (sellPricePerShare - avgCost) * qty;
+      map[t.ticker].shares -= qty;
+      map[t.ticker].cost -= avgCost * qty;
       map[t.ticker].realisedPL += rpl;
+      console.log(`CMC ${t.ticker} sell: avgCost=${avgCost.toFixed(4)}, sellPrice=${sellPricePerShare.toFixed(4)}, qty=${qty}, rpl=${rpl.toFixed(2)}`);
     }
   });
   return Object.values(map).filter(h=>h.shares>0.001).map(h=>({
