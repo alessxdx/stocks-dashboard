@@ -434,8 +434,9 @@ tr:hover td { background:var(--surface2); }
   <div class="stat-grid stat-grid-3">
     <div class="stat-card">
       <div class="stat-label">Total Deposits</div>
-      <div class="stat-value" id="wb-dep-sgd">—</div>
-      <div class="stat-sub" id="wb-dep-usd">—</div>
+      <div class="stat-value" id="wb-dep-combined">—</div>
+      <div class="stat-sub" id="wb-dep-sgd" style="display:none">—</div>
+      <div class="stat-sub" id="wb-dep-usd" style="display:none">—</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Total Withdrawals</div>
@@ -493,8 +494,10 @@ tr:hover td { background:var(--surface2); }
   <div class="section">
     <div class="section-header">
       <div class="section-title">Trade History</div>
-      <div style="display:flex;gap:8px;align-items:center">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span class="section-badge" id="wb-trades-count">—</span>
+        <select class="form-input" id="wb-trades-month-filter" style="padding:4px 8px;font-size:11px;width:auto;height:auto" onchange="filterWbTrades()">
+        </select>
         <button class="btn btn-sm" onclick="recalculateAllPL()" title="Recalculate P&L for all sell trades">↻ Calc P&amp;L</button>
       </div>
     </div>
@@ -1421,32 +1424,56 @@ async function loadWebull() {
   // Trades
   const wbTrades = (_wbTrades||[]).filter(t => t.brokerage==='webull');
   document.getElementById('wb-trades-count').textContent = wbTrades.length + ' trades';
-  document.getElementById('wb-trades-body').innerHTML = wbTrades.slice(0,100).map(t => `<tr>
-    <td>${fmtDate(t.date)}</td>
-    <td><span class="ticker-badge webull">${t.ticker}</span></td>
-    <td class="${t.action==='Buy'?'action-buy':'action-sell'}">${t.action}</td>
-    <td>${fmtShares(t.qty)}</td><td>${fmtUSD(t.price)}</td><td>${fmtUSD(t.amount)}</td>
-    <td class="${t.realised_pl!=0?plColor(t.realised_pl):''}">${t.realised_pl!=0?plStr(t.realised_pl):'—'}</td>
-    <td>
-      <div style="display:flex;gap:5px">
-        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
-          onclick="openEditTradeModal(${t.id},'${t.ticker}','${t.date}','${t.action}',${t.qty},${t.price},${t.amount},${t.realised_pl})">Edit</button>
-        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
-          onclick="deleteWbTrade(${t.id},'${t.ticker}')">Del</button>
-      </div>
-    </td>
-  </tr>`).join('');
+
+  // Build month/year options — default to current month
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const months = [...new Set(wbTrades.map(t => t.date.substring(0,7)))].sort().reverse();
+  const sel = document.getElementById('wb-trades-month-filter');
+  sel.innerHTML = months.map(m => {
+    const [yr, mo] = m.split('-');
+    const label = new Date(yr, mo-1).toLocaleString('en-SG',{month:'short',year:'numeric'});
+    return `<option value="${m}" ${m===currentMonthKey?'selected':''}>${label}</option>`;
+  }).join('');
+  // Add "All" option at top
+  sel.innerHTML = `<option value="all">All Trades</option>` + sel.innerHTML;
+
+  _wbAllTrades = wbTrades;
+  filterWbTrades();
+
+  // Store all trades globally
+  window._wbAllTrades = wbTrades;;
 
   // Deposits
   document.getElementById('wb-deposits-body').innerHTML = wbDeps.map(d => `<tr>
-    <td>${fmtDate(d.date)}</td><td>${d.currency}</td><td>${d.currency==='SGD'?fmtSGD(d.amount):fmtUSD(d.amount)}</td>
-  </tr>`).join('');
+    <td>${fmtDate(d.date)}</td>
+    <td>${d.currency}</td>
+    <td>${d.currency==='SGD'?fmtSGD(d.amount):fmtUSD(d.amount)}</td>
+    <td>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
+          onclick="openEditDepositModal(${d.id},'webull','${d.date}','${d.currency}',${d.amount},'${d.source_note||''}')">Edit</button>
+        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
+          onclick="deleteDepositEntry(${d.id},'webull')">Del</button>
+      </div>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="4" class="empty">No deposits</td></tr>';
 
   // Withdrawals
   const wbWdList = (_wds||[]).filter(w => w.brokerage==='webull');
   document.getElementById('wb-withdrawals-body').innerHTML = wbWdList.map(w => `<tr>
-    <td>${fmtDate(w.date)}</td><td>${w.currency}</td><td>${fmtSGD(w.amount)}</td>
-  </tr>`).join('');
+    <td>${fmtDate(w.date)}</td>
+    <td>${w.currency}</td>
+    <td>${fmtSGD(w.amount)}</td>
+    <td>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
+          onclick="openEditWithdrawalModal(${w.id},'webull','${w.date}','${w.currency}',${w.amount})">Edit</button>
+        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
+          onclick="deleteWithdrawalEntry(${w.id},'webull')">Del</button>
+      </div>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="4" class="empty">No withdrawals</td></tr>';
 }
 
 // ============================================================
@@ -2533,6 +2560,75 @@ async function recalculateAllPL() {
 }
 
 
+
+// ── Webull Trade History Filter ──
+let _wbAllTrades = [];
+
+function filterWbTrades() {
+  const sel = document.getElementById('wb-trades-month-filter');
+  if (!sel) return;
+  const filter = sel.value;
+  const trades = filter === 'all'
+    ? _wbAllTrades
+    : _wbAllTrades.filter(t => t.date.startsWith(filter));
+
+  document.getElementById('wb-trades-count').textContent = 
+    filter === 'all' ? `${_wbAllTrades.length} trades` : `${trades.length} trades (${sel.options[sel.selectedIndex]?.text||''})`;
+
+  document.getElementById('wb-trades-body').innerHTML = trades.map(t => {
+    const rpl = parseFloat(t.realised_pl||0);
+    return `<tr>
+      <td>${fmtDate(t.date)}</td>
+      <td><span class="ticker-badge webull">${t.ticker}</span></td>
+      <td class="${t.action==='Buy'?'action-buy':'action-sell'}">${t.action}</td>
+      <td>${fmtShares(t.qty)}</td>
+      <td>${fmtUSD(t.price)}</td>
+      <td>${fmtUSD(t.amount)}</td>
+      <td class="${rpl!==0?plColor(rpl):''}">${rpl!==0?plStr(rpl):'—'}</td>
+      <td>
+        <div style="display:flex;gap:5px">
+          <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
+            onclick="openEditTradeModal(${t.id},'${t.ticker}','${t.date}','${t.action}',${t.qty},${t.price},${t.amount},${t.realised_pl||0})">Edit</button>
+          <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
+            onclick="deleteWbTrade(${t.id},'${t.ticker}')">Del</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="8" class="empty">No trades for this period</td></tr>';
+}
+
+
+// ── Withdrawal Edit/Delete ──
+function openEditWithdrawalModal(id, broker, date, currency, amount) {
+  document.getElementById('wd-modal-title').textContent = 'Edit Withdrawal';
+  document.getElementById('wd-edit-id').value = id;
+  document.getElementById('wd-edit-date').value = date;
+  document.getElementById('wd-edit-currency').value = currency;
+  document.getElementById('wd-edit-amount').value = amount;
+  document.getElementById('edit-withdrawal-modal').classList.add('open');
+}
+
+async function submitEditWithdrawal() {
+  const id = document.getElementById('wd-edit-id').value;
+  const date = document.getElementById('wd-edit-date').value;
+  const currency = document.getElementById('wd-edit-currency').value;
+  const amount = parseFloat(document.getElementById('wd-edit-amount').value);
+  if (!date || isNaN(amount)) return alert('Please fill all fields');
+  await sb('withdrawals','PATCH',{date, currency, amount},`?id=eq.${id}`);
+  invalidateCache();
+  closeModal('edit-withdrawal-modal');
+  loadWebull();
+}
+
+async function deleteWithdrawalEntry(id, broker) {
+  if (!confirm('Delete this withdrawal?')) return;
+  await sb('withdrawals','DELETE',null,`?id=eq.${id}`);
+  invalidateCache();
+  if (broker === 'webull') loadWebull();
+  else if (broker === 'syfe') loadSyfe();
+  else loadCMC();
+}
+
 // ── Webull Trade Edit/Delete ──
 function openEditTradeModal(id, ticker, date, action, qty, price, amount, rpl) {
   document.getElementById('trade-modal-title').textContent = 'Edit Trade';
@@ -2879,6 +2975,35 @@ setInterval(loadWatchlist, 60000);
     </div>
     <div class="modal-actions" style="margin-top:16px">
       <button class="btn btn-cancel" onclick="closeModal('wb-trade-history-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Withdrawal Modal -->
+<div class="modal-overlay" id="edit-withdrawal-modal">
+  <div class="modal" style="width:400px">
+    <div class="modal-title" id="wd-modal-title">Edit Withdrawal</div>
+    <input type="hidden" id="wd-edit-id">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input class="form-input" type="date" id="wd-edit-date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Currency</label>
+        <select class="form-input" id="wd-edit-currency">
+          <option value="SGD">SGD</option>
+          <option value="USD">USD</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Amount</label>
+      <input class="form-input" type="number" id="wd-edit-amount" step="0.01">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="closeModal('edit-withdrawal-modal')">Cancel</button>
+      <button class="btn btn-submit" onclick="submitEditWithdrawal()">Save</button>
     </div>
   </div>
 </div>
