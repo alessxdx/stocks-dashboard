@@ -914,8 +914,8 @@ tr:hover td { background:var(--surface2); }
         <input class="form-input" type="number" id="trade-price" placeholder="0.00">
       </div>
       <div class="form-group">
-        <label class="form-label">Realised P&L (if Sell)</label>
-        <input class="form-input" type="number" id="trade-rpl" placeholder="0.00">
+        <label class="form-label">Realised P&L</label>
+        <div style="padding:9px 11px;background:var(--surface2);border:1px solid var(--border2);border-radius:7px;font-size:12px;color:var(--muted)">Auto-calculated from avg cost</div>
       </div>
     </div>
     <div class="modal-actions">
@@ -1912,15 +1912,24 @@ async function submitTrade() {
   const date = document.getElementById('trade-date').value;
   const qty = parseFloat(document.getElementById('trade-qty').value);
   const price_val = parseFloat(document.getElementById('trade-price').value);
-  const rpl = parseFloat(document.getElementById('trade-rpl').value)||0;
   if (!ticker||!date||!qty||!price_val) return alert('Please fill all required fields');
   const amount = qty * price_val;
 
+  // Auto-calculate realised P&L for sell trades using current avg cost
+  let rpl = 0;
+  if (action === 'Sell') {
+    const holdings = await sb('webull_holdings','GET',null,`?ticker=eq.${ticker}&brokerage=eq.webull`);
+    if (holdings?.length && holdings[0].avg_cost > 0) {
+      rpl = Math.round((price_val - holdings[0].avg_cost) * qty * 100) / 100;
+    }
+  }
+
   await sb('webull_trades','POST',{ticker, brokerage:'webull', date, action, qty, price:price_val, amount, realised_pl:rpl});
+
   // Update holding
-  const holdings = await sb('webull_holdings','GET',null,`?ticker=eq.${ticker}&brokerage=eq.webull`);
-  if (holdings?.length) {
-    const h = holdings[0];
+  const holdings2 = await sb('webull_holdings','GET',null,`?ticker=eq.${ticker}&brokerage=eq.webull`);
+  if (holdings2?.length) {
+    const h = holdings2[0];
     let newShares = h.shares + (action==='Buy'?qty:-qty);
     let newCost = action==='Buy' ? h.total_cost+amount : h.total_cost-(h.avg_cost*qty);
     let newAvg = newShares>0 ? newCost/newShares : 0;
