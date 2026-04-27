@@ -1722,6 +1722,51 @@ async function loadCMC() {
   });
   _cmcHoldSort = { key:'ticker', dir:1 };
   renderCMCActiveHoldings();
+
+  // Closed positions
+  const closed = getCMCClosed();
+  document.getElementById('cmc-closed-count').textContent = closed.length + ' stocks';
+  document.getElementById('cmc-closed-body').innerHTML = closed.map(h => `<tr>
+    <td><span class="ticker-badge cmc" style="cursor:pointer" onclick="showCMCTradeHistory('${h.ticker}')">${h.ticker}</span></td>
+    <td class="${h.realisedPL!==0?plColor(h.realisedPL):''}" style="${h.realisedPL===0?'color:var(--text)':''};font-family:var(--font-num)">${h.realisedPL!==0?plStr(h.realisedPL,'S$'):'—'}</td>
+    <td><span class="status-closed">Closed</span></td>
+  </tr>`).join('') || '<tr><td colspan="3" class="empty">No closed positions</td></tr>';
+
+  // SG Dividends grouped by ticker
+  const sgDivMap = {};
+  (_divSG||[]).forEach(d => {
+    if (!sgDivMap[d.ticker]) sgDivMap[d.ticker] = {ticker:d.ticker, total:0, payments:[]};
+    sgDivMap[d.ticker].total += d.total_sgd;
+    sgDivMap[d.ticker].payments.push(d);
+  });
+  document.getElementById('cmc-divs-body').innerHTML = Object.values(sgDivMap)
+    .sort((a,b)=>a.ticker.localeCompare(b.ticker))
+    .map(s => `<tr style="cursor:pointer" onclick="showCMCDivHistory('${s.ticker}')">
+      <td><span class="ticker-badge cmc">${s.ticker}</span></td>
+      <td class="pos" style="font-family:var(--font-num);font-weight:600">${fmtSGD(s.total)}</td>
+      <td style="color:var(--muted)">${s.payments.length} payments</td>
+      <td style="color:var(--accent);font-size:12px">View →</td>
+    </tr>`).join('') || '<tr><td colspan="4" class="empty">No dividends yet</td></tr>';
+
+  // Deposits
+  document.getElementById('cmc-deposits-body').innerHTML = cmcDeps.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(d => `<tr>
+    <td>${fmtDate(d.date)}</td>
+    <td>${fmtSGD(d.amount)}</td>
+    <td><div style="display:flex;gap:6px">
+      <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40" onclick="openEditDepositModal(${d.id},'cmc','${d.date}','${d.currency||'SGD'}',${d.amount},'${d.source_note||''}')">Edit</button>
+      <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40" onclick="deleteDepositEntry(${d.id},'cmc')">Del</button>
+    </div></td>
+  </tr>`).join('') || '<tr><td colspan="3" class="empty">No deposits</td></tr>';
+
+  // Withdrawals
+  document.getElementById('cmc-withdrawals-body').innerHTML = cmcWds.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(w => `<tr>
+    <td>${fmtDate(w.date)}</td>
+    <td style="font-family:var(--font-num)">${fmtSGD(w.amount)}</td>
+    <td><div style="display:flex;gap:6px">
+      <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40" onclick="openEditWithdrawalModal(${w.id},'cmc','${w.date}','${w.currency||'SGD'}',${w.amount})">Edit</button>
+      <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40" onclick="deleteWithdrawalEntry(${w.id},'cmc')">Del</button>
+    </div></td>
+  </tr>`).join('') || '<tr><td colspan="3" class="empty">No withdrawals</td></tr>';
 }
 
 
