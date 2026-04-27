@@ -2346,7 +2346,7 @@ function showDivHistory(ticker, broker) {
 // WATCHLIST PAGE
 // ============================================================
 // ── Supabase-backed watchlist ──
-let _wlRows = []; // cache of { id, ticker, exchange } from Supabase
+// _wlRows declared at top of script
 
 async function loadWatchlistPage() {
   const body     = document.getElementById('wl-body');
