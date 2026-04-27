@@ -2172,6 +2172,242 @@ async function loadWatchlist() {
 loadWatchlist();
 setInterval(loadWatchlist, 60000);
 
+
+// ============================================================
+// FX TRACKER
+// ============================================================
+let _fxFilter = 'all';
+
+async function loadFX() {
+  await loadAllData();
+  const fx = (_fx||[]);
+  const filterEl = document.getElementById('fx-filter');
+  if (filterEl) _fxFilter = filterEl.value || 'all';
+
+  const filtered = _fxFilter === 'all' ? fx : fx.filter(f => f.brokerage === _fxFilter);
+  const body = document.getElementById('fx-body');
+  if (!body) return;
+
+  body.innerHTML = filtered.sort((a,b) => new Date(b.date)-new Date(a.date)).map(f => `<tr>
+    <td>${fmtDate(f.date)}</td>
+    <td style="text-transform:capitalize">${f.brokerage}</td>
+    <td>${f.from_currency} → ${f.to_currency}</td>
+    <td style="font-family:var(--font-num)">${f.rate}</td>
+    <td style="font-family:var(--font-num)">${f.from_currency==='SGD'?fmtSGD(f.amount_from):fmtUSD(f.amount_from)}</td>
+    <td style="font-family:var(--font-num)">${f.to_currency==='USD'?fmtUSD(f.amount_to):fmtSGD(f.amount_to)}</td>
+    <td>
+      <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
+        onclick="deleteFX(${f.id})">Del</button>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="7" class="empty">No conversions yet</td></tr>';
+
+  // Summary
+  const totalSGDtoUSD = fx.filter(f=>f.from_currency==='SGD'&&f.to_currency==='USD').reduce((s,f)=>s+f.amount_from,0);
+  const totalUSDtoSGD = fx.filter(f=>f.from_currency==='USD'&&f.to_currency==='SGD').reduce((s,f)=>s+f.amount_from,0);
+  const el1 = document.getElementById('fx-sgd-usd'); if(el1) el1.textContent = fmtSGD(totalSGDtoUSD);
+  const el2 = document.getElementById('fx-usd-sgd'); if(el2) el2.textContent = fmtUSD(totalUSDtoSGD);
+}
+
+async function deleteFX(id) {
+  if (!confirm('Delete this FX conversion?')) return;
+  await sb('fx_conversions','DELETE',null,`?id=eq.${id}`);
+  invalidateCache();
+  loadFX();
+}
+
+// ============================================================
+// DIVIDENDS
+// ============================================================
+async function loadDividends() {
+  await loadAllData();
+  const prices = {};
+
+  // Group US dividends (Webull) by ticker
+  const usMap = {};
+  (_divUS||[]).forEach(d => {
+    const net = Math.round(d.amount_usd * US_TAX * 100) / 100;
+    if (!usMap[d.ticker]) usMap[d.ticker] = {ticker:d.ticker,broker:'webull',isSG:false,payments:[],total:0};
+    usMap[d.ticker].payments.push({id:d.id,date:fmtDate(d.date),rawDate:d.date,amount:fmtUSD(net),rawAmount:net});
+    usMap[d.ticker].total += net;
+  });
+
+  // Group SG dividends (CMC)
+  const sgMap = {};
+  (_divSG||[]).forEach(d => {
+    if (!sgMap[d.ticker]) sgMap[d.ticker] = {ticker:d.ticker,broker:'cmc',isSG:true,payments:[],total:0};
+    sgMap[d.ticker].payments.push({id:d.id,date:fmtDate(d.date),rawDate:d.date,amount:fmtSGD(d.total_sgd),rawAmount:d.total_sgd,rawPerShare:d.per_share,rawShares:d.shares});
+    sgMap[d.ticker].total += d.total_sgd;
+  });
+
+  // Group Syfe dividends
+  const syMap = {};
+  (_divSyfe||[]).forEach(d => {
+    if (!syMap[d.ticker]) syMap[d.ticker] = {ticker:d.ticker,broker:'syfe',isSG:false,payments:[],total:0};
+    syMap[d.ticker].payments.push({id:d.id,date:fmtDate(d.date),rawDate:d.date,amount:fmtUSD(d.amount_usd),rawAmount:d.amount_usd});
+    syMap[d.ticker].total += d.amount_usd;
+  });
+
+  const usTotal = Object.values(usMap).reduce((s,x)=>s+x.total,0);
+  const sgTotal = Object.values(sgMap).reduce((s,x)=>s+x.total,0);
+  const syTotal = Object.values(syMap).reduce((s,x)=>s+x.total,0);
+  const allTotal = usTotal + syTotal; // USD total (SGD separate)
+
+  // Summary cards
+  const el1 = document.getElementById('div-total'); if(el1) el1.innerHTML = fmtUSD(allTotal) + '<br><span style="font-size:12px;color:var(--muted)">+'+fmtSGD(sgTotal)+'</span>';
+  const el2 = document.getElementById('div-wb-total'); if(el2) el2.textContent = fmtUSD(usTotal);
+  const el3 = document.getElementById('div-cmc-total'); if(el3) el3.textContent = fmtSGD(sgTotal);
+  const el4 = document.getElementById('div-sy-total'); if(el4) el4.textContent = fmtUSD(syTotal);
+
+  // Fetch dividend data from worker for next dates
+  let divData = {};
+  try {
+    const allTickers = [...Object.keys(usMap), ...Object.keys(syMap)];
+    if (allTickers.length) {
+      const r = await fetch(`${WORKER_URL}?tickers=${allTickers.join(',')}&mode=dividends`);
+      const j = await r.json();
+      divData = j.dividends || {};
+    }
+  } catch(e) {}
+
+  // Build stocks array
+  const allStocks = [];
+  // Get holdings shares for payout estimate
+  const wbSharesMap = {};
+  (_wbHoldings||[]).forEach(h => { wbSharesMap[h.ticker] = h.shares; });
+  const sySharesMap = { VOO: 52.1778, SCHG: 607.9309, SPYI: 235 }; // from syfe_holdings
+
+  [...Object.values(usMap), ...Object.values(sgMap), ...Object.values(syMap)].forEach(s => {
+    const d = divData[s.ticker] || {};
+    if (d) {
+      s.next_date     = d.nextDate     || null;
+      s.next_amount   = d.nextAmount   || null;
+      s.next_pay_date = d.nextPayDate  || null;
+      s.is_estimate   = d.isEstimate   || false;
+    }
+    s.shares = wbSharesMap[s.ticker] || sySharesMap[s.ticker] || 0;
+    allStocks.push(s);
+  });
+
+  allStocks.sort((a,b) => a.ticker.localeCompare(b.ticker));
+
+  const brokerBadge = (b) => `<span class="ticker-badge ${b}">${b==='cmc'?'CMC':b==='syfe'?'Syfe':'Webull'}</span>`;
+  const stockCount = document.getElementById('div-stock-count');
+  if (stockCount) stockCount.textContent = allStocks.length + ' stocks';
+
+  const tbody = document.getElementById('div-table-body');
+  if (!tbody) return;
+
+  tbody.innerHTML = allStocks.map(s => {
+    const ratePerShare = s.next_amount || 0;
+    const taxFactor = (!s.isSG) ? US_TAX : 1;
+    const myPayout = ratePerShare * s.shares * taxFactor;
+    const nextAmt = s.next_amount ? `<span style="font-size:12px">${s.isSG?fmtSGD(s.next_amount):fmtUSD(s.next_amount)}${s.is_estimate?' <span style="font-size:9px;color:var(--muted)">(est)</span>':''}</span>` : '<span style="color:var(--muted)">—</span>';
+
+    return `<tr style="cursor:pointer" onclick="showDivHistory('${s.ticker}','${s.broker}')">
+      <td><span class="ticker-badge ${s.broker==='cmc'?'cmc':s.broker==='syfe'?'syfe':'webull'}">${s.ticker}</span></td>
+      <td>${brokerBadge(s.broker)}</td>
+      <td style="color:var(--muted);font-size:12px">${s.isSG?'SGD':'USD'}</td>
+      <td class="pos" style="font-family:var(--font-num);font-weight:600">${s.isSG?fmtSGD(s.total):fmtUSD(s.total)}</td>
+      <td style="color:var(--muted)">${s.payments.length}</td>
+      <td style="font-family:var(--font-num);color:var(--muted);font-size:12px">${s.next_date?fmtDate(s.next_date)+(s.is_estimate?' <span style="font-size:9px">(est)</span>':''):'<span style="color:var(--muted)">—</span>'}</td>
+      <td style="font-family:var(--font-num);color:var(--muted);font-size:12px">${s.next_pay_date?fmtDate(s.next_pay_date)+(s.is_estimate?' <span style="font-size:9px;color:var(--muted)">(est)</span>':''):'<span style="color:var(--muted)">—</span>'}</td>
+      <td>${nextAmt}</td>
+      <td style="font-family:var(--font-num)">${myPayout>0?`<span class="pos">${s.isSG?fmtSGD(myPayout):fmtUSD(myPayout)}</span>`:'<span style="color:var(--muted)">—</span>'}</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm" style="font-size:10px" onclick="event.stopPropagation();showDivHistory('${s.ticker}','${s.broker}')">View</button>
+          <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40" onclick="event.stopPropagation();openDivModal('${s.ticker}','${s.broker}')">+ Add</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="10" class="empty">No dividend history yet</td></tr>';
+}
+
+function showDivHistory(ticker, broker) {
+  let payments = [];
+  if (broker === 'webull') {
+    payments = (_divUS||[]).filter(d=>d.ticker===ticker)
+      .sort((a,b)=>new Date(b.date)-new Date(a.date))
+      .map(d=>({id:d.id,date:fmtDate(d.date),rawDate:d.date,amount:fmtUSD(Math.round(d.amount_usd*US_TAX*100)/100),rawAmount:Math.round(d.amount_usd*US_TAX*100)/100}));
+  } else if (broker === 'cmc') {
+    payments = (_divSG||[]).filter(d=>d.ticker===ticker)
+      .sort((a,b)=>new Date(b.date)-new Date(a.date))
+      .map(d=>({id:d.id,date:fmtDate(d.date),rawDate:d.date,amount:fmtSGD(d.total_sgd),rawAmount:d.total_sgd,rawPerShare:d.per_share,rawShares:d.shares,extra:fmtSGD(d.per_share)+' per share'}));
+  } else {
+    payments = (_divSyfe||[]).filter(d=>d.ticker===ticker)
+      .sort((a,b)=>new Date(b.date)-new Date(a.date))
+      .map(d=>({id:d.id,date:fmtDate(d.date),rawDate:d.date,amount:fmtUSD(d.amount_usd),rawAmount:d.amount_usd}));
+  }
+
+  const totalNum = payments.reduce((s,p)=>s+(p.rawAmount||0),0);
+  document.getElementById('div-modal-title').innerHTML = `<span class="ticker-badge ${broker==='cmc'?'cmc':broker==='syfe'?'syfe':'webull'}">${ticker}</span>&nbsp; Dividend History`;
+  document.getElementById('div-modal-total').innerHTML = `<span style="font-size:14px">${broker==='cmc'?fmtSGD(totalNum):fmtUSD(totalNum)}</span>`;
+
+  document.getElementById('div-modal-body').innerHTML = payments.map(p=>`<tr>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted)">${p.date}</td>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border)" class="pos">
+      ${p.amount}${p.extra?'<br><span style="font-size:11px;color:var(--muted)">'+p.extra+'</span>':''}
+    </td>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40" onclick="openDivEditModal('${p.id}','${broker}','${p.rawDate}',${p.rawAmount}${p.rawPerShare?','+p.rawPerShare:''}${p.rawShares?','+p.rawShares:''})">Edit</button>
+        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40" onclick="deleteDivEntry('${p.id}','${broker}')">Del</button>
+      </div>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--muted)">No history</td></tr>';
+
+  document.getElementById('div-history-modal').classList.add('open');
+}
+
+// ============================================================
+// WATCHLIST PAGE
+// ============================================================
+async function loadWatchlistPage() {
+  const tickers = JSON.parse(localStorage.getItem('watchlist') || '["VOO","SCHG","SPYI","NVDA","AAPL","MSFT"]');
+  const body = document.getElementById('watchlist-page-body');
+  if (!body) return;
+
+  // Force fresh price fetch for watchlist page
+  tickers.forEach(t => { delete priceCache[t]; delete periodCache[t]; });
+  await fetchPrices(tickers);
+
+  body.innerHTML = tickers.map(t => {
+    const p = priceCache[t] || {};
+    const prd = periodCache[t] || {};
+    return `<tr>
+      <td><span class="ticker-badge default">${t}</span></td>
+      <td style="font-family:var(--font-num)">${p.price>0?fmtUSD(p.price):'—'}</td>
+      <td class="${p.dayChange>=0?'pos':'neg'}">${p.dayChange!=null?(p.dayChange>=0?'+':'')+p.dayChange.toFixed(2)+'%':'—'}</td>
+      <td class="${(prd.week||0)>=0?'pos':'neg'}">${prd.week!=null?(prd.week>=0?'+':'')+prd.week.toFixed(2)+'%':'—'}</td>
+      <td class="${(prd.month||0)>=0?'pos':'neg'}">${prd.month!=null?(prd.month>=0?'+':'')+prd.month.toFixed(2)+'%':'—'}</td>
+      <td class="${(prd.three_month||0)>=0?'pos':'neg'}">${prd.three_month!=null?(prd.three_month>=0?'+':'')+prd.three_month.toFixed(2)+'%':'—'}</td>
+      <td class="${(prd.ytd||0)>=0?'pos':'neg'}">${prd.ytd!=null?(prd.ytd>=0?'+':'')+prd.ytd.toFixed(2)+'%':'—'}</td>
+      <td><button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40" onclick="removeWatchlistTicker('${t}')">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function removeWatchlistTicker(ticker) {
+  let tickers = JSON.parse(localStorage.getItem('watchlist') || '[]');
+  tickers = tickers.filter(t => t !== ticker);
+  localStorage.setItem('watchlist', JSON.stringify(tickers));
+  loadWatchlistPage();
+}
+
+function addWatchlistTicker() {
+  const input = document.getElementById('add-ticker-input');
+  if (!input) return;
+  const ticker = input.value.toUpperCase().trim();
+  if (!ticker) return;
+  let tickers = JSON.parse(localStorage.getItem('watchlist') || '[]');
+  if (!tickers.includes(ticker)) tickers.push(ticker);
+  localStorage.setItem('watchlist', JSON.stringify(tickers));
+  input.value = '';
+  closeModal('add-ticker-modal');
+  loadWatchlistPage();
+}
+
+
 </script>
 
 <div class="modal-overlay" id="add-ticker-modal">
