@@ -2329,39 +2329,25 @@ async function loadDividends() {
     allStocks.push(s);
   });
 
-  allStocks.sort((a,b) => a.ticker.localeCompare(b.ticker));
+  // Store in global for sorting
+  const taxFactor_fn = (s) => (!s.isSG) ? US_TAX : 1;
+  _divStocksData = allStocks.map(s => ({
+    ...s,
+    payments: s.payments.length,
+    total: s.total,
+    broker: s.broker,
+    currency: s.isSG ? 'SGD' : 'USD',
+    next_date: s.next_date || '',
+    next_pay_date: s.next_pay_date || '',
+    next_amount: s.next_amount || 0,
+    my_payout: (s.next_amount || 0) * s.shares * taxFactor_fn(s),
+  }));
 
-  const brokerBadge = (b) => `<span class="ticker-badge ${b}">${b==='cmc'?'CMC':b==='syfe'?'Syfe':'Webull'}</span>`;
   const stockCount = document.getElementById('div-stock-count');
   if (stockCount) stockCount.textContent = allStocks.length + ' stocks';
 
-  const tbody = document.getElementById('div-stocks-body');
-  if (!tbody) return;
-
-  tbody.innerHTML = allStocks.map(s => {
-    const ratePerShare = s.next_amount || 0;
-    const taxFactor = (!s.isSG) ? US_TAX : 1;
-    const myPayout = ratePerShare * s.shares * taxFactor;
-    const nextAmt = s.next_amount ? `<span style="font-size:12px">${s.isSG?fmtSGD(s.next_amount):fmtUSD(s.next_amount)}${s.is_estimate?' <span style="font-size:9px;color:var(--muted)">(est)</span>':''}</span>` : '<span style="color:var(--muted)">—</span>';
-
-    return `<tr style="cursor:pointer" onclick="showDivHistory('${s.ticker}','${s.broker}')">
-      <td><span class="ticker-badge ${s.broker==='cmc'?'cmc':s.broker==='syfe'?'syfe':'webull'}">${s.ticker}</span></td>
-      <td>${brokerBadge(s.broker)}</td>
-      <td style="color:var(--muted);font-size:12px">${s.isSG?'SGD':'USD'}</td>
-      <td class="pos" style="font-family:var(--font-num);font-weight:600">${s.isSG?fmtSGD(s.total):fmtUSD(s.total)}</td>
-      <td style="color:var(--muted)">${s.payments.length}</td>
-      <td style="font-family:var(--font-num);color:var(--muted);font-size:12px">${s.next_date?fmtDate(s.next_date)+(s.is_estimate?' <span style="font-size:9px">(est)</span>':''):'<span style="color:var(--muted)">—</span>'}</td>
-      <td style="font-family:var(--font-num);color:var(--muted);font-size:12px">${s.next_pay_date?fmtDate(s.next_pay_date)+(s.is_estimate?' <span style="font-size:9px;color:var(--muted)">(est)</span>':''):'<span style="color:var(--muted)">—</span>'}</td>
-      <td>${nextAmt}</td>
-      <td style="font-family:var(--font-num)">${myPayout>0?`<span class="pos">${s.isSG?fmtSGD(myPayout):fmtUSD(myPayout)}</span>`:'<span style="color:var(--muted)">—</span>'}</td>
-      <td>
-        <div style="display:flex;gap:6px">
-          <button class="btn btn-sm" style="font-size:10px" onclick="event.stopPropagation();showDivHistory('${s.ticker}','${s.broker}')">View</button>
-          <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40" onclick="event.stopPropagation();openDivModal('${s.ticker}','${s.broker}')">+ Add</button>
-        </div>
-      </td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="10" class="empty">No dividend history yet</td></tr>';
+  _divSortKey = 'ticker'; _divSortDir = 1;
+  renderDivTable();
 }
 
 function showDivHistory(ticker, broker) {
@@ -2883,27 +2869,47 @@ async function loadFX_withFilter(filter) {
 
 // ── Dividend table sort ──
 let _divSortKey = 'ticker', _divSortDir = 1;
+let _divStocksData = []; // store for sorting
+
 function sortDivTable(key) {
   if (_divSortKey === key) { _divSortDir *= -1; }
-  else { _divSortKey = key; _divSortDir = key === 'ticker' ? 1 : -1; }
+  else { _divSortKey = key; _divSortDir = key === 'ticker' || key === 'broker' || key === 'currency' ? 1 : -1; }
   document.querySelectorAll('#page-dividends th').forEach(th => {
     th.classList.remove('sort-asc','sort-desc');
     if (th.getAttribute('onclick') === `sortDivTable('${key}')`)
       th.classList.add(_divSortDir === 1 ? 'sort-asc' : 'sort-desc');
   });
-  // Re-sort the existing rows
-  const tbody = document.getElementById('div-stocks-body');
-  if (!tbody) return;
-  const rows = Array.from(tbody.querySelectorAll('tr'));
-  rows.sort((a, b) => {
-    const aVal = a.dataset[key] || a.cells[0]?.textContent || '';
-    const bVal = b.dataset[key] || b.cells[0]?.textContent || '';
-    const aNum = parseFloat(aVal.replace(/[^0-9.-]/g,''));
-    const bNum = parseFloat(bVal.replace(/[^0-9.-]/g,''));
-    if (!isNaN(aNum) && !isNaN(bNum)) return (aNum - bNum) * _divSortDir;
-    return aVal.localeCompare(bVal) * _divSortDir;
+  renderDivTable();
+}
+
+function renderDivTable() {
+  const sorted = [..._divStocksData].sort((a, b) => {
+    const av = a[_divSortKey], bv = b[_divSortKey];
+    if (typeof av === 'string') return (av||'').localeCompare(bv||'') * _divSortDir;
+    return ((av||0) - (bv||0)) * _divSortDir;
   });
-  rows.forEach(r => tbody.appendChild(r));
+
+  const brokerBadge = (b) => `<span class="ticker-badge ${b==='cmc'?'cmc':b==='syfe'?'syfe':'webull'}">${b==='cmc'?'CMC':b==='syfe'?'Syfe':'Webull'}</span>`;
+
+  document.getElementById('div-stocks-body').innerHTML = sorted.map(s => {
+    const myPayout = s.my_payout || 0;
+    const nextAmt = s.next_amount ? `<span style="font-size:12px">${s.isSG?fmtSGD(s.next_amount):fmtUSD(s.next_amount)}${s.is_estimate?' <span style="font-size:9px;color:var(--muted)">(est)</span>':''}</span>` : '<span style="color:var(--muted)">—</span>';
+    return `<tr style="cursor:pointer" onclick="showDivHistory('${s.ticker}','${s.broker}')">
+      <td><span class="ticker-badge ${s.broker==='cmc'?'cmc':s.broker==='syfe'?'syfe':'webull'}">${s.ticker}</span></td>
+      <td>${brokerBadge(s.broker)}</td>
+      <td style="color:var(--muted);font-size:12px">${s.isSG?'SGD':'USD'}</td>
+      <td class="pos" style="font-family:var(--font-num);font-weight:600">${s.isSG?fmtSGD(s.total):fmtUSD(s.total)}</td>
+      <td style="color:var(--muted)">${s.payments}</td>
+      <td style="font-family:var(--font-num);color:var(--muted);font-size:12px">${s.next_date?fmtDate(s.next_date)+(s.is_estimate?' <span style="font-size:9px">(est)</span>':''):'<span style="color:var(--muted)">—</span>'}</td>
+      <td style="font-family:var(--font-num);color:var(--muted);font-size:12px">${s.next_pay_date?fmtDate(s.next_pay_date):'<span style="color:var(--muted)">—</span>'}</td>
+      <td>${nextAmt}</td>
+      <td style="font-family:var(--font-num)">${myPayout>0?`<span class="pos">${s.isSG?fmtSGD(myPayout):fmtUSD(myPayout)}</span>`:'<span style="color:var(--muted)">—</span>'}</td>
+      <td><div style="display:flex;gap:6px">
+        <button class="btn btn-sm" style="font-size:10px" onclick="event.stopPropagation();showDivHistory('${s.ticker}','${s.broker}')">View</button>
+        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40" onclick="event.stopPropagation();openDivModal('${s.ticker}','${s.broker}')">+ Add</button>
+      </div></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="10" class="empty">No dividend history yet</td></tr>';
 }
 
 </script>
