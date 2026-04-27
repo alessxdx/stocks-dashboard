@@ -202,6 +202,16 @@ tr:hover td { background:var(--surface2); }
   opacity:0; pointer-events:none; transition:opacity .2s;
 }
 .modal-overlay.open { opacity:1; pointer-events:all; }
+/* Edit/add modals must always stack above history/view modals */
+#div-add-modal,
+#add-trade-modal,
+#add-sg-trade-modal,
+#syfe-add-trade-modal,
+#add-deposit-modal,
+#add-withdrawal-modal,
+#edit-withdrawal-modal,
+#add-fx-modal,
+#add-ticker-modal { z-index: 1100; }
 .modal {
   background:var(--surface); border:1px solid var(--border2);
   border-radius:16px; padding:28px; width:440px; max-width:95vw;
@@ -1803,6 +1813,7 @@ async function deleteWithdrawalEntry(id, broker) {
 
 // ── Webull Trade Edit/Delete ──
 function openEditTradeModal(id, ticker, date, action, qty, price, amount, rpl) {
+  closeModal('wb-trade-history-modal');
   document.getElementById('trade-modal-title').textContent = 'Edit Trade';
   document.getElementById('trade-edit-id').value = id;
   document.getElementById('trade-broker').value = 'webull';
@@ -2640,6 +2651,10 @@ function openDivModal(ticker='', broker='webull') {
 }
 
 function openDivEditModal(id, broker, date, amount, perShare, shares) {
+  // Close any parent history modal first so edit appears on top
+  closeModal('div-history-modal');
+  closeModal('cmc-trade-history-modal');
+  closeModal('syfe-trade-modal');
   const lbl=broker==='cmc'?'CMC Invest':broker==='syfe'?'Syfe':'Webull';
   document.getElementById('div-add-modal-title').textContent=`Edit Dividend — ${lbl}`;
   document.getElementById('div-edit-id').value=id;
@@ -2778,6 +2793,7 @@ async function showSyfeDivHistory(ticker) {
 }
 
 function openSyfeEditDivModal(id,ticker,date,amount) {
+  closeModal('div-history-modal');
   document.getElementById('div-add-modal-title').textContent='Edit '+ticker+' Dividend';
   document.getElementById('div-edit-id').value=id;
   document.getElementById('div-add-broker').value='syfe';
