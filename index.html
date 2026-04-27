@@ -1019,12 +1019,15 @@ tr:hover td { background:var(--surface2); }
 </div>
 
 <div class="modal-overlay" id="add-fx-modal">
-  <div class="modal">
+  <div class="modal" style="width:480px">
     <div class="modal-title">Add FX Conversion</div>
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Broker</label>
-        <select class="form-input" id="fx-broker"><option>webull</option><option>syfe</option></select>
+        <select class="form-input" id="fx-broker">
+          <option value="webull">Webull</option>
+          <option value="syfe">Syfe</option>
+        </select>
       </div>
       <div class="form-group">
         <label class="form-label">Date</label>
@@ -1034,26 +1037,30 @@ tr:hover td { background:var(--surface2); }
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">From Currency</label>
-        <select class="form-input" id="fx-from"><option>SGD</option><option>USD</option></select>
+        <select class="form-input" id="fx-from" onchange="updateFXLabels()">
+          <option>SGD</option><option>USD</option>
+        </select>
       </div>
       <div class="form-group">
         <label class="form-label">To Currency</label>
-        <select class="form-input" id="fx-to"><option>USD</option><option>SGD</option></select>
-      </div>
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Rate</label>
-        <input class="form-input" type="number" id="fx-rate" placeholder="0.0000" step="0.0001">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Amount From</label>
-        <input class="form-input" type="number" id="fx-amt-from" placeholder="0.00">
+        <select class="form-input" id="fx-to" onchange="updateFXLabels()">
+          <option>USD</option><option>SGD</option>
+        </select>
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">Amount To (received)</label>
-      <input class="form-input" type="number" id="fx-amt-to" placeholder="0.00">
+      <label class="form-label">Rate</label>
+      <input class="form-input" type="number" id="fx-rate" step="0.0001" placeholder="0.0000">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label" id="fx-from-label">Amount From (SGD)</label>
+        <input class="form-input" type="number" id="fx-amount-from" step="0.01" placeholder="0.00" oninput="autoCalcFXTo()">
+      </div>
+      <div class="form-group">
+        <label class="form-label" id="fx-to-label">Amount To (USD)</label>
+        <input class="form-input" type="number" id="fx-amount-to" step="0.01" placeholder="0.00">
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-cancel" onclick="closeModal('add-fx-modal')">Cancel</button>
@@ -1544,7 +1551,7 @@ async function loadSyfe() {
     document.getElementById(`sy-${key}-value`).textContent = fmtUSD(val);
     document.getElementById(`sy-${key}-invested`).textContent = fmtUSD(h.total_invested);
     document.getElementById(`sy-${key}-pl`).innerHTML = `<span class="${plColor(pl)}">${plStr(pl)} (${fmtPct(pct)})</span>`;
-    const spyiDivs = ticker==='SPYI' ? (_divSyfe||[]).reduce((s,d)=>s+d.amount_usd,0) : h.total_dividends;
+    const spyiDivs = ticker==='SPYI' ? (_divSyfe||[]).filter(d=>d.ticker==='SPYI').reduce((s,d)=>s+d.amount_usd,0) : h.total_dividends;
     document.getElementById(`sy-${key}-divs`).textContent = fmtUSD(spyiDivs);
   });
 
@@ -2183,14 +2190,29 @@ async function submitWithdrawal() {
   else loadWebull();
 }
 
+function updateFXLabels() {
+  const from = document.getElementById('fx-from').value;
+  const to = document.getElementById('fx-to').value;
+  document.getElementById('fx-from-label').textContent = `Amount From (${from})`;
+  document.getElementById('fx-to-label').textContent = `Amount To (${to})`;
+}
+
+function autoCalcFXTo() {
+  const rate = parseFloat(document.getElementById('fx-rate').value) || 0;
+  const amtFrom = parseFloat(document.getElementById('fx-amount-from').value) || 0;
+  if (rate > 0 && amtFrom > 0) {
+    document.getElementById('fx-amount-to').value = (amtFrom * rate).toFixed(2);
+  }
+}
+
 async function submitFX() {
   const broker = document.getElementById('fx-broker').value;
   const date = document.getElementById('fx-date').value;
   const from_currency = document.getElementById('fx-from').value;
   const to_currency = document.getElementById('fx-to').value;
   const rate = parseFloat(document.getElementById('fx-rate').value);
-  const amount_from = parseFloat(document.getElementById('fx-amt-from').value);
-  const amount_to = parseFloat(document.getElementById('fx-amt-to').value);
+  const amount_from = parseFloat(document.getElementById('fx-amount-from').value);
+  const amount_to = parseFloat(document.getElementById('fx-amount-to').value);
   if (!date||!rate||!amount_from||!amount_to) return alert('Please fill all fields');
   await sb('fx_conversions','POST',{brokerage:broker,date,from_currency,to_currency,rate,amount_from,amount_to});
   invalidateCache();
