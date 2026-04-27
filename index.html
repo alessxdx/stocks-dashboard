@@ -2795,12 +2795,9 @@ async function recalculateAllPL() {
 }
 
 // ── Deposit breakdown ──
-async 
 
-async 
 
 // ── CMC Div modal ──
-async 
 
 
 // ── Global modal close: click outside or ESC ──
@@ -2837,6 +2834,31 @@ async function loadFX_withFilter(filter) {
     <td style="font-family:var(--font-num)">${f.to_currency==='USD'?fmtUSD(f.amount_to):fmtSGD(f.amount_to)}</td>
     <td><button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40" onclick="deleteFX(${f.id})">Del</button></td>
   </tr>`).join('')||'<tr><td colspan="7" class="empty">No conversions</td></tr>';
+}
+
+// ── Dividend table sort ──
+let _divSortKey = 'ticker', _divSortDir = 1;
+function sortDivTable(key) {
+  if (_divSortKey === key) { _divSortDir *= -1; }
+  else { _divSortKey = key; _divSortDir = key === 'ticker' ? 1 : -1; }
+  document.querySelectorAll('#page-dividends th').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    if (th.getAttribute('onclick') === `sortDivTable('${key}')`)
+      th.classList.add(_divSortDir === 1 ? 'sort-asc' : 'sort-desc');
+  });
+  // Re-sort the existing rows
+  const tbody = document.getElementById('div-stocks-body');
+  if (!tbody) return;
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  rows.sort((a, b) => {
+    const aVal = a.dataset[key] || a.cells[0]?.textContent || '';
+    const bVal = b.dataset[key] || b.cells[0]?.textContent || '';
+    const aNum = parseFloat(aVal.replace(/[^0-9.-]/g,''));
+    const bNum = parseFloat(bVal.replace(/[^0-9.-]/g,''));
+    if (!isNaN(aNum) && !isNaN(bNum)) return (aNum - bNum) * _divSortDir;
+    return aVal.localeCompare(bVal) * _divSortDir;
+  });
+  rows.forEach(r => tbody.appendChild(r));
 }
 
 </script>
