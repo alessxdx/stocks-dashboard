@@ -910,13 +910,30 @@ tr:hover td { background:var(--surface2); }
 <!-- ===================== WATCHLIST PAGE ===================== -->
 <div id="page-watchlist" class="page">
   <div class="page-header">
-    <div class="page-title">Watchlist</div>
-    <div class="page-subtitle">Live prices & performance — Day · Week · Month · 3M · YTD</div>
-    <div class="last-updated" id="wl-page-updated">Fetching prices...</div>
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div>
+        <div class="page-title">Watchlist</div>
+        <div class="page-subtitle">Live prices & performance — Day · Week · Month · 3M · YTD</div>
+        <div class="last-updated" id="wl-page-updated">Fetching prices...</div>
+      </div>
+      <!-- Toggle buttons -->
+      <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+        <div style="display:flex;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:3px;gap:3px">
+          <button id="wl-toggle-holdings" onclick="wlToggle('holdings')"
+            style="padding:7px 18px;border-radius:8px;border:none;cursor:pointer;font-size:11px;font-family:var(--font-mono);letter-spacing:.4px;text-transform:uppercase;transition:all .2s;background:var(--accent);color:#fff">
+            My Holdings
+          </button>
+          <button id="wl-toggle-watchlist" onclick="wlToggle('watchlist')"
+            style="padding:7px 18px;border-radius:8px;border:none;cursor:pointer;font-size:11px;font-family:var(--font-mono);letter-spacing:.4px;text-transform:uppercase;transition:all .2s;background:transparent;color:var(--muted)">
+            Watchlist
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- SECTION 1: MY HOLDINGS -->
-  <div class="section" style="margin-bottom:20px">
+  <div id="wl-section-holdings" class="section">
     <div class="section-header">
       <div>
         <div class="section-title">My Holdings</div>
@@ -927,14 +944,14 @@ tr:hover td { background:var(--surface2); }
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>Ticker</th>
+          <th onclick="wlHoldSort('ticker')" class="sort-asc">Ticker</th>
           <th>Broker</th>
-          <th>Live Price</th>
-          <th>Day %</th>
-          <th>Week %</th>
-          <th>Month %</th>
-          <th>3 Month %</th>
-          <th>YTD %</th>
+          <th onclick="wlHoldSort('price')">Live Price</th>
+          <th onclick="wlHoldSort('day')">Day %</th>
+          <th onclick="wlHoldSort('week')">Week %</th>
+          <th onclick="wlHoldSort('month')">Month %</th>
+          <th onclick="wlHoldSort('three_month')">3 Month %</th>
+          <th onclick="wlHoldSort('ytd')">YTD %</th>
         </tr></thead>
         <tbody id="wl-holdings-body">
           <tr><td colspan="8" class="loading"><div class="spinner"></div>Loading...</td></tr>
@@ -944,7 +961,7 @@ tr:hover td { background:var(--surface2); }
   </div>
 
   <!-- SECTION 2: WATCHLIST -->
-  <div class="section">
+  <div id="wl-section-watchlist" class="section" style="display:none">
     <div class="section-header">
       <div>
         <div class="section-title">Watchlist</div>
@@ -958,13 +975,13 @@ tr:hover td { background:var(--surface2); }
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>Ticker</th>
-          <th>Live Price</th>
-          <th>Day %</th>
-          <th>Week %</th>
-          <th>Month %</th>
-          <th>3 Month %</th>
-          <th>YTD %</th>
+          <th onclick="wlWatchSort('ticker')" class="sort-asc">Ticker</th>
+          <th onclick="wlWatchSort('price')">Live Price</th>
+          <th onclick="wlWatchSort('day')">Day %</th>
+          <th onclick="wlWatchSort('week')">Week %</th>
+          <th onclick="wlWatchSort('month')">Month %</th>
+          <th onclick="wlWatchSort('three_month')">3 Month %</th>
+          <th onclick="wlWatchSort('ytd')">YTD %</th>
           <th></th>
         </tr></thead>
         <tbody id="wl-body">
@@ -2382,105 +2399,184 @@ function showDivHistory(ticker, broker) {
 // ── Supabase-backed watchlist ──
 // _wlRows declared at top of script
 
+// ── Watchlist toggle ──
+let _wlActiveTab = 'holdings';
+function wlToggle(tab) {
+  _wlActiveTab = tab;
+  document.getElementById('wl-section-holdings').style.display  = tab === 'holdings'  ? 'block' : 'none';
+  document.getElementById('wl-section-watchlist').style.display = tab === 'watchlist' ? 'block' : 'none';
+  const btnH = document.getElementById('wl-toggle-holdings');
+  const btnW = document.getElementById('wl-toggle-watchlist');
+  if (tab === 'holdings') {
+    btnH.style.background = 'var(--accent)'; btnH.style.color = '#fff';
+    btnW.style.background = 'transparent';   btnW.style.color = 'var(--muted)';
+  } else {
+    btnW.style.background = 'var(--accent)'; btnW.style.color = '#fff';
+    btnH.style.background = 'transparent';   btnH.style.color = 'var(--muted)';
+  }
+}
+
+// ── Sort state ──
+let _wlHoldSortKey = 'ticker', _wlHoldSortDir = 1;
+let _wlWatchSortKey = 'ticker', _wlWatchSortDir = 1;
+let _wlHoldingsData  = []; // raw data for re-sort
+let _wlWatchlistData = []; // raw data for re-sort
+
+function wlHoldSort(key) {
+  if (_wlHoldSortKey === key) _wlHoldSortDir *= -1;
+  else { _wlHoldSortKey = key; _wlHoldSortDir = key === 'ticker' ? 1 : -1; }
+  document.querySelectorAll('#wl-section-holdings th').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    if (th.getAttribute('onclick') === `wlHoldSort('${key}')`)
+      th.classList.add(_wlHoldSortDir === 1 ? 'sort-asc' : 'sort-desc');
+  });
+  renderWlHoldings();
+}
+
+function wlWatchSort(key) {
+  if (_wlWatchSortKey === key) _wlWatchSortDir *= -1;
+  else { _wlWatchSortKey = key; _wlWatchSortDir = key === 'ticker' ? 1 : -1; }
+  document.querySelectorAll('#wl-section-watchlist th').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    if (th.getAttribute('onclick') === `wlWatchSort('${key}')`)
+      th.classList.add(_wlWatchSortDir === 1 ? 'sort-asc' : 'sort-desc');
+  });
+  renderWlWatchlist();
+}
+
+function pctCell(val) {
+  if (val == null) return `<td style="color:var(--muted);text-align:right">—</td>`;
+  const cls = val >= 0 ? 'pos' : 'neg';
+  return `<td class="${cls}" style="font-family:var(--font-num);font-weight:600;text-align:right">${val>=0?'+':''}${val.toFixed(2)}%</td>`;
+}
+
+function renderWlHoldings() {
+  const body = document.getElementById('wl-holdings-body');
+  if (!body) return;
+  const key = _wlHoldSortKey, dir = _wlHoldSortDir;
+  const sorted = [..._wlHoldingsData].sort((a,b) => {
+    const av = a[key] ?? (typeof a[key]==='string' ? '' : -Infinity);
+    const bv = b[key] ?? (typeof b[key]==='string' ? '' : -Infinity);
+    return typeof av === 'string' ? av.localeCompare(bv)*dir : (av-bv)*dir;
+  });
+  const brokerBadge = b => `<span class="pill pill-${b}">${b==='cmc'?'CMC':b==='syfe'?'Syfe':'Webull'}</span>`;
+  body.innerHTML = sorted.map(h => `<tr>
+    <td><span class="ticker-badge ${h.broker}">${h.displayTicker}</span></td>
+    <td>${brokerBadge(h.broker)}</td>
+    <td style="font-family:var(--font-num);font-weight:600">${h.price>0?(h.isSG?fmtSGD(h.price):fmtUSD(h.price)):'—'}</td>
+    ${pctCell(h.day)} ${pctCell(h.week)} ${pctCell(h.month)} ${pctCell(h.three_month)} ${pctCell(h.ytd)}
+  </tr>`).join('') || '<tr><td colspan="8" class="empty">No active holdings</td></tr>';
+}
+
+function renderWlWatchlist() {
+  const body = document.getElementById('wl-body');
+  if (!body) return;
+  const key = _wlWatchSortKey, dir = _wlWatchSortDir;
+  const sorted = [..._wlWatchlistData].sort((a,b) => {
+    const av = a[key] ?? (typeof a[key]==='string' ? '' : -Infinity);
+    const bv = b[key] ?? (typeof b[key]==='string' ? '' : -Infinity);
+    return typeof av === 'string' ? av.localeCompare(bv)*dir : (av-bv)*dir;
+  });
+  body.innerHTML = sorted.map(r => `<tr>
+    <td><span class="ticker-badge default">${r.ticker}</span></td>
+    <td style="font-family:var(--font-num);font-weight:600">${r.price>0?(r.isSG?fmtSGD(r.price):fmtUSD(r.price)):'—'}</td>
+    ${pctCell(r.day)} ${pctCell(r.week)} ${pctCell(r.month)} ${pctCell(r.three_month)} ${pctCell(r.ytd)}
+    <td style="text-align:right">
+      <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
+        onclick="removeWatchlistTicker(${r.id},'${r.ticker}')">✕</button>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="8" class="empty">No stocks yet — click + Add Stock</td></tr>';
+}
+
+// ── Pre-seed watchlist if empty ──
+const WL_SEED = [
+  // From holdings (all brokers)
+  'VOO','SCHG','SPYI',          // Syfe
+  'NVDA','AAPL','MSFT','AMZN','META','GOOG','NFLX','AMD','ADBE',
+  'INTU','ASML','MU','IREN','DUOL','TXRH','NBIS','BKNG',
+  'SPYI','QBTS','TSM','MA','MCO','CRM','EFX','FICO',
+  'JPM','UNH','MSCI','CCJ','ELF','DB','BE',
+  'VOO','SCHG','SMH','URA',    // ETFs
+  // Extra watchlist stocks
+  'MRVL','SNDK','COHR','AMKR','VST','LRCX','CIEN',
+];
+
+async function seedWatchlistIfEmpty() {
+  const existing = await sb('watchlist','GET',null,'?limit=1');
+  if (existing && existing.length > 0) return; // already has rows
+  // Deduplicate
+  const unique = [...new Set(WL_SEED)];
+  for (const ticker of unique) {
+    await sb('watchlist','POST',{ ticker, exchange: 'US' });
+  }
+}
+
 async function loadWatchlistPage() {
   const updatedEl = document.getElementById('wl-page-updated');
 
-  // ── helper: colour-coded % cell ──
-  function pctCell(val, colspan) {
-    if (val == null) return `<td style="color:var(--muted);text-align:right">—</td>`;
-    const cls = val >= 0 ? 'pos' : 'neg';
-    return `<td class="${cls}" style="font-family:var(--font-num);font-weight:600;text-align:right">${val>=0?'+':''}${val.toFixed(2)}%</td>`;
-  }
+  // Restore toggle state
+  wlToggle(_wlActiveTab);
 
-  // ══════════════════════════════════════════
-  // SECTION 1 — MY HOLDINGS (from portfolio data)
-  // ══════════════════════════════════════════
+  // ── SECTION 1: MY HOLDINGS ──
   await loadAllData();
-  const holdingsBody  = document.getElementById('wl-holdings-body');
-  const holdingsCount = document.getElementById('wl-holdings-count');
-
   const wbActive  = (_wbHoldings||[]).filter(h => h.status==='active' && h.shares > 0.01);
   const syfeH     = _syfeH || [];
   const cmcActive = getCMCActive();
 
-  // Build a flat list: { ticker, displayTicker, broker, isSG }
   const holdingsList = [
-    ...wbActive.map(h  => ({ ticker: h.ticker,        displayTicker: h.ticker,        broker: 'webull', isSG: false })),
-    ...syfeH.map(h     => ({ ticker: h.ticker,        displayTicker: h.ticker,        broker: 'syfe',   isSG: false })),
-    ...cmcActive.map(h => ({ ticker: h.ticker+'.SI',  displayTicker: h.ticker,        broker: 'cmc',    isSG: true  })),
+    ...wbActive.map(h  => ({ ticker: h.ticker,       displayTicker: h.ticker,  broker:'webull', isSG:false })),
+    ...syfeH.map(h     => ({ ticker: h.ticker,       displayTicker: h.ticker,  broker:'syfe',   isSG:false })),
+    ...cmcActive.map(h => ({ ticker: h.ticker+'.SI', displayTicker: h.ticker,  broker:'cmc',    isSG:true  })),
   ];
 
-  // Deduplicate by ticker (same stock in multiple brokers shows once per broker)
   const holdingTickers = [...new Set(holdingsList.map(h => h.ticker))];
   holdingTickers.forEach(t => { delete priceCache[t]; delete periodCache[t]; delete dayChangeCache[t]; });
   await fetchPrices(holdingTickers);
 
-  if (holdingsCount) holdingsCount.textContent = holdingsList.length + ' positions';
+  document.getElementById('wl-holdings-count').textContent = holdingsList.length + ' positions';
 
-  const brokerBadge = b => `<span class="pill pill-${b}">${b==='cmc'?'CMC':b==='syfe'?'Syfe':'Webull'}</span>`;
+  _wlHoldingsData = holdingsList.map(h => {
+    const prd = periodCache[h.ticker] || {};
+    return {
+      ...h,
+      price:       priceCache[h.ticker]    || 0,
+      day:         dayChangeCache[h.ticker] ?? null,
+      week:        prd.week        ?? null,
+      month:       prd.month       ?? null,
+      three_month: prd.three_month ?? null,
+      ytd:         prd.ytd         ?? null,
+    };
+  });
+  _wlHoldSortKey = 'ticker'; _wlHoldSortDir = 1;
+  renderWlHoldings();
 
-  if (holdingsBody) {
-    holdingsBody.innerHTML = holdingsList.map(h => {
-      const lp  = priceCache[h.ticker] || 0;
-      const prd = periodCache[h.ticker] || {};
-      const day = dayChangeCache[h.ticker] ?? null;
-      const priceStr = lp > 0 ? (h.isSG ? fmtSGD(lp) : fmtUSD(lp)) : '—';
-      return `<tr>
-        <td><span class="ticker-badge ${h.broker}">${h.displayTicker}</span></td>
-        <td>${brokerBadge(h.broker)}</td>
-        <td style="font-family:var(--font-num);font-weight:600">${priceStr}</td>
-        ${pctCell(day)}
-        ${pctCell(prd.week        ?? null)}
-        ${pctCell(prd.month       ?? null)}
-        ${pctCell(prd.three_month ?? null)}
-        ${pctCell(prd.ytd         ?? null)}
-      </tr>`;
-    }).join('') || '<tr><td colspan="8" class="empty">No active holdings</td></tr>';
-  }
-
-  // ══════════════════════════════════════════
-  // SECTION 2 — WATCHLIST (from Supabase)
-  // ══════════════════════════════════════════
-  const wlBody   = document.getElementById('wl-body');
-  const countEl  = document.getElementById('wl-count');
-
+  // ── SECTION 2: WATCHLIST ──
+  await seedWatchlistIfEmpty();
   const rows = await sb('watchlist','GET',null,'?order=created_at.asc');
   _wlRows = rows || [];
-  const wlTickers = _wlRows.map(r => r.exchange === 'SGX' ? r.ticker+'.SI' : r.ticker);
+  document.getElementById('wl-count').textContent = _wlRows.length + ' stocks';
 
-  if (countEl) countEl.textContent = _wlRows.length + ' stocks';
+  const wlTickers = _wlRows.map(r => r.exchange==='SGX' ? r.ticker+'.SI' : r.ticker);
+  const missing   = wlTickers.filter(t => !priceCache[t]);
+  if (missing.length) await fetchPrices(missing);
 
-  if (!_wlRows.length) {
-    if (wlBody) wlBody.innerHTML = '<tr><td colspan="8" class="empty">No stocks yet — click + Add Stock</td></tr>';
-  } else {
-    // Only fetch tickers not already in cache from Section 1
-    const missing = wlTickers.filter(t => !priceCache[t]);
-    if (missing.length) await fetchPrices(missing);
-
-    if (wlBody) {
-      wlBody.innerHTML = _wlRows.map(r => {
-        const t   = r.exchange === 'SGX' ? r.ticker+'.SI' : r.ticker;
-        const isSG = r.exchange === 'SGX';
-        const lp  = priceCache[t] || 0;
-        const prd = periodCache[t] || {};
-        const day = dayChangeCache[t] ?? null;
-        const priceStr = lp > 0 ? (isSG ? fmtSGD(lp) : fmtUSD(lp)) : '—';
-        return `<tr>
-          <td><span class="ticker-badge default">${r.ticker}</span></td>
-          <td style="font-family:var(--font-num);font-weight:600">${priceStr}</td>
-          ${pctCell(day)}
-          ${pctCell(prd.week        ?? null)}
-          ${pctCell(prd.month       ?? null)}
-          ${pctCell(prd.three_month ?? null)}
-          ${pctCell(prd.ytd         ?? null)}
-          <td style="text-align:right">
-            <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
-              onclick="removeWatchlistTicker(${r.id},'${r.ticker}')">✕</button>
-          </td>
-        </tr>`;
-      }).join('');
-    }
-  }
+  _wlWatchlistData = _wlRows.map(r => {
+    const t   = r.exchange==='SGX' ? r.ticker+'.SI' : r.ticker;
+    const prd = periodCache[t] || {};
+    return {
+      id:          r.id,
+      ticker:      r.ticker,
+      isSG:        r.exchange==='SGX',
+      price:       priceCache[t]    || 0,
+      day:         dayChangeCache[t] ?? null,
+      week:        prd.week        ?? null,
+      month:       prd.month       ?? null,
+      three_month: prd.three_month ?? null,
+      ytd:         prd.ytd         ?? null,
+    };
+  });
+  _wlWatchSortKey = 'ticker'; _wlWatchSortDir = 1;
+  renderWlWatchlist();
 
   if (updatedEl) updatedEl.textContent = 'Live prices as of ' + new Date().toLocaleTimeString('en-SG');
 }
