@@ -2294,7 +2294,7 @@ async function loadDividends() {
   const stockCount = document.getElementById('div-stock-count');
   if (stockCount) stockCount.textContent = allStocks.length + ' stocks';
 
-  const tbody = document.getElementById('div-table-body');
+  const tbody = document.getElementById('div-stocks-body');
   if (!tbody) return;
 
   tbody.innerHTML = allStocks.map(s => {
@@ -2406,6 +2406,407 @@ function addWatchlistTicker() {
   closeModal('add-ticker-modal');
   loadWatchlistPage();
 }
+
+
+// ── Format helpers ──
+
+
+// ── Modal helpers ──
+let _currentBroker = '';
+function openModal(id, broker) {
+  _currentBroker = broker;
+  const overlay = document.getElementById(id);
+  if (!overlay) return;
+  overlay.classList.add('open');
+  const brokerInput = overlay.querySelector('[id$="-broker"]');
+  if (brokerInput) brokerInput.value = broker;
+  overlay.querySelectorAll('input[type=date]').forEach(el => { el.value = new Date().toISOString().split('T')[0]; });
+  const brokerLabel = broker==='cmc'?'CMC Invest':broker==='syfe'?'Syfe':'Webull';
+  if (id==='add-deposit-modal') { document.getElementById('dep-modal-title').textContent=`Add Deposit — ${brokerLabel}`; document.getElementById('dep-edit-id').value=''; }
+  if (id==='add-withdrawal-modal') { document.getElementById('wd-modal-add-title').textContent=`Add Withdrawal — ${brokerLabel}`; }
+  if (id==='add-trade-modal') { document.getElementById('trade-modal-title').textContent='Add Trade — Webull'; document.getElementById('trade-edit-id').value=''; }
+}
+function closeModal(id) { const o=document.getElementById(id); if(o) o.classList.remove('open'); }
+
+// ── Submit helpers ──
+async function submitDeposit() {
+  const editId = document.getElementById('dep-edit-id').value;
+  const broker = document.getElementById('dep-broker').value;
+  const date = document.getElementById('dep-date').value;
+  const currency = document.getElementById('dep-currency').value;
+  const amount = parseFloat(document.getElementById('dep-amount').value);
+  const note = document.getElementById('dep-note').value;
+  if (!date||!amount) return alert('Please fill required fields');
+  const body = {brokerage:broker,date,currency,amount,source_note:note||null};
+  if (editId) { await sb('deposits','PATCH',body,`?id=eq.${editId}`); document.getElementById('dep-edit-id').value=''; document.getElementById('dep-modal-title').textContent='Add Deposit'; }
+  else { await sb('deposits','POST',body); }
+  invalidateCache(); closeModal('add-deposit-modal');
+  if(broker==='webull') loadWebull(); else if(broker==='syfe') loadSyfe(); else loadCMC();
+}
+
+async function submitWithdrawal() {
+  const broker = document.getElementById('wd-broker').value;
+  const date = document.getElementById('wd-date').value;
+  const currency = document.getElementById('wd-currency').value;
+  const amount = parseFloat(document.getElementById('wd-amount').value);
+  if (!date||!amount) return alert('Please fill required fields');
+  await sb('withdrawals','POST',{brokerage:broker,date,currency,amount});
+  invalidateCache(); closeModal('add-withdrawal-modal');
+  if(broker==='syfe') loadSyfe(); else if(broker==='cmc') loadCMC(); else loadWebull();
+}
+
+function openEditDepositModal(id, broker, date, currency, amount, note) {
+  document.getElementById('dep-modal-title').textContent = 'Edit Deposit';
+  document.getElementById('dep-edit-id').value = id;
+  document.getElementById('dep-broker').value = broker;
+  document.getElementById('dep-date').value = date;
+  document.getElementById('dep-currency').value = currency;
+  document.getElementById('dep-amount').value = amount;
+  document.getElementById('dep-note').value = note || '';
+  document.getElementById('add-deposit-modal').classList.add('open');
+}
+
+async function deleteDepositEntry(id, broker) {
+  if (!confirm('Delete this deposit?')) return;
+  await sb('deposits','DELETE',null,`?id=eq.${id}`);
+  invalidateCache();
+  if(broker==='syfe') loadSyfe(); else if(broker==='cmc') loadCMC(); else loadWebull();
+}
+
+// ── Trade submit (Webull) ──
+async function submitTrade() {
+  const editId = document.getElementById('trade-edit-id').value;
+  const ticker = document.getElementById('trade-ticker').value.toUpperCase().trim();
+  const action = document.getElementById('trade-action').value;
+  const date = document.getElementById('trade-date').value;
+  const qty = parseFloat(document.getElementById('trade-qty').value);
+  const price_val = parseFloat(document.getElementById('trade-price').value);
+  if (!ticker||!date||!qty||!price_val) return alert('Please fill all required fields');
+  const amount = qty * price_val;
+  let rpl = 0;
+  if (action==='Sell') {
+    const holdings = await sb('webull_holdings','GET',null,`?ticker=eq.${ticker}&brokerage=eq.webull`);
+    if (holdings?.length && holdings[0].avg_cost>0) rpl = Math.round((price_val-holdings[0].avg_cost)*qty*100)/100;
+  }
+  const body = {ticker,brokerage:'webull',date,action,qty,price:price_val,amount,realised_pl:rpl};
+  if (editId) {
+    await sb('webull_trades','PATCH',body,`?id=eq.${editId}`);
+    document.getElementById('trade-edit-id').value=''; document.getElementById('trade-modal-title').textContent='Add Trade — Webull';
+    invalidateCache(); closeModal('add-trade-modal'); loadWebull(); return;
+  }
+  await sb('webull_trades','POST',body);
+  const holdings2 = await sb('webull_holdings','GET',null,`?ticker=eq.${ticker}&brokerage=eq.webull`);
+  if (holdings2?.length) {
+    const h=holdings2[0];
+    let newShares=h.shares+(action==='Buy'?qty:-qty), newCost=action==='Buy'?h.total_cost+amount:h.total_cost-(h.avg_cost*qty);
+    let newAvg=newShares>0?newCost/newShares:0, newRPL=h.total_realised_pl+(action==='Sell'?rpl:0);
+    await sb('webull_holdings','PATCH',{shares:newShares,total_cost:newCost,avg_cost:newAvg,total_realised_pl:newRPL,status:newShares>0.01?'active':'closed'},`?id=eq.${h.id}`);
+  } else if (action==='Buy') {
+    await sb('webull_holdings','POST',{ticker,brokerage:'webull',shares:qty,avg_cost:price_val,total_cost:amount,total_realised_pl:0,status:'active'});
+  }
+  invalidateCache(); closeModal('add-trade-modal'); loadWebull();
+}
+
+// ── Trade submit (CMC) ──
+async function submitSGTrade() {
+  const editId = document.getElementById('sg-edit-id').value;
+  const ticker = document.getElementById('sg-ticker').value.toUpperCase().trim();
+  const action = document.getElementById('sg-action').value;
+  const date = document.getElementById('sg-date').value;
+  const qty = parseFloat(document.getElementById('sg-qty').value);
+  const price_val = parseFloat(document.getElementById('sg-price').value);
+  if (!ticker||!date||!qty||!price_val) return alert('Please fill all required fields');
+  const body = {ticker,brokerage:'cmc',date,action,qty,price:price_val,amount:qty*price_val,profit:0};
+  if (editId) { await sb('cmc_trades','PATCH',body,`?id=eq.${editId}`); document.getElementById('sg-edit-id').value=''; document.getElementById('cmc-trade-modal-title').textContent='Add Trade — CMC Invest'; }
+  else { await sb('cmc_trades','POST',body); }
+  invalidateCache(); closeModal('add-sg-trade-modal'); loadCMC();
+}
+
+// ── FX ──
+function updateFXLabels() {
+  const from=document.getElementById('fx-from').value, to=document.getElementById('fx-to').value;
+  const l1=document.getElementById('fx-from-label'), l2=document.getElementById('fx-to-label');
+  if(l1) l1.textContent=`Amount From (${from})`; if(l2) l2.textContent=`Amount To (${to})`;
+}
+function autoCalcFXTo() {
+  const rate=parseFloat(document.getElementById('fx-rate').value)||0, amt=parseFloat(document.getElementById('fx-amount-from').value)||0;
+  if(rate>0&&amt>0) document.getElementById('fx-amount-to').value=(amt*rate).toFixed(2);
+}
+async function submitFX() {
+  const broker=document.getElementById('fx-broker').value, date=document.getElementById('fx-date').value;
+  const from_currency=document.getElementById('fx-from').value, to_currency=document.getElementById('fx-to').value;
+  const rate=parseFloat(document.getElementById('fx-rate').value);
+  const amount_from=parseFloat(document.getElementById('fx-amount-from').value);
+  const amount_to=parseFloat(document.getElementById('fx-amount-to').value);
+  if(!date||!rate||!amount_from||!amount_to) return alert('Please fill all fields');
+  await sb('fx_conversions','POST',{brokerage:broker,date,from_currency,to_currency,rate,amount_from,amount_to});
+  invalidateCache(); closeModal('add-fx-modal'); loadFX();
+}
+
+// ── Dividend CRUD ──
+function updateDivCMCFields() {
+  const broker=document.getElementById('div-add-broker').value;
+  document.getElementById('div-cmc-fields').style.display=broker==='cmc'?'block':'none';
+}
+function onDivBrokerChange(broker) {
+  document.getElementById('div-add-broker').value=broker;
+  document.getElementById('div-cmc-fields').style.display=broker==='cmc'?'block':'none';
+  const lbl=broker==='cmc'?'CMC Invest':broker==='syfe'?'Syfe':'Webull';
+  document.getElementById('div-add-modal-title').textContent=`Add Dividend — ${lbl}`;
+}
+function onDivTickerInput() {
+  const broker=document.getElementById('div-add-broker').value;
+  if(broker==='cmc') autoFillCMCShares(document.getElementById('div-add-ticker').value.toUpperCase());
+}
+function autoFillCMCShares(ticker) {
+  const active=getCMCActive(), holding=active.find(h=>h.ticker===ticker);
+  if(holding) { document.getElementById('div-add-shares').value=holding.shares; document.getElementById('div-shares-hint').textContent='(auto-filled)'; autoCalcDivAmount(); }
+  else { document.getElementById('div-shares-hint').textContent=''; }
+}
+function autoCalcDivAmount() {
+  const ps=parseFloat(document.getElementById('div-add-per-share').value)||0, sh=parseFloat(document.getElementById('div-add-shares').value)||0;
+  if(ps>0&&sh>0) document.getElementById('div-add-amount').value=(ps*sh).toFixed(4);
+}
+
+function openDivModal(ticker='', broker='webull') {
+  const lbl=broker==='cmc'?'CMC Invest':broker==='syfe'?'Syfe':'Webull';
+  document.getElementById('div-add-modal-title').textContent=`Add Dividend — ${lbl}`;
+  document.getElementById('div-edit-id').value='';
+  document.getElementById('div-add-broker').value=broker;
+  const sel=document.getElementById('div-add-broker-select'); if(sel) sel.value=broker;
+  document.getElementById('div-add-ticker').value=ticker;
+  const cmcT=document.getElementById('div-add-ticker-cmc'); if(cmcT) cmcT.value=ticker;
+  document.getElementById('div-add-date').value=new Date().toISOString().split('T')[0];
+  document.getElementById('div-add-amount').value='';
+  document.getElementById('div-add-per-share').value='';
+  document.getElementById('div-add-shares').value='';
+  document.getElementById('div-shares-hint').textContent='';
+  const isCMC=broker==='cmc';
+  const br=document.getElementById('div-broker-row'); if(br) br.style.display=isCMC?'none':'';
+  const ct=document.getElementById('div-cmc-ticker-row'); if(ct) ct.style.display=isCMC?'block':'none';
+  document.getElementById('div-cmc-fields').style.display=isCMC?'block':'none';
+  if(isCMC&&ticker) autoFillCMCShares(ticker);
+  document.getElementById('div-add-modal').classList.add('open');
+}
+
+function openDivEditModal(id, broker, date, amount, perShare, shares) {
+  const lbl=broker==='cmc'?'CMC Invest':broker==='syfe'?'Syfe':'Webull';
+  document.getElementById('div-add-modal-title').textContent=`Edit Dividend — ${lbl}`;
+  document.getElementById('div-edit-id').value=id;
+  document.getElementById('div-add-broker').value=broker;
+  document.getElementById('div-add-date').value=date;
+  document.getElementById('div-add-amount').value=amount;
+  if(perShare) document.getElementById('div-add-per-share').value=perShare;
+  if(shares) document.getElementById('div-add-shares').value=shares;
+  const isCMC=broker==='cmc';
+  document.getElementById('div-cmc-fields').style.display=isCMC?'block':'none';
+  document.getElementById('div-add-modal').classList.add('open');
+}
+
+async function submitDivEntry() {
+  const editId=document.getElementById('div-edit-id').value;
+  const broker=document.getElementById('div-add-broker').value;
+  const ticker=document.getElementById('div-add-ticker').value.toUpperCase().trim();
+  const date=document.getElementById('div-add-date').value;
+  const amount=parseFloat(document.getElementById('div-add-amount').value);
+  if(!ticker||!date||isNaN(amount)) return alert('Please fill all required fields');
+  if(broker==='cmc') {
+    const perShare=parseFloat(document.getElementById('div-add-per-share').value)||0;
+    const shares=parseFloat(document.getElementById('div-add-shares').value)||0;
+    const body={ticker,brokerage:'cmc',date,per_share:perShare,shares,total_sgd:amount};
+    if(editId) await sb('dividends_sg','PATCH',body,`?id=eq.${editId}`); else await sb('dividends_sg','POST',body);
+  } else if(broker==='syfe') {
+    const body={ticker,brokerage:'syfe',date,amount_usd:amount};
+    if(editId) await sb('dividends_syfe','PATCH',body,`?id=eq.${editId}`); else await sb('dividends_syfe','POST',body);
+  } else {
+    const body={ticker,brokerage:'webull',date,amount_usd:amount};
+    if(editId) await sb('dividends_us','PATCH',body,`?id=eq.${editId}`); else await sb('dividends_us','POST',body);
+  }
+  invalidateCache(); closeModal('div-add-modal');
+  await loadDividends();
+}
+
+async function deleteDivEntry(id, broker) {
+  if(!confirm('Delete this dividend entry?')) return;
+  const table=broker==='cmc'?'dividends_sg':broker==='syfe'?'dividends_syfe':'dividends_us';
+  await sb(table,'DELETE',null,`?id=eq.${id}`);
+  invalidateCache(); closeModal('div-history-modal'); await loadDividends();
+}
+
+// ── Syfe trade history ──
+let _currentSyfeTicker='';
+async function showSyfeTradeHistory(ticker) {
+  _syfeTrades = await sb('syfe_trades','GET',null,'?order=date.desc');
+  _currentSyfeTicker=ticker;
+  const trades=(_syfeTrades||[]).filter(t=>t.ticker===ticker).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const totalShares=trades.reduce((s,t)=>s+parseFloat(t.shares),0);
+  const totalSpent=trades.reduce((s,t)=>s+parseFloat(t.amount_usd),0);
+  const avgPrice=totalShares>0?totalSpent/totalShares:0;
+  document.getElementById('syfe-trade-modal-title').innerHTML=`<span class="ticker-badge syfe">${ticker}</span>&nbsp; Trade History`;
+  document.getElementById('syfe-add-trade-btn').onclick=()=>openSyfeAddTrade(ticker);
+  document.getElementById('syfe-trade-modal-stats').innerHTML=`
+    <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Total Trades</div><div style="font-family:var(--font-num);font-size:16px;font-weight:700">${trades.length}</div></div>
+    <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Total Shares</div><div style="font-family:var(--font-num);font-size:16px;font-weight:700">${totalShares.toFixed(4)}</div></div>
+    <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Total Invested</div><div style="font-family:var(--font-num);font-size:16px;font-weight:700">${fmtUSD(totalSpent)}</div></div>
+    <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Avg Cost/Share</div><div style="font-family:var(--font-num);font-size:16px;font-weight:700">${fmtUSD(avgPrice)}</div></div>`;
+  document.getElementById('syfe-trade-body').innerHTML=trades.map(t=>`<tr>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted)">${fmtDate(t.date)}</td>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-num)">${parseFloat(t.shares).toFixed(4)}</td>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-num)">${fmtUSD(t.price_usd)}</td>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-num)">${fmtUSD(t.amount_usd)}</td>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40" onclick="openSyfeEditTrade(${t.id},'${t.ticker}','${t.date}',${t.shares},${t.price_usd},${t.amount_usd})">Edit</button>
+        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40" onclick="deleteSyfeTrade(${t.id},'${t.ticker}')">Del</button>
+      </div>
+    </td>
+  </tr>`).join('')||'<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--muted)">No trades</td></tr>';
+  document.getElementById('syfe-trade-modal').classList.add('open');
+}
+
+function openSyfeAddTrade(ticker) {
+  document.getElementById('syfe-add-trade-title').textContent='Add Trade — '+(ticker||_currentSyfeTicker);
+  document.getElementById('syfe-trade-edit-id').value='';
+  document.getElementById('syfe-trade-ticker').value=ticker||_currentSyfeTicker;
+  document.getElementById('syfe-trade-date').value=new Date().toISOString().split('T')[0];
+  document.getElementById('syfe-trade-shares').value='';
+  document.getElementById('syfe-trade-price').value='';
+  document.getElementById('syfe-trade-amount').value='';
+  document.getElementById('syfe-add-trade-modal').classList.add('open');
+}
+
+function openSyfeEditTrade(id,ticker,date,shares,price,amount) {
+  document.getElementById('syfe-add-trade-title').textContent='Edit Trade — '+ticker;
+  document.getElementById('syfe-trade-edit-id').value=id;
+  document.getElementById('syfe-trade-ticker').value=ticker;
+  document.getElementById('syfe-trade-date').value=date;
+  document.getElementById('syfe-trade-shares').value=shares;
+  document.getElementById('syfe-trade-price').value=price;
+  document.getElementById('syfe-trade-amount').value=amount;
+  document.getElementById('syfe-add-trade-modal').classList.add('open');
+}
+
+async function submitSyfeTrade() {
+  const editId=document.getElementById('syfe-trade-edit-id').value;
+  const ticker=document.getElementById('syfe-trade-ticker').value;
+  const date=document.getElementById('syfe-trade-date').value;
+  const shares=parseFloat(document.getElementById('syfe-trade-shares').value);
+  const price_usd=parseFloat(document.getElementById('syfe-trade-price').value);
+  const amount_usd=parseFloat(document.getElementById('syfe-trade-amount').value);
+  if(!ticker||!date||isNaN(shares)||isNaN(price_usd)||isNaN(amount_usd)) return alert('Please fill all fields');
+  const body={ticker,date,shares,price_usd,amount_usd};
+  if(editId) await sb('syfe_trades','PATCH',body,`?id=eq.${editId}`); else await sb('syfe_trades','POST',body);
+  invalidateCache(); closeModal('syfe-add-trade-modal');
+  _syfeTrades=await sb('syfe_trades','GET',null,'?order=date.desc');
+  showSyfeTradeHistory(ticker);
+}
+
+async function deleteSyfeTrade(id,ticker) {
+  if(!confirm('Delete this trade?')) return;
+  await sb('syfe_trades','DELETE',null,`?id=eq.${id}`);
+  invalidateCache(); _syfeTrades=await sb('syfe_trades','GET',null,'?order=date.desc'); showSyfeTradeHistory(ticker);
+}
+
+// ── Syfe dividend history ──
+async function showSyfeDivHistory(ticker) {
+  await loadAllData();
+  const payments=(_divSyfe||[]).filter(d=>d.ticker===ticker).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const totalNet=payments.reduce((s,d)=>s+d.amount_usd,0);
+  document.getElementById('div-modal-title').innerHTML=`<span class="ticker-badge syfe">${ticker}</span>&nbsp; Dividend History`;
+  document.getElementById('div-modal-total').innerHTML=`<span style="font-size:14px">${fmtUSD(totalNet)}</span>`;
+  document.getElementById('div-modal-body').innerHTML=payments.map(d=>`<tr>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted)">${fmtDate(d.date)}</td>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border)" class="pos">${fmtUSD(d.amount_usd)}</td>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40" onclick="openSyfeEditDivModal(${d.id},'${d.ticker}','${d.date}',${d.amount_usd})">Edit</button>
+        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40" onclick="deleteSyfeDivEntry(${d.id})">Del</button>
+      </div>
+    </td>
+  </tr>`).join('')||'<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--muted)">No history</td></tr>';
+  document.getElementById('div-history-modal').classList.add('open');
+}
+
+function openSyfeEditDivModal(id,ticker,date,amount) {
+  document.getElementById('div-add-modal-title').textContent='Edit '+ticker+' Dividend';
+  document.getElementById('div-edit-id').value=id;
+  document.getElementById('div-add-broker').value='syfe';
+  document.getElementById('div-add-ticker').value=ticker;
+  document.getElementById('div-add-date').value=date;
+  document.getElementById('div-add-amount').value=amount;
+  document.getElementById('div-cmc-fields').style.display='none';
+  document.getElementById('div-add-modal').classList.add('open');
+}
+
+async function deleteSyfeDivEntry(id) {
+  if(!confirm('Delete this dividend entry?')) return;
+  await sb('dividends_syfe','DELETE',null,`?id=eq.${id}`);
+  invalidateCache(); closeModal('div-history-modal'); loadSyfe();
+}
+
+// ── Webull trade edit ──
+let _wbAllTrades=[];
+function filterWbTrades() {
+  const sel=document.getElementById('wb-trades-month-filter'); if(!sel) return;
+  const filter=sel.value;
+  const trades=filter==='all'?_wbAllTrades:_wbAllTrades.filter(t=>t.date.startsWith(filter));
+  document.getElementById('wb-trades-count').textContent=filter==='all'?`${_wbAllTrades.length} trades`:`${trades.length} trades`;
+  document.getElementById('wb-trades-body').innerHTML=trades.map(t=>{
+    const rpl=parseFloat(t.realised_pl||0);
+    return `<tr>
+      <td>${fmtDate(t.date)}</td>
+      <td><span class="ticker-badge webull">${t.ticker}</span></td>
+      <td class="${t.action==='Buy'?'action-buy':'action-sell'}">${t.action}</td>
+      <td>${fmtShares(t.qty)}</td><td>${fmtUSD(t.price)}</td><td>${fmtUSD(t.amount)}</td>
+      <td class="${rpl!==0?plColor(rpl):''}">${rpl!==0?plStr(rpl):'—'}</td>
+      <td><div style="display:flex;gap:5px">
+        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40" onclick="openEditTradeModal(${t.id},'${t.ticker}','${t.date}','${t.action}',${t.qty},${t.price},${t.amount},${t.realised_pl||0})">Edit</button>
+        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40" onclick="deleteWbTrade(${t.id},'${t.ticker}')">Del</button>
+      </div></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="8" class="empty">No trades for this period</td></tr>';
+}
+
+
+
+async 
+
+async function recalculateAllPL() {
+  const allTrades=await sb('webull_trades','GET',null,'?order=date.asc');
+  const trades=[...(allTrades||[])];
+  console.log('Total trades fetched:',trades.length,'Sell trades:',trades.filter(t=>t.action==='Sell').length);
+  const tickerState={}, updates=[], holdingRPL={};
+  trades.forEach(t=>{
+    const ticker=t.ticker;
+    if(!tickerState[ticker]) tickerState[ticker]={shares:0,totalCost:0};
+    const state=tickerState[ticker];
+    if(t.action==='Buy'){state.shares+=parseFloat(t.qty);state.totalCost+=parseFloat(t.amount);}
+    else if(t.action==='Sell'){
+      const avgCost=state.shares>0?state.totalCost/state.shares:0;
+      const realisedPL=Math.round((parseFloat(t.price)-avgCost)*parseFloat(t.qty)*100)/100;
+      state.shares-=parseFloat(t.qty); state.totalCost-=avgCost*parseFloat(t.qty);
+      if(state.shares<0.001){state.shares=0;state.totalCost=0;}
+      updates.push({id:t.id,ticker:t.ticker,realised_pl:realisedPL});
+      if(!holdingRPL[ticker]) holdingRPL[ticker]=0;
+      holdingRPL[ticker]+=realisedPL;
+    }
+  });
+  if(!updates.length){alert('No sell trades found!');return;}
+  for(const u of updates) await sb('webull_trades','PATCH',{realised_pl:u.realised_pl},`?id=eq.${u.id}`);
+  for(const [ticker,rpl] of Object.entries(holdingRPL)) {
+    const totalRPL=Math.round(rpl*100)/100;
+    await sb('webull_holdings','PATCH',{total_realised_pl:totalRPL},`?ticker=eq.${ticker}&brokerage=eq.webull`);
+  }
+  invalidateCache(); alert(`Updated ${updates.length} sell trade(s) and holdings P&L!`); loadWebull();
+}
+
+// ── Deposit breakdown ──
+async 
+
+async 
+
+// ── CMC Div modal ──
+async 
 
 
 </script>
