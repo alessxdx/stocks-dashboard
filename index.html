@@ -2391,28 +2391,51 @@ function showDivHistory(ticker, broker) {
 // ============================================================
 async function loadWatchlistPage() {
   const tickers = JSON.parse(localStorage.getItem('watchlist') || '["VOO","SCHG","SPYI","NVDA","AAPL","MSFT"]');
-  const body = document.getElementById('watchlist-page-body');
+
+  // ── correct element ID matches the HTML ──
+  const body = document.getElementById('wl-body');
+  const countEl = document.getElementById('wl-count');
+  const updatedEl = document.getElementById('wl-page-updated');
   if (!body) return;
 
-  // Force fresh price fetch for watchlist page
-  tickers.forEach(t => { delete priceCache[t]; delete periodCache[t]; });
+  body.innerHTML = `<tr><td colspan="8" class="loading"><div class="spinner"></div>Loading prices...</td></tr>`;
+  if (countEl) countEl.textContent = tickers.length + ' stocks';
+
+  // Force a fresh fetch every time the watchlist page is opened
+  tickers.forEach(t => { delete priceCache[t]; delete periodCache[t]; delete dayChangeCache[t]; });
   await fetchPrices(tickers);
 
+  if (updatedEl) updatedEl.textContent = 'Live prices as of ' + new Date().toLocaleTimeString('en-SG');
+
+  function pctCell(val) {
+    if (val == null) return '<td style="color:var(--muted)">—</td>';
+    const cls = val >= 0 ? 'pos' : 'neg';
+    return `<td class="${cls}" style="font-family:var(--font-num);font-weight:600">${(val>=0?'+':'')+val.toFixed(2)}%</td>`;
+  }
+
   body.innerHTML = tickers.map(t => {
-    const p = priceCache[t] || {};
-    const prd = periodCache[t] || {};
+    const livePrice = priceCache[t] || 0;
+    const dayChg    = dayChangeCache[t] ?? null;
+    const prd       = periodCache[t] || {};
+    const isSG      = t.endsWith('.SI');
+    const priceStr  = livePrice > 0 ? (isSG ? fmtSGD(livePrice) : fmtUSD(livePrice)) : '—';
+
     return `<tr>
-      <td><span class="ticker-badge default">${t}</span></td>
-      <td style="font-family:var(--font-num)">${p.price>0?fmtUSD(p.price):'—'}</td>
-      <td class="${p.dayChange>=0?'pos':'neg'}">${p.dayChange!=null?(p.dayChange>=0?'+':'')+p.dayChange.toFixed(2)+'%':'—'}</td>
-      <td class="${(prd.week||0)>=0?'pos':'neg'}">${prd.week!=null?(prd.week>=0?'+':'')+prd.week.toFixed(2)+'%':'—'}</td>
-      <td class="${(prd.month||0)>=0?'pos':'neg'}">${prd.month!=null?(prd.month>=0?'+':'')+prd.month.toFixed(2)+'%':'—'}</td>
-      <td class="${(prd.three_month||0)>=0?'pos':'neg'}">${prd.three_month!=null?(prd.three_month>=0?'+':'')+prd.three_month.toFixed(2)+'%':'—'}</td>
-      <td class="${(prd.ytd||0)>=0?'pos':'neg'}">${prd.ytd!=null?(prd.ytd>=0?'+':'')+prd.ytd.toFixed(2)+'%':'—'}</td>
+      <td><span class="ticker-badge default">${t.replace('.SI','')}</span></td>
+      <td style="font-family:var(--font-num);font-weight:600">${priceStr}</td>
+      ${pctCell(dayChg)}
+      ${pctCell(prd.week ?? null)}
+      ${pctCell(prd.month ?? null)}
+      ${pctCell(prd.three_month ?? null)}
+      ${pctCell(prd.ytd ?? null)}
       <td><button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40" onclick="removeWatchlistTicker('${t}')">✕</button></td>
     </tr>`;
-  }).join('');
+  }).join('') || '<tr><td colspan="8" class="empty">No stocks in watchlist</td></tr>';
 }
+
+// alias — the modal button calls submitAddTicker()
+function submitAddTicker() { addWatchlistTicker(); }
+function openAddTickerModal() { openModal('add-ticker-modal',''); }
 
 function removeWatchlistTicker(ticker) {
   let tickers = JSON.parse(localStorage.getItem('watchlist') || '[]');
