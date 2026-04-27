@@ -1169,7 +1169,7 @@ async function sb(table, method='GET', body=null, query='') {
 let priceCache = {};
 let dayChangeCache = {};
 let periodCache = {};
-let _customWatchlist = JSON.parse(localStorage.getItem('wl_custom')||'[]');
+let _wlRows = []; // Supabase watchlist rows cache
 
 async function fetchPrices(tickers) {
   const missing = tickers.filter(t => t && !priceCache[t]);
@@ -2174,64 +2174,9 @@ loadOverview();
 // ============================================================
 // WATCHLIST
 // ============================================================
-async function loadWatchlist() {
-  // Get all unique tickers from holdings
-  await loadAllData();
-  const wbActive = (_wbHoldings||[]).filter(h => h.status==='active' && h.shares > 0.01);
-  const syfe = _syfeH || [];
-  const cmcActive = getCMCActive();
-
-  const usTickers = [
-    ...wbActive.map(h => h.ticker),
-    ...syfe.map(h => h.ticker)
-  ];
-  const sgTickers = cmcActive.map(h => h.ticker + '.SI');
-  const allTickers = [...new Set([...usTickers, ...sgTickers])].sort();
-
-  await fetchPrices(allTickers);
-
-  const container = document.getElementById('watchlist-items');
-  if (!allTickers.length) { container.innerHTML = '<div class="wl-loading">No holdings</div>'; return; }
-
-  container.innerHTML = allTickers.map(ticker => {
-    const p = priceCache[ticker] || 0;
-    const isSG = ticker.endsWith('.SI');
-    const displayTicker = ticker.replace('.SI','');
-
-    // Find avg cost for colour reference
-    let avgCost = 0;
-    if (isSG) {
-      const h = getCMCActive().find(x => x.ticker+'.SI' === ticker);
-      if (h) avgCost = h.avgPrice;
-    } else {
-      const h = (_wbHoldings||[]).find(x => x.ticker === ticker);
-      const sy = (_syfeH||[]).find(x => x.ticker === ticker);
-      avgCost = h?.avg_cost || sy?.avg_cost || 0;
-    }
-
-    const dayChg = dayChangeCache[ticker];
-    const diffColor = dayChg == null ? 'var(--muted)' : dayChg >= 0 ? 'var(--green)' : 'var(--red)';
-    const diffStr = dayChg == null ? '—' : (dayChg >= 0 ? '+' : '') + dayChg.toFixed(2) + '%';
-    const priceStr = isSG ? 'S$' + p.toFixed(3) : '$' + p.toFixed(2);
-
-    return `<div class="wl-item" onclick="showPage('${isSG ? 'cmc' : 'webull'}'); event.stopPropagation()">
-      <span class="wl-ticker">${displayTicker}</span>
-      <div class="wl-right">
-        <div class="wl-price">${p > 0 ? priceStr : '—'}</div>
-        <div class="wl-chg" style="color:${diffColor}">${diffStr}</div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// Auto-refresh watchlist every 60 seconds
+// Auto-refresh sidebar watchlist every 60 seconds
 loadWatchlist();
 setInterval(loadWatchlist, 60000);
-
-
-// ============================================================
-// FX TRACKER
-// ============================================================
 let _fxFilter = 'all';
 
 async function loadFX() {
@@ -2400,73 +2345,133 @@ function showDivHistory(ticker, broker) {
 // ============================================================
 // WATCHLIST PAGE
 // ============================================================
-async function loadWatchlistPage() {
-  const tickers = JSON.parse(localStorage.getItem('watchlist') || '["VOO","SCHG","SPYI","NVDA","AAPL","MSFT"]');
+// ── Supabase-backed watchlist ──
+let _wlRows = []; // cache of { id, ticker, exchange } from Supabase
 
-  // ── correct element ID matches the HTML ──
-  const body = document.getElementById('wl-body');
-  const countEl = document.getElementById('wl-count');
-  const updatedEl = document.getElementById('wl-page-updated');
+async function loadWatchlistPage() {
+  const body     = document.getElementById('wl-body');
+  const countEl  = document.getElementById('wl-count');
+  const updatedEl= document.getElementById('wl-page-updated');
   if (!body) return;
 
-  body.innerHTML = `<tr><td colspan="8" class="loading"><div class="spinner"></div>Loading prices...</td></tr>`;
+  body.innerHTML = `<tr><td colspan="8" class="loading"><div class="spinner"></div>Loading...</td></tr>`;
+
+  // Fetch watchlist rows from Supabase
+  const rows = await sb('watchlist','GET',null,'?order=created_at.asc');
+  _wlRows = rows || [];
+
+  const tickers = _wlRows.map(r => r.exchange === 'SGX' ? r.ticker + '.SI' : r.ticker);
+
   if (countEl) countEl.textContent = tickers.length + ' stocks';
 
-  // Force a fresh fetch every time the watchlist page is opened
+  if (!tickers.length) {
+    body.innerHTML = '<tr><td colspan="8" class="empty">No stocks in watchlist — click + Add Stock to get started</td></tr>';
+    return;
+  }
+
+  // Force fresh price fetch
   tickers.forEach(t => { delete priceCache[t]; delete periodCache[t]; delete dayChangeCache[t]; });
   await fetchPrices(tickers);
 
   if (updatedEl) updatedEl.textContent = 'Live prices as of ' + new Date().toLocaleTimeString('en-SG');
 
   function pctCell(val) {
-    if (val == null) return '<td style="color:var(--muted)">—</td>';
+    if (val == null) return '<td style="color:var(--muted);text-align:right">—</td>';
     const cls = val >= 0 ? 'pos' : 'neg';
-    return `<td class="${cls}" style="font-family:var(--font-num);font-weight:600">${(val>=0?'+':'')+val.toFixed(2)}%</td>`;
+    return `<td class="${cls}" style="font-family:var(--font-num);font-weight:600;text-align:right">${(val>=0?'+':'')+val.toFixed(2)}%</td>`;
   }
 
-  body.innerHTML = tickers.map(t => {
+  body.innerHTML = _wlRows.map(r => {
+    const t         = r.exchange === 'SGX' ? r.ticker + '.SI' : r.ticker;
+    const isSG      = r.exchange === 'SGX';
     const livePrice = priceCache[t] || 0;
     const dayChg    = dayChangeCache[t] ?? null;
     const prd       = periodCache[t] || {};
-    const isSG      = t.endsWith('.SI');
     const priceStr  = livePrice > 0 ? (isSG ? fmtSGD(livePrice) : fmtUSD(livePrice)) : '—';
 
     return `<tr>
-      <td><span class="ticker-badge default">${t.replace('.SI','')}</span></td>
+      <td><span class="ticker-badge default">${r.ticker}</span></td>
       <td style="font-family:var(--font-num);font-weight:600">${priceStr}</td>
       ${pctCell(dayChg)}
-      ${pctCell(prd.week ?? null)}
-      ${pctCell(prd.month ?? null)}
+      ${pctCell(prd.week   ?? null)}
+      ${pctCell(prd.month  ?? null)}
       ${pctCell(prd.three_month ?? null)}
-      ${pctCell(prd.ytd ?? null)}
-      <td><button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40" onclick="removeWatchlistTicker('${t}')">✕</button></td>
+      ${pctCell(prd.ytd    ?? null)}
+      <td style="text-align:right">
+        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
+          onclick="removeWatchlistTicker(${r.id},'${r.ticker}')">✕</button>
+      </td>
     </tr>`;
   }).join('') || '<tr><td colspan="8" class="empty">No stocks in watchlist</td></tr>';
+}
+
+async function removeWatchlistTicker(id, ticker) {
+  if (!confirm(`Remove ${ticker} from watchlist?`)) return;
+  await sb('watchlist','DELETE',null,`?id=eq.${id}`);
+  loadWatchlistPage();
+  loadWatchlist(); // refresh sidebar mini-watchlist too
+}
+
+async function addWatchlistTicker() {
+  const input    = document.getElementById('add-ticker-input');
+  const exchange = document.getElementById('add-ticker-exchange').value;
+  if (!input) return;
+  const ticker = input.value.toUpperCase().trim().replace('.SI','');
+  if (!ticker) return alert('Please enter a ticker symbol');
+
+  // Check duplicate
+  const existing = await sb('watchlist','GET',null,`?ticker=eq.${ticker}&exchange=eq.${exchange==='SGX'?'SGX':'US'}`);
+  if (existing && existing.length) {
+    alert(`${ticker} is already in your watchlist`);
+    return;
+  }
+
+  await sb('watchlist','POST',{ ticker, exchange: exchange === 'SGX' ? 'SGX' : 'US' });
+  input.value = '';
+  closeModal('add-ticker-modal');
+  loadWatchlistPage();
+  loadWatchlist(); // refresh sidebar mini-watchlist too
 }
 
 // alias — the modal button calls submitAddTicker()
 function submitAddTicker() { addWatchlistTicker(); }
 function openAddTickerModal() { openModal('add-ticker-modal',''); }
 
-function removeWatchlistTicker(ticker) {
-  let tickers = JSON.parse(localStorage.getItem('watchlist') || '[]');
-  tickers = tickers.filter(t => t !== ticker);
-  localStorage.setItem('watchlist', JSON.stringify(tickers));
-  loadWatchlistPage();
+// Also update the sidebar mini-watchlist to pull from Supabase
+async function loadWatchlist() {
+  await loadAllData();
+  const wbActive  = (_wbHoldings||[]).filter(h => h.status==='active' && h.shares > 0.01);
+  const syfe      = _syfeH || [];
+  const cmcActive = getCMCActive();
+
+  const usTickers = [...wbActive.map(h=>h.ticker), ...syfe.map(h=>h.ticker)];
+  const sgTickers = cmcActive.map(h => h.ticker+'.SI');
+  const allTickers = [...new Set([...usTickers,...sgTickers])].sort();
+
+  await fetchPrices(allTickers);
+
+  const container = document.getElementById('watchlist-items');
+  if (!allTickers.length) { container.innerHTML = '<div class="wl-loading">No holdings</div>'; return; }
+
+  container.innerHTML = allTickers.map(ticker => {
+    const p = priceCache[ticker] || 0;
+    const isSG = ticker.endsWith('.SI');
+    const displayTicker = ticker.replace('.SI','');
+    const dayChg = dayChangeCache[ticker];
+    const diffColor = dayChg == null ? 'var(--muted)' : dayChg >= 0 ? 'var(--green)' : 'var(--red)';
+    const diffStr   = dayChg == null ? '—' : (dayChg >= 0 ? '+' : '') + dayChg.toFixed(2) + '%';
+    const priceStr  = isSG ? 'S$' + p.toFixed(3) : '$' + p.toFixed(2);
+    return `<div class="wl-item" onclick="showPage('${isSG?'cmc':'webull'}'); event.stopPropagation()">
+      <span class="wl-ticker">${displayTicker}</span>
+      <div class="wl-right">
+        <div class="wl-price">${p > 0 ? priceStr : '—'}</div>
+        <div class="wl-chg" style="color:${diffColor}">${diffStr}</div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
-function addWatchlistTicker() {
-  const input = document.getElementById('add-ticker-input');
-  if (!input) return;
-  const ticker = input.value.toUpperCase().trim();
-  if (!ticker) return;
-  let tickers = JSON.parse(localStorage.getItem('watchlist') || '[]');
-  if (!tickers.includes(ticker)) tickers.push(ticker);
-  localStorage.setItem('watchlist', JSON.stringify(tickers));
-  input.value = '';
-  closeModal('add-ticker-modal');
-  loadWatchlistPage();
-}
+// watchlist CRUD functions defined above in loadWatchlistPage block
 
 
 // ── Format helpers ──
