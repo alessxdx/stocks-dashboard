@@ -432,7 +432,7 @@ tr:hover td { background:var(--surface2); }
       <div class="stat-sub">Closed trades</div>
     </div>
   </div>
-  <div class="stat-grid stat-grid-3">
+  <div class="stat-grid stat-grid-4">
     <div class="stat-card" style="cursor:pointer" onclick="showDepositBreakdown()" title="Click to see yearly breakdown">
       <div class="stat-label">Total Deposits <span style="font-size:9px;color:var(--muted)">↗ breakdown</span></div>
       <div class="stat-value" id="wb-dep-combined">—</div>
@@ -443,8 +443,13 @@ tr:hover td { background:var(--surface2); }
       <div class="stat-label">Total Withdrawals</div>
       <div class="stat-value" id="wb-wd">—</div>
     </div>
+    <div class="stat-card">
+      <div class="stat-label">Net Deposits</div>
+      <div class="stat-value" id="wb-net-dep">—</div>
+      <div class="stat-sub">Deposits − Withdrawals</div>
+    </div>
     <div class="stat-card gold">
-      <div class="stat-label">US Dividends Received</div>
+      <div class="stat-label">Dividends Received</div>
       <div class="stat-value" id="wb-divs">—</div>
     </div>
   </div>
@@ -686,17 +691,22 @@ tr:hover td { background:var(--surface2); }
       <div class="stat-sub">Closed trades</div>
     </div>
   </div>
-  <div class="stat-grid stat-grid-3">
+  <div class="stat-grid stat-grid-4">
     <div class="stat-card" style="cursor:pointer" onclick="showCMCDepositBreakdown()" title="Click for yearly breakdown">
       <div class="stat-label">Total Deposits <span style="font-size:9px;color:var(--muted)">↗ breakdown</span></div>
       <div class="stat-value" id="cmc-dep-total">—</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Total Withdrawals (SGD)</div>
+      <div class="stat-label">Total Withdrawals</div>
       <div class="stat-value" id="cmc-wd-total">—</div>
     </div>
+    <div class="stat-card">
+      <div class="stat-label">Net Deposits</div>
+      <div class="stat-value" id="cmc-net-dep">—</div>
+      <div class="stat-sub">Deposits − Withdrawals</div>
+    </div>
     <div class="stat-card gold">
-      <div class="stat-label">SG Dividends (SGD)</div>
+      <div class="stat-label">Dividends Received</div>
       <div class="stat-value" id="cmc-divs">—</div>
     </div>
   </div>
@@ -709,8 +719,14 @@ tr:hover td { background:var(--surface2); }
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>Ticker</th><th>Shares</th><th>Avg Cost (SGD)</th>
-          <th>Live Price</th><th>Market Value</th><th>Unrealised P&L</th><th>Return %</th><th>Realised P&L</th>
+          <th onclick="sortCMCHoldings('ticker')" style="cursor:pointer" class="sort-asc">Ticker</th>
+          <th onclick="sortCMCHoldings('shares')" style="cursor:pointer">Shares</th>
+          <th onclick="sortCMCHoldings('avg_cost')" style="cursor:pointer">Avg Cost (SGD)</th>
+          <th onclick="sortCMCHoldings('live_price')" style="cursor:pointer">Live Price</th>
+          <th onclick="sortCMCHoldings('market_value')" style="cursor:pointer">Market Value</th>
+          <th onclick="sortCMCHoldings('unrealised_pl')" style="cursor:pointer">Unrealised P&L</th>
+          <th onclick="sortCMCHoldings('return_pct')" style="cursor:pointer">Return %</th>
+          <th onclick="sortCMCHoldings('realised_pl')" style="cursor:pointer">Realised P&L</th>
         </tr></thead>
         <tbody id="cmc-active-body">
           <tr><td colspan="7" class="loading"><div class="spinner"></div></td></tr>
@@ -1433,7 +1449,11 @@ async function loadWebull() {
   document.getElementById('wb-dep-sgd').textContent = fmtSGD(depSGD);
   document.getElementById('wb-dep-usd').textContent = fmtUSD(depUSD) + ' USD';
   document.getElementById('wb-dep-combined').innerHTML = fmtSGD(depSGD) + ' <span style="color:var(--muted);font-size:14px">+</span> ' + fmtUSD(depUSD);
-  document.getElementById('wb-wd').textContent = fmtSGD(wbWds.reduce((s,d)=>s+d.amount,0));
+  const wbWdTotal = wbWds.reduce((s,d)=>s+d.amount,0);
+  const wbNetDepSGD = depSGD - wbWdTotal;
+  const wbNetDepUSD = depUSD;
+  document.getElementById('wb-wd').textContent = fmtSGD(wbWdTotal);
+  document.getElementById('wb-net-dep').innerHTML = fmtSGD(wbNetDepSGD) + ' <span style="color:var(--muted);font-size:14px">+</span> ' + fmtUSD(wbNetDepUSD);
   document.getElementById('wb-divs').textContent = fmtUSD(wbDivTotal);
 
   const unrealised = wbValue - wbCost;
@@ -1687,1138 +1707,21 @@ async function loadCMC() {
   document.getElementById('cmc-unrealised').innerHTML = `<span class="${plColor(cmcPL)}">${plStr(cmcPL,'S$')}</span>`;
   document.getElementById('cmc-unrealised-pct').innerHTML = `<span class="${plColor(cmcPct)}">${fmtPct(cmcPct)}</span>`;
   document.getElementById('cmc-realised').innerHTML = `<span class="${cmcRealisedTotal!==0?plColor(cmcRealisedTotal):''}">${cmcRealisedTotal!==0?plStr(cmcRealisedTotal,'S$'):'—'}</span>`;
+  const cmcNetDep = cmcDepTotal - cmcWdTotal;
   document.getElementById('cmc-dep-total').textContent = fmtSGD(cmcDepTotal);
   document.getElementById('cmc-wd-total').textContent = fmtSGD(cmcWdTotal);
+  document.getElementById('cmc-net-dep').textContent = fmtSGD(cmcNetDep);
   document.getElementById('cmc-divs').textContent = fmtSGD(sgDivTotal);
 
   // Active holdings table
-  document.getElementById('cmc-active-body').innerHTML = active.map(h => {
+  _cmcActiveData = active.map(h => {
     const p = price(h.ticker+'.SI'); const val = h.shares*p;
     const pl = val - h.cost; const pct = h.cost>0?pl/h.cost*100:0;
-    return `<tr>
-      <td><span class="ticker-badge default" style="cursor:pointer" onclick="showCMCTradeHistory('${h.ticker}')">${h.ticker}</span></td>
-      <td>${fmtShares(h.shares)}</td><td>${fmtSGD(h.avgPrice)}</td>
-      <td>${fmtSGD(p)}</td><td>${fmtSGD(val)}</td>
-      <td class="${plColor(pl)}">${plStr(pl,'S$')}</td>
-      <td class="${plColor(pct)}">${fmtPct(pct)}</td>
-      <td class="${h.realisedPL!==0?plColor(h.realisedPL):''}" style="${h.realisedPL===0?'color:var(--text)':''}">
-        ${h.realisedPL!==0?plStr(h.realisedPL,'S$'):'—'}
-      </td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="7" class="empty">No active holdings</td></tr>';
-
-  // Closed positions
-  const closed = getCMCClosed();
-  document.getElementById('cmc-closed-count').textContent = closed.length + ' stocks';
-  document.getElementById('cmc-closed-body').innerHTML = closed.map(h => `<tr>
-    <td><span class="ticker-badge cmc" style="cursor:pointer" onclick="showCMCTradeHistory('${h.ticker}')">${h.ticker}</span></td>
-    <td class="${h.realisedPL!==0?plColor(h.realisedPL):''}" style="${h.realisedPL===0?'color:var(--text)':''};font-family:var(--font-num)">${h.realisedPL!==0?plStr(h.realisedPL,'S$'):'—'}</td>
-    <td><span class="status-closed">Closed</span></td>
-  </tr>`).join('') || '<tr><td colspan="3" class="empty">No closed positions</td></tr>';
-
-
-
-  // SG Dividends — grouped by ticker
-  const sgDivMap = {};
-  (_divSG||[]).forEach(d => {
-    if (!sgDivMap[d.ticker]) sgDivMap[d.ticker] = {ticker:d.ticker, total:0, payments:[]};
-    sgDivMap[d.ticker].total += d.total_sgd;
-    sgDivMap[d.ticker].payments.push(d);
+    return { ticker:h.ticker, shares:h.shares, avg_cost:h.avgPrice, live_price:p,
+             market_value:val, unrealised_pl:pl, return_pct:pct, realised_pl:h.realisedPL||0 };
   });
-  document.getElementById('cmc-divs-body').innerHTML = Object.values(sgDivMap)
-    .sort((a,b)=>a.ticker.localeCompare(b.ticker))
-    .map(s => `<tr style="cursor:pointer" onclick="showCMCDivHistory('${s.ticker}')">
-      <td><span class="ticker-badge cmc">${s.ticker}</span></td>
-      <td class="pos" style="font-family:var(--font-num);font-weight:600">${fmtSGD(s.total)}</td>
-      <td style="color:var(--muted)">${s.payments.length} payments</td>
-      <td style="color:var(--accent);font-size:12px">View →</td>
-    </tr>`).join('') || '<tr><td colspan="4" class="empty">No dividends yet</td></tr>';
-
-  // CMC deposits
-    document.getElementById('cmc-deposits-body').innerHTML = cmcDeps.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(d => `<tr>
-    <td>${fmtDate(d.date)}</td>
-    <td>${fmtSGD(d.amount)}</td>
-    <td>
-      <div style="display:flex;gap:6px">
-        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
-          onclick="openEditDepositModal(${d.id},'cmc','${d.date}','${d.currency||'SGD'}',${d.amount},'${d.source_note||''}')">Edit</button>
-        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
-          onclick="deleteDepositEntry(${d.id},'cmc')">Del</button>
-      </div>
-    </td>
-  </tr>`).join('') || '<tr><td colspan="3" class="empty">No deposits</td></tr>';
-
-  // CMC withdrawals
-  document.getElementById('cmc-withdrawals-body').innerHTML = cmcWds.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(w => `<tr>
-    <td>${fmtDate(w.date)}</td>
-    <td style="font-family:var(--font-num)">${fmtSGD(w.amount)}</td>
-    <td>
-      <div style="display:flex;gap:6px">
-        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
-          onclick="openEditWithdrawalModal(${w.id},'cmc','${w.date}','${w.currency||'SGD'}',${w.amount})">Edit</button>
-        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
-          onclick="deleteWithdrawalEntry(${w.id},'cmc')">Del</button>
-      </div>
-    </td>
-  </tr>`).join('') || '<tr><td colspan="3" class="empty">No withdrawals</td></tr>';
-}
-
-// ============================================================
-// FX
-// ============================================================
-let _fxFilter = 'all';
-async function loadFX() {
-  await loadAllData();
-  renderFX();
-}
-
-function filterFX(broker, el) {
-  _fxFilter = broker;
-  document.querySelectorAll('.broker-tab').forEach(t=>t.classList.remove('active'));
-  el.classList.add('active');
-  renderFX();
-}
-
-function renderFX() {
-  const all = (_fx||[]);
-  const filtered = _fxFilter==='all' ? all : all.filter(f=>f.brokerage===_fxFilter);
-
-  const sgdToUSD = all.filter(f=>f.from_currency==='SGD'&&f.to_currency==='USD');
-  const usdToSGD = all.filter(f=>f.from_currency==='USD'&&f.to_currency==='SGD');
-  const totalSGDIn = sgdToUSD.reduce((s,f)=>s+f.amount_from,0);
-  const totalUSDOut = sgdToUSD.reduce((s,f)=>s+f.amount_to,0);
-  const totalUSDIn = usdToSGD.reduce((s,f)=>s+f.amount_from,0);
-  const totalSGDOut = usdToSGD.reduce((s,f)=>s+f.amount_to,0);
-  const avgRate = all.length ? all.filter(f=>f.from_currency==='SGD').reduce((s,f)=>s+f.rate,0)/Math.max(all.filter(f=>f.from_currency==='SGD').length,1) : 0;
-
-  document.getElementById('fx-sgd-to-usd-sgd').textContent = fmtSGD(totalSGDIn);
-  document.getElementById('fx-sgd-to-usd-usd').textContent = '→ ' + fmtUSD(totalUSDOut) + ' received';
-  document.getElementById('fx-usd-to-sgd-usd').textContent = fmtUSD(totalUSDIn);
-  document.getElementById('fx-usd-to-sgd-sgd').textContent = '→ ' + fmtSGD(totalSGDOut) + ' received';
-  document.getElementById('fx-avg-rate').textContent = avgRate.toFixed(4);
-
-  document.getElementById('fx-body').innerHTML = filtered.map(f => `<tr>
-    <td>${fmtDate(f.date)}</td>
-    <td><span class="pill pill-${f.brokerage}">${f.brokerage}</span></td>
-    <td class="fx-from">${f.from_currency}</td>
-    <td>${f.from_currency==='SGD'?fmtSGD(f.amount_from):fmtUSD(f.amount_from)}</td>
-    <td class="fx-to">${f.to_currency}</td>
-    <td>${f.to_currency==='SGD'?fmtSGD(f.amount_to):fmtUSD(f.amount_to)}</td>
-    <td class="fx-rate">${f.rate.toFixed(4)}</td>
-  </tr>`).join('') || '<tr><td colspan="7" class="empty">No FX conversions found</td></tr>';
-}
-
-// ============================================================
-// DIVIDENDS
-// ============================================================
-async function loadDividends() {
-  await loadAllData();
-  // Reset dividend forecast data on each load
-  if (_divAllStocks.length) _divAllStocks.forEach(s => { s.next_date=null; s.next_amount=null; s.last_date=null; s.last_amount=null; });
-
-  // Group by ticker
-  const usMap = {};
-  (_divUS||[]).forEach(d => {
-    if (!usMap[d.ticker]) usMap[d.ticker] = {ticker:d.ticker,broker:'webull',isSG:false,payments:[],total:0};
-    usMap[d.ticker].payments.push({date:d.date,amount:d.amount_usd});
-    usMap[d.ticker].total += d.amount_usd;
-  });
-
-  const sgMap = {};
-  (_divSG||[]).forEach(d => {
-    if (!sgMap[d.ticker]) sgMap[d.ticker] = {ticker:d.ticker,broker:'cmc',isSG:true,payments:[],total:0};
-    sgMap[d.ticker].payments.push({date:d.date,amount:d.total_sgd,perShare:d.per_share});
-    sgMap[d.ticker].total += d.total_sgd;
-  });
-
-  const syMap = {};
-  (_divSyfe||[]).forEach(d => {
-    if (!syMap[d.ticker]) syMap[d.ticker] = {ticker:d.ticker,broker:'syfe',isSG:false,payments:[],total:0};
-    syMap[d.ticker].payments.push({date:d.date,amount:d.amount_usd,rawAmount:d.amount_usd,id:d.id,rawDate:d.date});
-    syMap[d.ticker].total += d.amount_usd;
-  });
-
-  const usTotal = Object.values(usMap).reduce((s,x)=>s+x.total,0);
-  const sgTotal = Object.values(sgMap).reduce((s,x)=>s+x.total,0);
-  const syTotal = Object.values(syMap).reduce((s,x)=>s+x.total,0);
-
-  document.getElementById('div-us-total').textContent = fmtUSD(usTotal);
-  document.getElementById('div-us-count').textContent = (_divUS||[]).length + ' payments';
-  document.getElementById('div-sg-total').textContent = fmtSGD(sgTotal);
-  document.getElementById('div-sg-count').textContent = (_divSG||[]).length + ' payments';
-  document.getElementById('div-syfe-total-card').textContent = fmtUSD(syTotal);
-  document.getElementById('div-grand-total').textContent = fmtUSD(usTotal+syTotal) + ' + ' + fmtSGD(sgTotal);
-  document.getElementById('div-grand-sub').textContent =
-    'Webull ' + fmtUSD(usTotal) + ' · Syfe ' + fmtUSD(syTotal) + ' · CMC ' + fmtSGD(sgTotal);
-
-  // Attach share counts so we can calculate personal payout
-  const wbShareMap = {};
-  (_wbHoldings||[]).filter(h=>h.status==='active'&&h.shares>0.01).forEach(h => { wbShareMap[h.ticker] = h.shares; });
-  const syShareMap = {};
-  (_syfeH||[]).forEach(h => { syShareMap[h.ticker] = h.shares; });
-  const cmcShareMap = {};
-  getCMCActive().forEach(h => { cmcShareMap[h.ticker] = h.shares; });
-
-  _divAllStocks = [
-    ...Object.values(usMap).map(s => ({ ...s, shares: wbShareMap[s.ticker] || 0 })),
-    ...Object.values(sgMap).map(s => ({ ...s, shares: cmcShareMap[s.ticker] || 0 })),
-    ...Object.values(syMap).map(s => ({ ...s, shares: syShareMap[s.ticker] || 0 })),
-  ];
-
-  // Fetch next dividend data from worker for US tickers
-  // Pass all tickers — US as-is, SG with .SI appended so worker knows they're SGX
-  const allDivTickers = _divAllStocks.map(s => s.isSG ? s.ticker + '.SI' : s.ticker);
-  console.log('Fetching dividends for:', allDivTickers);
-  try {
-    const r = await fetch(`${WORKER_URL}?tickers=${allDivTickers.join(',')}&mode=dividends`, {
-      signal: AbortSignal.timeout(15000)
-    });
-    console.log('Dividend fetch status:', r.status);
-    if (r.ok) {
-      const resp = await r.json();
-      const divData = resp.dividends || {};
-      console.log('divData keys:', Object.keys(divData));
-      console.log('divData:', JSON.stringify(divData));
-      _divAllStocks.forEach(s => {
-        const key = s.ticker;
-        const d = divData[key];
-        console.log(`${key} -> d:`, d);
-        if (d) {
-          s.next_date     = d.nextDate     || null;
-          s.next_amount   = d.nextAmount   || null;
-          s.next_pay_date = d.nextPayDate  || null;
-          s.last_date     = d.lastDate     || null;
-          s.last_amount   = d.lastAmount   || null;
-          s.last_pay_date = d.lastPayDate  || null;
-          s.is_estimate   = d.isEstimate   || false;
-          s.div_source    = d.source       || null;
-        }
-      });
-      console.log('After mapping, C38U next_date:', _divAllStocks.find(s=>s.ticker==='C38U')?.next_date);
-    }
-  } catch(e) { console.warn('Dividend forecast fetch failed:', e.message); }
-
-  document.getElementById('div-stock-count').textContent = _divAllStocks.length + ' stocks';
-  _divSortKey = 'ticker';
-  _divSortDir = 1;
-  renderDivTable();
-}
-
-let _divAllStocks = [];
-let _divSortKey = 'ticker';
-let _divSortDir = 1;
-
-function sortDivTable(key) {
-  if (_divSortKey === key) { _divSortDir *= -1; }
-  else { _divSortKey = key; _divSortDir = key === 'ticker' || key === 'broker' || key === 'currency' || key === 'next_date' ? 1 : -1; }
-  document.querySelectorAll('#page-dividends th').forEach(th => {
-    th.classList.remove('sort-asc','sort-desc');
-    if (th.getAttribute('onclick') === `sortDivTable('${key}')`)
-      th.classList.add(_divSortDir === 1 ? 'sort-asc' : 'sort-desc');
-  });
-  renderDivTable();
-}
-
-function renderDivTable() {
-  const sorted = [..._divAllStocks].sort((a,b) => {
-    const k = _divSortKey;
-    let av, bv;
-    if (k === 'ticker') { av=a.ticker; bv=b.ticker; }
-    else if (k === 'broker') { av=a.broker; bv=b.broker; }
-    else if (k === 'currency') { av=a.isSG?'SGD':'USD'; bv=b.isSG?'SGD':'USD'; }
-    else if (k === 'total') { av=a.total; bv=b.total; }
-    else if (k === 'payments') { av=a.payments.length; bv=b.payments.length; }
-    else if (k === 'next_date') { av=a.next_date||'9999'; bv=b.next_date||'9999'; }
-    else if (k === 'next_date') { av=a.next_date||'9999'; bv=b.next_date||'9999'; }
-    else if (k === 'next_amount') { av=a.next_amount||0; bv=b.next_amount||0; }
-    else if (k === 'my_payout') { av=(a.next_amount||a.last_amount||0)*(a.shares||0); bv=(b.next_amount||b.last_amount||0)*(b.shares||0); }
-    else { av=a.total; bv=b.total; }
-    return typeof av==='string' ? av.localeCompare(bv)*_divSortDir : (av-bv)*_divSortDir;
-  });
-
-  document.getElementById('div-stocks-body').innerHTML = sorted.map(s => {
-    const totalStr = s.isSG ? fmtSGD(s.total) : fmtUSD(s.total);
-    // Show data if we have any upcoming info
-    const hasNext = !!(s.next_pay_date || s.next_amount);
-    const isEst = !!s.is_estimate;
-    const nextAmt = s.next_amount
-      ? `<span style="font-size:12px">${s.isSG ? fmtSGD(s.next_amount) : fmtUSD(s.next_amount)}${isEst?' <span style="font-size:9px;color:var(--muted)">(est)</span>':''}</span>`
-      : '<span style="color:var(--muted)">—</span>';
-    // Calculate my personal payout
-    const ratePerShare = s.next_amount || s.last_amount || 0;
-    const myShares = s.shares || 0;
-    const taxFactor = (!s.isSG) ? US_TAX : 1; // 30% tax on US stocks
-    const myPayout = ratePerShare * myShares * taxFactor;
-    const myPayoutStr = myShares > 0 && ratePerShare > 0
-      ? `<span style="color:var(--gold);font-weight:600;font-family:var(--font-num)">${s.isSG ? fmtSGD(myPayout) : fmtUSD(myPayout)}</span>
-         <span style="color:var(--muted);font-size:10px;display:block">${fmtShares(myShares)} shares</span>`
-      : '<span style="color:var(--muted)">—</span>';
-
-    return `<tr style="cursor:pointer" onclick="showDivHistory('${s.ticker}','${s.broker}')">
-      <td><span class="ticker-badge ${s.broker}">${s.ticker}</span></td>
-      <td><span class="pill pill-${s.broker}">${s.broker==='cmc'?'CMC':s.broker.charAt(0).toUpperCase()+s.broker.slice(1)}</span></td>
-      <td style="color:var(--muted);font-size:12px">${s.isSG?'SGD':'USD'}</td>
-      <td class="pos" style="font-family:var(--font-num);font-weight:600">${totalStr}</td>
-      <td style="color:var(--muted)">${s.payments.length}</td>
-      <td style="font-family:var(--font-num)">${(() => {
-        if (!s.isSG || !s.next_date) return '<span style="color:var(--muted)">—</span>';
-        const soon = (new Date(s.next_date) - new Date()) < 30*86400*1000;
-        return `<span style="color:${soon?'var(--gold)':'var(--text)'};font-weight:${soon?'600':'400'}">${soon?'⚡ ':''}${fmtDate(s.next_date)}</span>`;
-      })()}</td>
-      <td style="font-family:var(--font-num);color:var(--muted);font-size:12px">${s.next_pay_date ? fmtDate(s.next_pay_date)+(s.is_estimate?'<span style="font-size:9px;color:var(--muted)"> (est)</span>':'') : '<span style=\'color:var(--muted)\'>—</span>'}</td>
-      <td style="font-family:var(--font-num);color:var(--muted);font-size:12px">${nextAmt}</td>
-      <td>${myPayoutStr}</td>
-      <td>
-        <div style="display:flex;gap:6px">
-          <button class="btn btn-sm" onclick="event.stopPropagation();showDivHistory('${s.ticker}','${s.broker}')" style="font-size:10px">View</button>
-          <button class="btn btn-sm" onclick="event.stopPropagation();openDivModal('${s.ticker}','${s.broker}')" style="font-size:10px;color:var(--gold);border-color:var(--gold)40">+ Add</button>
-        </div>
-      </td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="9" class="empty">No dividend data</td></tr>';
-}
-
-async function showDivHistory(ticker, broker) {
-  await loadAllData();
-  let payments = [];
-  let isSG = false;
-
-  if (broker === 'webull') {
-    payments = (_divUS||[]).filter(d=>d.ticker===ticker)
-      .sort((a,b)=>new Date(b.date)-new Date(a.date))
-      .map(d=>({id:d.id, date:fmtDate(d.date), rawDate:d.date, amount:fmtUSD(d.amount_usd), rawAmount:d.amount_usd}));
-  } else if (broker === 'cmc') {
-    isSG = true;
-    payments = (_divSG||[]).filter(d=>d.ticker===ticker)
-      .sort((a,b)=>new Date(b.date)-new Date(a.date))
-      .map(d=>({id:d.id, date:fmtDate(d.date), rawDate:d.date, amount:fmtSGD(d.total_sgd), rawAmount:d.total_sgd, rawPerShare:d.per_share, rawShares:d.shares, extra:fmtSGD(d.per_share)+' per share'}));
-  } else if (broker === 'syfe') {
-    payments = (_divSyfe||[]).filter(d=>d.ticker===ticker)
-      .sort((a,b)=>new Date(b.date)-new Date(a.date))
-      .map(d=>({id:d.id, date:fmtDate(d.date), rawDate:d.date, amount:fmtUSD(d.amount_usd), rawAmount:d.amount_usd}));
-  }
-
-  // Find next dividend info
-  const stockData = _divAllStocks.find(s=>s.ticker===ticker && s.broker===broker);
-  const showDate = stockData?.next_date || null;
-  const showAmt  = stockData?.next_amount || null;
-  const isFuture = !!stockData?.next_date;
-  const myShares = stockData?.shares || 0;
-  const myPayout = showAmt && myShares > 0 ? showAmt * myShares : 0;
-
-  const nextDiv = showDate ? 
-    `<div style="margin-bottom:12px;padding:12px 14px;background:var(--surface2);border-radius:8px;border:1px solid var(--border2)">
-      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">
-        ${isFuture ? '⚡ Next Dividend' : 'Last Dividend'}
-      </div>
-      <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">
-        <div>
-          <div style="font-size:10px;color:var(--muted)">Ex-Date</div>
-          <div style="font-family:var(--font-num);font-size:15px;font-weight:600;color:${isFuture?'var(--gold)':'var(--muted)'}">${fmtDate(showDate)}</div>
-        </div>
-        ${(() => { const pd = stockData?.next_pay_date; const today = new Date().toISOString().split('T')[0]; return pd && pd >= today ? `<div>
-          <div style="font-size:10px;color:var(--muted)">Pay Date</div>
-          <div style="font-family:var(--font-num);font-size:15px;font-weight:600;color:var(--muted)">${fmtDate(pd)}</div>
-        </div>` : ''; })()}
-        ${showAmt ? `<div>
-          <div style="font-size:10px;color:var(--muted)">Rate / Share</div>
-          <div style="font-family:var(--font-num);font-size:15px;font-weight:600;color:var(--muted)">${isSG?fmtSGD(showAmt):fmtUSD(showAmt)}</div>
-        </div>` : ''}
-        ${myPayout > 0 ? `<div>
-          <div style="font-size:10px;color:var(--muted)">My Payout (${fmtShares(myShares)} shares)</div>
-          <div style="font-family:var(--font-num);font-size:18px;font-weight:700;color:var(--gold)">${isSG?fmtSGD(myPayout):fmtUSD(myPayout)}</div>
-        </div>` : ''}
-      </div>
-    </div>` : '';
-
-  const totalNum = payments.reduce((s,p)=>s+(p.rawAmount||parseFloat(p.amount.replace(/[^0-9.-]/g,''))||0),0);
-  document.getElementById('div-modal-title').innerHTML =
-    `<span class="ticker-badge ${broker}">${ticker}</span>&nbsp; Dividend History`;
-  document.getElementById('div-modal-total').textContent = (isSG?fmtSGD(totalNum):fmtUSD(totalNum)) + ' total';
-  document.getElementById('div-modal-body').innerHTML = nextDiv + payments.map(p=>`<tr>
-    <td style="padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted)">${fmtDate(p.date)}</td>
-    <td style="padding:10px 12px;border-bottom:1px solid var(--border)" class="pos">
-      ${p.amount}${p.extra?'<br><span style="font-size:11px;color:var(--muted)">'+p.extra+'</span>':''}
-    </td>
-    <td style="padding:10px 12px;border-bottom:1px solid var(--border)">
-      <div style="display:flex;gap:6px">
-        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40" onclick="openDivEditModal('${p.id}','${broker}','${p.rawDate}',${p.rawAmount}${p.rawPerShare?','+p.rawPerShare:''}${p.rawShares?','+p.rawShares:''})">Edit</button>
-        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40" onclick="deleteDivEntry('${p.id}','${broker}')">Del</button>
-      </div>
-    </td>
-  </tr>`).join('') || '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--muted)">No history</td></tr>';
-
-  document.getElementById('div-history-modal').classList.add('open');
-}
-
-// ============================================================
-// MODALS
-// ============================================================
-let _currentBroker = '';
-function openModal(id, broker) {
-  _currentBroker = broker;
-  const overlay = document.getElementById(id);
-  overlay.classList.add('open');
-  // Set broker hidden field
-  const brokerInput = overlay.querySelector('[id$="-broker"]');
-  if (brokerInput) brokerInput.value = broker;
-  // Default date to today
-  overlay.querySelectorAll('input[type=date]').forEach(el => {
-    el.value = new Date().toISOString().split('T')[0];
-  });
-  // Set dynamic title based on broker
-  const brokerLabel = broker === 'cmc' ? 'CMC Invest' : broker === 'syfe' ? 'Syfe' : 'Webull';
-  if (id === 'add-deposit-modal') {
-    document.getElementById('dep-modal-title').textContent = `Add Deposit — ${brokerLabel}`;
-    document.getElementById('dep-edit-id').value = '';
-  }
-  if (id === 'add-withdrawal-modal') {
-    document.getElementById('wd-modal-add-title').textContent = `Add Withdrawal — ${brokerLabel}`;
-  }
-  if (id === 'add-trade-modal') {
-    document.getElementById('trade-modal-title').textContent = 'Add Trade';
-    document.getElementById('trade-edit-id').value = '';
-  }
-}
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
-
-// Close on overlay click
-// Close any modal by clicking outside or pressing ESC
-document.querySelectorAll('.modal-overlay').forEach(overlay => {
-  overlay.addEventListener('click', e => {
-    if (e.target === overlay) overlay.classList.remove('open');
-  });
-});
-
-// ESC key closes any open modal
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') {
-    document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
-  }
-});
-
-// Also handle dynamically added modals (trade history, div history etc)
-document.addEventListener('click', e => {
-  if (e.target.classList.contains('modal-overlay')) {
-    e.target.classList.remove('open');
-  }
-});
-
-async function submitTrade() {
-  const editId = document.getElementById('trade-edit-id').value;
-  const ticker = document.getElementById('trade-ticker').value.toUpperCase().trim();
-  const action = document.getElementById('trade-action').value;
-  const date = document.getElementById('trade-date').value;
-  const qty = parseFloat(document.getElementById('trade-qty').value);
-  const price_val = parseFloat(document.getElementById('trade-price').value);
-  if (!ticker||!date||!qty||!price_val) return alert('Please fill all required fields');
-  const amount = qty * price_val;
-
-  // Auto-calculate realised P&L for sell trades using current avg cost
-  let rpl = 0;
-  if (action === 'Sell') {
-    const holdings = await sb('webull_holdings','GET',null,`?ticker=eq.${ticker}&brokerage=eq.webull`);
-    if (holdings?.length && holdings[0].avg_cost > 0) {
-      rpl = Math.round((price_val - holdings[0].avg_cost) * qty * 100) / 100;
-    }
-  }
-
-  if (editId) {
-    await sb('webull_trades','PATCH',{ticker, brokerage:'webull', date, action, qty, price:price_val, amount, realised_pl:rpl},`?id=eq.${editId}`);
-    document.getElementById('trade-edit-id').value = '';
-    document.getElementById('trade-modal-title').textContent = 'Add Trade';
-    invalidateCache();
-    closeModal('add-trade-modal');
-    loadWebull();
-    return;
-  }
-
-  await sb('webull_trades','POST',{ticker, brokerage:'webull', date, action, qty, price:price_val, amount, realised_pl:rpl});
-
-  // Update holding
-  const holdings2 = await sb('webull_holdings','GET',null,`?ticker=eq.${ticker}&brokerage=eq.webull`);
-  if (holdings2?.length) {
-    const h = holdings2[0];
-    let newShares = h.shares + (action==='Buy'?qty:-qty);
-    let newCost = action==='Buy' ? h.total_cost+amount : h.total_cost-(h.avg_cost*qty);
-    let newAvg = newShares>0 ? newCost/newShares : 0;
-    let newRPL = h.total_realised_pl + (action==='Sell'?rpl:0);
-    let status = newShares > 0.01 ? 'active' : 'closed';
-    await sb('webull_holdings','PATCH',{shares:newShares,total_cost:newCost,avg_cost:newAvg,total_realised_pl:newRPL,status},`?id=eq.${h.id}`);
-  } else if (action==='Buy') {
-    await sb('webull_holdings','POST',{ticker,brokerage:'webull',shares:qty,avg_cost:price_val,total_cost:amount,total_realised_pl:0,status:'active'});
-  }
-  invalidateCache();
-  closeModal('add-trade-modal');
-  loadWebull();
-}
-
-async function submitDeposit() {
-  const editId = document.getElementById('dep-edit-id').value;
-  const broker = document.getElementById('dep-broker').value;
-  const date = document.getElementById('dep-date').value;
-  const currency = document.getElementById('dep-currency').value;
-  const amount = parseFloat(document.getElementById('dep-amount').value);
-  const note = document.getElementById('dep-note').value;
-  if (!date||!amount) return alert('Please fill all required fields');
-  const body = {brokerage:broker, date, currency, amount, source_note:note||null};
-  if (editId) {
-    await sb('deposits','PATCH',body,`?id=eq.${editId}`);
-    document.getElementById('dep-edit-id').value = '';
-  } else {
-    await sb('deposits','POST',body);
-  }
-  invalidateCache();
-  closeModal('add-deposit-modal');
-  document.getElementById('dep-modal-title').textContent = 'Add Deposit';
-  if(broker==='webull') loadWebull();
-  else if(broker==='syfe') loadSyfe();
-  else if(broker==='cmc') loadCMC();
-}
-
-async function submitWithdrawal() {
-  const broker = document.getElementById('wd-broker').value;
-  const date = document.getElementById('wd-date').value;
-  const currency = document.getElementById('wd-currency').value;
-  const amount = parseFloat(document.getElementById('wd-amount').value);
-  if (!date||!amount) return alert('Please fill all required fields');
-  await sb('withdrawals','POST',{brokerage:broker,date,currency,amount});
-  invalidateCache();
-  closeModal('add-withdrawal-modal');
-  if (broker==='syfe') loadSyfe();
-  else if (broker==='cmc') loadCMC();
-  else loadWebull();
-}
-
-function updateFXLabels() {
-  const from = document.getElementById('fx-from').value;
-  const to = document.getElementById('fx-to').value;
-  document.getElementById('fx-from-label').textContent = `Amount From (${from})`;
-  document.getElementById('fx-to-label').textContent = `Amount To (${to})`;
-}
-
-function autoCalcFXTo() {
-  const rate = parseFloat(document.getElementById('fx-rate').value) || 0;
-  const amtFrom = parseFloat(document.getElementById('fx-amount-from').value) || 0;
-  if (rate > 0 && amtFrom > 0) {
-    document.getElementById('fx-amount-to').value = (amtFrom * rate).toFixed(2);
-  }
-}
-
-async function submitFX() {
-  const broker = document.getElementById('fx-broker').value;
-  const date = document.getElementById('fx-date').value;
-  const from_currency = document.getElementById('fx-from').value;
-  const to_currency = document.getElementById('fx-to').value;
-  const rate = parseFloat(document.getElementById('fx-rate').value);
-  const amount_from = parseFloat(document.getElementById('fx-amount-from').value);
-  const amount_to = parseFloat(document.getElementById('fx-amount-to').value);
-  if (!date||!rate||!amount_from||!amount_to) return alert('Please fill all fields');
-  await sb('fx_conversions','POST',{brokerage:broker,date,from_currency,to_currency,rate,amount_from,amount_to});
-  invalidateCache();
-  closeModal('add-fx-modal');
-  loadFX();
-}
-
-async function submitSGTrade() {
-  const editId = document.getElementById('sg-edit-id').value;
-  const ticker = document.getElementById('sg-ticker').value.toUpperCase().trim();
-  const action = document.getElementById('sg-action').value;
-  const date = document.getElementById('sg-date').value;
-  const qty = parseFloat(document.getElementById('sg-qty').value);
-  const price_val = parseFloat(document.getElementById('sg-price').value);
-  if (!ticker||!date||!qty||!price_val) return alert('Please fill all required fields');
-  const body = {ticker, brokerage:'cmc', date, action, qty, price:price_val, amount:qty*price_val, profit:0};
-  if (editId) {
-    await sb('cmc_trades','PATCH',body,`?id=eq.${editId}`);
-    document.getElementById('sg-edit-id').value = '';
-    document.getElementById('cmc-trade-modal-title').textContent = 'Add Trade — CMC Invest';
-  } else {
-    await sb('cmc_trades','POST',body);
-  }
-  invalidateCache();
-  closeModal('add-sg-trade-modal');
-  loadCMC();
-}
-
-
-// ============================================================
-// WATCHLIST PAGE
-// ============================================================
-// ============================================================
-// WATCHLIST PAGE — ticker + live price + period % changes
-// ============================================================
-let _wlSortKey = 'day', _wlSortDir = -1;
-
-async function loadWatchlistPage() {
-  await loadAllData();
-
-  // Collect all tickers — webull (active+closed), syfe, cmc (active+closed), plus custom
-  const wbAll = (_wbHoldings||[]).map(h => ({ticker:h.ticker, isSG:false}));
-  const syAll = (_syfeH||[]).map(h => ({ticker:h.ticker, isSG:false}));
-  const cmcMap = {};
-  (_cmcTrades||[]).filter(t=>t.brokerage==='cmc').forEach(t => {
-    if(!cmcMap[t.ticker]) cmcMap[t.ticker] = {ticker:t.ticker+'.SI', isSG:true};
-  });
-  const cmcAll = Object.values(cmcMap);
-
-  // Include custom watchlist tickers
-  const customTickers = _customWatchlist.map(t => ({
-    ticker: t.ticker,
-    isSG: t.ticker.endsWith('.SI')
-  }));
-
-  const allItems = [...wbAll, ...syAll, ...cmcAll, ...customTickers]
-    .filter((v,i,a) => a.findIndex(x=>x.ticker===v.ticker)===i)
-    .sort((a,b) => a.ticker.localeCompare(b.ticker));
-
-  const tickers = allItems.map(h=>h.ticker);
-  document.getElementById('wl-count').textContent = tickers.length + ' stocks';
-
-  // Always force-fetch all tickers for watchlist so period data is fresh
-  await forceFetchPrices(tickers);
-  renderWatchlistTable(allItems);
-}
-
-// Force fetch — bypasses cache so period data always loads
-async function forceFetchPrices(tickers) {
-  if (!tickers.length) return;
-  try {
-    const r = await fetch(`${WORKER_URL}?tickers=${tickers.join(',')}`, {
-      signal: AbortSignal.timeout(20000)
-    });
-    if (!r.ok) throw new Error('Worker ' + r.status);
-    const resp = await r.json();
-    Object.entries(resp.data || {}).forEach(([ticker, d]) => {
-      priceCache[ticker] = d.price;
-      dayChangeCache[ticker] = d.dayChangePct;
-      periodCache[ticker] = {
-        day:         d.dayChangePct        ?? null,
-        week:        d.weekChangePct       ?? null,
-        month:       d.monthChangePct      ?? null,
-        three_month: d.threeMonthChangePct ?? null,
-        ytd:         d.ytdChangePct        ?? null,
-      };
-    });
-    Object.entries(resp.prices || {}).forEach(([ticker, p]) => {
-      if (!priceCache[ticker]) priceCache[ticker] = p;
-    });
-  } catch(e) { console.error('Force fetch error:', e.message); }
-}
-
-
-
-function wlSort(key) {
-  if(_wlSortKey===key) _wlSortDir*=-1;
-  else { _wlSortKey=key; _wlSortDir=key==='ticker'?1:-1; }
-  document.querySelectorAll('#page-watchlist th').forEach(th => {
-    th.classList.remove('sort-asc','sort-desc');
-    if(th.getAttribute('onclick')===`wlSort('${key}')`)
-      th.classList.add(_wlSortDir===1?'sort-asc':'sort-desc');
-  });
-  const wbAll=(_wbHoldings||[]).map(h=>({ticker:h.ticker,isSG:false}));
-  const syAll=(_syfeH||[]).map(h=>({ticker:h.ticker,isSG:false}));
-  const cmcMap={};(_cmcTrades||[]).filter(t=>t.brokerage==='cmc').forEach(t=>{if(!cmcMap[t.ticker])cmcMap[t.ticker]={ticker:t.ticker+'.SI',isSG:true};});
-  const all=[...wbAll,...syAll,...Object.values(cmcMap)].filter((v,i,a)=>a.findIndex(x=>x.ticker===v.ticker)===i);
-  renderWatchlistTable(all);
-}
-
-function renderWatchlistTable(items) {
-  function pct(val) {
-    if(val==null) return '<span style="color:var(--muted)">—</span>';
-    const c = val>=0 ? 'var(--green)' : 'var(--red)';
-    return `<span style="color:${c};font-size:13px;font-weight:500">${val>=0?'+':''}${val.toFixed(2)}%</span>`;
-  }
-
-  const enriched = items.map(h => {
-    const pc = periodCache[h.ticker] || {};
-    return {
-      ...h,
-      price: priceCache[h.ticker] || 0,
-      day: pc.day ?? dayChangeCache[h.ticker] ?? null,
-      week: pc.week ?? null,
-      month: pc.month ?? null,
-      three_month: pc.three_month ?? null,
-      ytd: pc.ytd ?? null,
-    };
-  });
-
-  const sorted = [...enriched].sort((a,b) => {
-    const k = _wlSortKey;
-    const av = k==='ticker' ? a.ticker : (a[k]??-9999);
-    const bv = k==='ticker' ? b.ticker : (b[k]??-9999);
-    return typeof av==='string' ? av.localeCompare(bv)*_wlSortDir : (av-bv)*_wlSortDir;
-  });
-
-  document.getElementById('wl-body').innerHTML = sorted.map(h => {
-    const ps = h.price > 0 ? (h.isSG ? 'S$'+h.price.toFixed(3) : '$'+h.price.toFixed(2)) : '<span style="color:var(--muted)">—</span>';
-    return `<tr>
-      <td><span class="ticker-badge ${h.isSG ? 'cmc' : 'webull'}">${h.ticker.replace('.SI','')}</span></td>
-      <td style="font-family:var(--font-num);font-weight:600;font-size:13px">${ps}</td>
-      <td style="font-family:var(--font-num)">${pct(h.day)}</td>
-      <td style="font-family:var(--font-num)">${pct(h.week)}</td>
-      <td style="font-family:var(--font-num)">${pct(h.month)}</td>
-      <td style="font-family:var(--font-num)">${pct(h.three_month)}</td>
-      <td style="font-family:var(--font-num)">${pct(h.ytd)}</td>
-    </tr>`;
-  }).join('');
-
-  document.getElementById('wl-page-updated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-SG');
-}
-
-
-
-// ============================================================
-// CUSTOM WATCHLIST MANAGEMENT
-// ============================================================
-function openAddTickerModal() {
-  document.getElementById('add-ticker-modal').classList.add('open');
-  document.getElementById('add-ticker-input').value = '';
-  document.getElementById('add-ticker-input').focus();
-}
-
-function submitAddTicker() {
-  let ticker = document.getElementById('add-ticker-input').value.toUpperCase().trim();
-  const exchange = document.getElementById('add-ticker-exchange').value;
-  if (!ticker) return alert('Please enter a ticker symbol');
-  if (exchange === 'SGX' && !ticker.endsWith('.SI')) ticker = ticker + '.SI';
-  // Check not already in list
-  const existing = [...(_wbHoldings||[]).map(h=>h.ticker), ...(_syfeH||[]).map(h=>h.ticker)];
-  const cmcExisting = (_cmcTrades||[]).filter(t=>t.brokerage==='cmc').map(t=>t.ticker+'.SI');
-  const allExisting = [...existing, ...cmcExisting, ..._customWatchlist.map(x=>x.ticker)];
-  if (allExisting.includes(ticker)) {
-    alert(`${ticker} is already in your watchlist`);
-    return;
-  }
-  _customWatchlist.push({ ticker });
-  localStorage.setItem('wl_custom', JSON.stringify(_customWatchlist));
-  closeModal('add-ticker-modal');
-  loadWatchlistPage();
-}
-
-
-// ============================================================
-// DIVIDEND CRUD
-// ============================================================
-function updateDivCMCFields() {
-  // Legacy - now handled by openDivModal
-  const broker = document.getElementById('div-add-broker').value;
-  document.getElementById('div-cmc-fields').style.display = broker === 'cmc' ? 'block' : 'none';
-}
-
-function openDivModal(ticker='', broker='webull') {
-  document.getElementById('div-add-modal-title').textContent =
-    broker === 'cmc' ? 'Add Dividend — CMC Invest' :
-    broker === 'syfe' ? 'Add Dividend — Syfe' : 'Add Dividend — Webull';
-  document.getElementById('div-edit-id').value = '';
-  document.getElementById('div-add-broker').value = broker;
-  document.getElementById('div-add-broker-select').value = broker;
-  document.getElementById('div-add-ticker').value = ticker;
-  document.getElementById('div-add-ticker-cmc').value = ticker;
-  document.getElementById('div-add-date').value = new Date().toISOString().split('T')[0];
-  document.getElementById('div-add-amount').value = '';
-  document.getElementById('div-add-per-share').value = '';
-  document.getElementById('div-add-shares').value = '';
-  document.getElementById('div-shares-hint').textContent = '';
-
-  // Show/hide broker selector based on context
-  const isCMC = broker === 'cmc';
-  document.getElementById('div-broker-row').style.display = isCMC ? 'none' : '';
-  document.getElementById('div-cmc-ticker-row').style.display = isCMC ? 'block' : 'none';
-  document.getElementById('div-cmc-fields').style.display = isCMC ? 'block' : 'none';
-
-  // Auto-fill shares if CMC and ticker known
-  if (isCMC && ticker) autoFillCMCShares(ticker);
-
-  document.getElementById('div-add-modal').classList.add('open');
-}
-
-function onDivBrokerChange(broker) {
-  document.getElementById('div-add-broker').value = broker;
-  const isCMC = broker === 'cmc';
-  document.getElementById('div-cmc-fields').style.display = isCMC ? 'block' : 'none';
-  document.getElementById('div-add-modal-title').textContent =
-    isCMC ? 'Add Dividend — CMC Invest' :
-    broker === 'syfe' ? 'Add Dividend — Syfe' : 'Add Dividend — Webull';
-}
-
-function onDivTickerInput() {
-  const broker = document.getElementById('div-add-broker').value;
-  if (broker === 'cmc') {
-    const ticker = document.getElementById('div-add-ticker').value.toUpperCase();
-    autoFillCMCShares(ticker);
-  }
-}
-
-function autoFillCMCShares(ticker) {
-  // Look up current shares from CMC active holdings
-  const active = getCMCActive();
-  const holding = active.find(h => h.ticker === ticker);
-  if (holding) {
-    document.getElementById('div-add-shares').value = holding.shares;
-    document.getElementById('div-shares-hint').textContent = '(auto-filled)';
-    autoCalcDivAmount();
-  } else {
-    document.getElementById('div-shares-hint').textContent = '';
-  }
-}
-
-function autoCalcDivAmount() {
-  const perShare = parseFloat(document.getElementById('div-add-per-share').value) || 0;
-  const shares = parseFloat(document.getElementById('div-add-shares').value) || 0;
-  if (perShare > 0 && shares > 0) {
-    document.getElementById('div-add-amount').value = (perShare * shares).toFixed(4);
-  }
-}
-
-function openDivEditModal(id, broker, date, amount, perShare, shares) {
-  document.getElementById('div-add-modal-title').textContent = 'Edit Dividend';
-  document.getElementById('div-edit-id').value = id;
-  document.getElementById('div-add-broker').value = broker;
-  document.getElementById('div-add-date').value = date;
-  document.getElementById('div-add-amount').value = amount;
-  if (perShare) document.getElementById('div-add-per-share').value = perShare;
-  if (shares) document.getElementById('div-add-shares').value = shares;
-  updateDivCMCFields();
-  document.getElementById('div-add-modal').classList.add('open');
-}
-
-async function submitDivEntry() {
-  const editId = document.getElementById('div-edit-id').value;
-  const broker = document.getElementById('div-add-broker').value;
-  const ticker = document.getElementById('div-add-ticker').value.toUpperCase().trim();
-  const date = document.getElementById('div-add-date').value;
-  const amount = parseFloat(document.getElementById('div-add-amount').value);
-
-  if (!ticker || !date || isNaN(amount)) return alert('Please fill all required fields');
-
-  if (broker === 'cmc') {
-    const perShare = parseFloat(document.getElementById('div-add-per-share').value) || 0;
-    const shares = parseFloat(document.getElementById('div-add-shares').value) || 0;
-    const body = { ticker, brokerage:'cmc', date, per_share: perShare, shares, total_sgd: amount };
-    if (editId) {
-      await sb('dividends_sg', 'PATCH', body, `?id=eq.${editId}`);
-    } else {
-      await sb('dividends_sg', 'POST', body);
-    }
-  } else if (broker === 'syfe') {
-    const body = { ticker, brokerage:'syfe', date, amount_usd: amount };
-    if (editId) {
-      await sb('dividends_syfe', 'PATCH', body, `?id=eq.${editId}`);
-    } else {
-      await sb('dividends_syfe', 'POST', body);
-    }
-  } else {
-    const body = { ticker, brokerage:'webull', date, amount_usd: amount };
-    if (editId) {
-      await sb('dividends_us', 'PATCH', body, `?id=eq.${editId}`);
-    } else {
-      await sb('dividends_us', 'POST', body);
-    }
-  }
-
-  invalidateCache();
-  closeModal('div-add-modal');
-  await loadDividends();
-}
-
-async function deleteDivEntry(id, broker) {
-  if (!confirm('Delete this dividend entry?')) return;
-  const table = broker === 'cmc' ? 'dividends_sg' : broker === 'syfe' ? 'dividends_syfe' : 'dividends_us';
-  await sb(table, 'DELETE', null, `?id=eq.${id}`);
-  invalidateCache();
-  closeModal('div-history-modal');
-  await loadDividends();
-}
-
-
-// ============================================================
-// SYFE EDIT HELPERS
-// ============================================================
-function openSyfeEditDivModal(id, ticker, date, amount) {
-  document.getElementById('div-add-modal-title').textContent = 'Edit ' + ticker + ' Dividend';
-  document.getElementById('div-edit-id').value = id;
-  document.getElementById('div-add-broker').value = 'syfe';
-  document.getElementById('div-add-ticker').value = ticker;
-  document.getElementById('div-add-date').value = date;
-  document.getElementById('div-add-amount').value = amount;
-  updateDivCMCFields();
-  document.getElementById('div-add-modal').classList.add('open');
-}
-
-async function deleteSyfeDivEntry(id) {
-  if (!confirm('Delete this dividend entry?')) return;
-  await sb('dividends_syfe', 'DELETE', null, `?id=eq.${id}`);
-  invalidateCache();
-  closeModal('div-history-modal');
-  loadSyfe();
-}
-
-function openEditDepositModal(id, broker, date, currency, amount, note) {
-  document.getElementById('dep-modal-title').textContent = 'Edit Deposit';
-  document.getElementById('dep-edit-id').value = id;
-  document.getElementById('dep-broker').value = broker;
-  document.getElementById('dep-date').value = date;
-  document.getElementById('dep-currency').value = currency;
-  document.getElementById('dep-amount').value = amount;
-  document.getElementById('dep-note').value = note || '';
-  document.getElementById('add-deposit-modal').classList.add('open');
-}
-
-async function deleteDepositEntry(id, broker) {
-  if (!confirm('Delete this deposit entry?')) return;
-  await sb('deposits', 'DELETE', null, `?id=eq.${id}`);
-  invalidateCache();
-  if (broker === 'syfe') loadSyfe();
-  else if (broker === 'webull') loadWebull();
-  else loadCMC();
-}
-
-
-// ── Syfe dividend history modal ──
-async function showSyfeDivHistory(ticker) {
-  await loadAllData();
-  const payments = (_divSyfe||[])
-    .filter(d => d.ticker === ticker)
-    .sort((a,b) => new Date(b.date) - new Date(a.date));
-
-  const totalNet = payments.reduce((s,d) => s+d.amount_usd, 0);
-
-  // Reuse div-history-modal
-  document.getElementById('div-modal-title').innerHTML =
-    `<span class="ticker-badge syfe">${ticker}</span>&nbsp; Dividend History`;
-  document.getElementById('div-modal-total').innerHTML =
-    `<span style="font-size:14px">${fmtUSD(totalNet)}</span>`;
-
-  document.getElementById('div-modal-body').innerHTML = payments.map(d => {
-    return `<tr>
-      <td style="padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted)">${fmtDate(d.date)}</td>
-      <td style="padding:10px 12px;border-bottom:1px solid var(--border)" class="pos">
-        ${fmtUSD(d.amount_usd)}
-      </td>
-      <td style="padding:10px 12px;border-bottom:1px solid var(--border)">
-        <div style="display:flex;gap:6px">
-          <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
-            onclick="openSyfeEditDivModal(${d.id},'${d.ticker}','${d.date}',${d.amount_usd})">Edit</button>
-          <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
-            onclick="deleteSyfeDivEntry(${d.id})">Del</button>
-        </div>
-      </td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--muted)">No history</td></tr>';
-
-  document.getElementById('div-history-modal').classList.add('open');
-}
-
-
-// ── Syfe Trade History ──
-let _currentSyfeTicker = '';
-
-async function showSyfeTradeHistory(ticker) {
-  await loadAllData();
-  // Always fetch fresh syfe_trades directly
-  _syfeTrades = await sb('syfe_trades','GET',null,'?order=date.desc');
-  _currentSyfeTicker = ticker;
-  const trades = (_syfeTrades||[]).filter(t => t.ticker === ticker)
-    .sort((a,b) => new Date(b.date) - new Date(a.date));
-
-  const totalShares = trades.reduce((s,t) => s+parseFloat(t.shares), 0);
-  const totalSpent  = trades.reduce((s,t) => s+parseFloat(t.amount_usd), 0);
-  const avgPrice    = totalShares > 0 ? totalSpent/totalShares : 0;
-
-  document.getElementById('syfe-trade-modal-title').innerHTML =
-    `<span class="ticker-badge syfe">${ticker}</span>&nbsp; Trade History`;
-  document.getElementById('syfe-add-trade-btn').onclick = () => openSyfeAddTrade(ticker);
-
-  document.getElementById('syfe-trade-summary').innerHTML = `
-    <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)">
-      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Total Trades</div>
-      <div style="font-family:var(--font-num);font-size:16px;font-weight:700">${trades.length}</div>
-    </div>
-    <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)">
-      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Total Shares</div>
-      <div style="font-family:var(--font-num);font-size:16px;font-weight:700">${totalShares.toFixed(4)}</div>
-    </div>
-    <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)">
-      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Total Invested</div>
-      <div style="font-family:var(--font-num);font-size:16px;font-weight:700">${fmtUSD(totalSpent)}</div>
-    </div>
-    <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2)">
-      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Avg Cost/Share</div>
-      <div style="font-family:var(--font-num);font-size:16px;font-weight:700">${fmtUSD(avgPrice)}</div>
-    </div>`;
-
-  document.getElementById('syfe-trade-body').innerHTML = trades.map(t => `<tr>
-    <td style="padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted)">${fmtDate(t.date)}</td>
-    <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-num)">${parseFloat(t.shares).toFixed(4)}</td>
-    <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-num)">${fmtUSD(t.price_usd)}</td>
-    <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-num)">${fmtUSD(t.amount_usd)}</td>
-    <td style="padding:10px 12px;border-bottom:1px solid var(--border)">
-      <div style="display:flex;gap:6px">
-        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
-          onclick="openSyfeEditTrade(${t.id},'${t.ticker}','${t.date}',${t.shares},${t.price_usd},${t.amount_usd})">Edit</button>
-        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
-          onclick="deleteSyfeTrade(${t.id},'${t.ticker}')">Del</button>
-      </div>
-    </td>
-  </tr>`).join('') || '<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--muted)">No trades</td></tr>';
-
-  document.getElementById('syfe-trade-modal').classList.add('open');
-}
-
-function openSyfeAddTrade(ticker) {
-  document.getElementById('syfe-add-trade-title').textContent = 'Add Trade — ' + (ticker||_currentSyfeTicker);
-  document.getElementById('syfe-trade-edit-id').value = '';
-  document.getElementById('syfe-trade-ticker').value = ticker||_currentSyfeTicker;
-  document.getElementById('syfe-trade-date').value = new Date().toISOString().split('T')[0];
-  document.getElementById('syfe-trade-shares').value = '';
-  document.getElementById('syfe-trade-price').value = '';
-  document.getElementById('syfe-trade-amount').value = '';
-  document.getElementById('syfe-add-trade-modal').classList.add('open');
-}
-
-function openSyfeEditTrade(id, ticker, date, shares, price, amount) {
-  document.getElementById('syfe-add-trade-title').textContent = 'Edit Trade — ' + ticker;
-  document.getElementById('syfe-trade-edit-id').value = id;
-  document.getElementById('syfe-trade-ticker').value = ticker;
-  document.getElementById('syfe-trade-date').value = date;
-  document.getElementById('syfe-trade-shares').value = shares;
-  document.getElementById('syfe-trade-price').value = price;
-  document.getElementById('syfe-trade-amount').value = amount;
-  document.getElementById('syfe-add-trade-modal').classList.add('open');
-}
-
-async function submitSyfeTrade() {
-  const editId = document.getElementById('syfe-trade-edit-id').value;
-  const ticker = document.getElementById('syfe-trade-ticker').value;
-  const date = document.getElementById('syfe-trade-date').value;
-  const shares = parseFloat(document.getElementById('syfe-trade-shares').value);
-  const price_usd = parseFloat(document.getElementById('syfe-trade-price').value);
-  const amount_usd = parseFloat(document.getElementById('syfe-trade-amount').value);
-  if (!ticker||!date||isNaN(shares)||isNaN(price_usd)||isNaN(amount_usd)) return alert('Please fill all fields');
-  const body = {ticker, date, shares, price_usd, amount_usd};
-  if (editId) {
-    await sb('syfe_trades','PATCH',body,`?id=eq.${editId}`);
-  } else {
-    await sb('syfe_trades','POST',body);
-  }
-  invalidateCache();
-  closeModal('syfe-add-trade-modal');
-  // Refresh the trade history modal with updated data
-  _syfeTrades = await sb('syfe_trades','GET',null,'?order=date.desc');
-  showSyfeTradeHistory(ticker);
-}
-
-async function deleteSyfeTrade(id, ticker) {
-  if (!confirm('Delete this trade?')) return;
-  await sb('syfe_trades','DELETE',null,`?id=eq.${id}`);
-  invalidateCache();
-  _syfeTrades = await sb('syfe_trades','GET',null,'?order=date.desc');
-  showSyfeTradeHistory(ticker);
-}
-
-
-// ============================================================
-// RECALCULATE REALISED P&L FOR ALL SELL TRADES
-// ============================================================
-async function recalculateAllPL() {
-  // Force fresh fetch of all trades sorted oldest first
-  const allTrades = await sb('webull_trades','GET',null,'?order=date.asc');
-  const trades = [...(allTrades||[])];
-  console.log('Total trades fetched:', trades.length);
-  console.log('Sell trades:', trades.filter(t=>t.action==='Sell').length);
-
-  // Group by ticker and compute running avg cost
-  const tickerState = {};
-  const tradeUpdates = [];
-  const holdingRPL = {}; // accumulate total realised PL per ticker
-
-  trades.forEach(t => {
-    const ticker = t.ticker;
-    if (!tickerState[ticker]) tickerState[ticker] = { shares: 0, totalCost: 0 };
-    const state = tickerState[ticker];
-
-    if (t.action === 'Buy') {
-      state.shares += parseFloat(t.qty);
-      state.totalCost += parseFloat(t.amount);
-    } else if (t.action === 'Sell') {
-      const avgCost = state.shares > 0 ? state.totalCost / state.shares : 0;
-      const realisedPL = Math.round((parseFloat(t.price) - avgCost) * parseFloat(t.qty) * 100) / 100;
-
-      // Update running state
-      state.shares -= parseFloat(t.qty);
-      state.totalCost -= avgCost * parseFloat(t.qty);
-      if (state.shares < 0.001) { state.shares = 0; state.totalCost = 0; }
-
-      tradeUpdates.push({ id: t.id, realised_pl: realisedPL });
-
-      // Accumulate for holdings
-      if (!holdingRPL[ticker]) holdingRPL[ticker] = 0;
-      holdingRPL[ticker] += realisedPL;
-    }
-  });
-
-  if (tradeUpdates.length === 0) {
-    alert('No sell trades found!');
-    return;
-  }
-
-  // Update webull_trades
-  for (const u of tradeUpdates) {
-    await sb('webull_trades','PATCH',{ realised_pl: u.realised_pl },`?id=eq.${u.id}`);
-  }
-
-  // Update webull_holdings total_realised_pl — update by ticker directly
-  for (const [ticker, rpl] of Object.entries(holdingRPL)) {
-    const totalRPL = Math.round(rpl * 100) / 100;
-    await sb('webull_holdings','PATCH',
-      { total_realised_pl: totalRPL },
-      `?ticker=eq.${ticker}&brokerage=eq.webull`
-    );
-    console.log(`Updated ${ticker} holdings RPL: ${totalRPL}`);
-  }
-
-  invalidateCache();
-  alert(`Updated ${tradeUpdates.length} sell trade(s) and holdings P&L!`);
-  loadWebull();
-}
-
-
-
-// ── Webull Trade History Filter ──
-let _wbAllTrades = [];
-
-function filterWbTrades() {
-  const sel = document.getElementById('wb-trades-month-filter');
-  if (!sel) return;
-  const filter = sel.value;
-  const trades = filter === 'all'
-    ? _wbAllTrades
-    : _wbAllTrades.filter(t => t.date.startsWith(filter));
-
-  document.getElementById('wb-trades-count').textContent = 
-    filter === 'all' ? `${_wbAllTrades.length} trades` : `${trades.length} trades (${sel.options[sel.selectedIndex]?.text||''})`;
-
-  document.getElementById('wb-trades-body').innerHTML = trades.map(t => {
-    const rpl = parseFloat(t.realised_pl||0);
-    return `<tr>
-      <td>${fmtDate(t.date)}</td>
-      <td><span class="ticker-badge webull">${t.ticker}</span></td>
-      <td class="${t.action==='Buy'?'action-buy':'action-sell'}">${t.action}</td>
-      <td>${fmtShares(t.qty)}</td>
-      <td>${fmtUSD(t.price)}</td>
-      <td>${fmtUSD(t.amount)}</td>
-      <td class="${rpl!==0?plColor(rpl):''}">${rpl!==0?plStr(rpl):'—'}</td>
-      <td>
-        <div style="display:flex;gap:5px">
-          <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
-            onclick="openEditTradeModal(${t.id},'${t.ticker}','${t.date}','${t.action}',${t.qty},${t.price},${t.amount},${t.realised_pl||0})">Edit</button>
-          <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
-            onclick="deleteWbTrade(${t.id},'${t.ticker}')">Del</button>
-        </div>
-      </td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="8" class="empty">No trades for this period</td></tr>';
+  _cmcHoldSort = { key:'ticker', dir:1 };
+  renderCMCActiveHoldings();
 }
 
 
@@ -3020,6 +1923,41 @@ async function showCMCDepositBreakdown() {
   </tr>`).join('') || '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--muted)">No deposits</td></tr>';
 
   document.getElementById('deposit-breakdown-modal').classList.add('open');
+}
+
+
+// ── CMC Active Holdings Sort ──
+let _cmcActiveData = [];
+let _cmcHoldSort = { key: 'ticker', dir: 1 };
+
+function sortCMCHoldings(key) {
+  if (_cmcHoldSort.key === key) { _cmcHoldSort.dir *= -1; }
+  else { _cmcHoldSort = { key, dir: key === 'ticker' ? 1 : -1 }; }
+  document.querySelectorAll('#page-cmc th').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    if (th.getAttribute('onclick') === `sortCMCHoldings('${key}')`)
+      th.classList.add(_cmcHoldSort.dir === 1 ? 'sort-asc' : 'sort-desc');
+  });
+  renderCMCActiveHoldings();
+}
+
+function renderCMCActiveHoldings() {
+  const sorted = [..._cmcActiveData].sort((a,b) => {
+    const av = typeof a[_cmcHoldSort.key] === 'string' ? a[_cmcHoldSort.key] : (a[_cmcHoldSort.key]||0);
+    const bv = typeof b[_cmcHoldSort.key] === 'string' ? b[_cmcHoldSort.key] : (b[_cmcHoldSort.key]||0);
+    return typeof av === 'string' ? av.localeCompare(bv)*_cmcHoldSort.dir : (av-bv)*_cmcHoldSort.dir;
+  });
+
+  document.getElementById('cmc-active-body').innerHTML = sorted.map(h => `<tr>
+    <td><span class="ticker-badge default" style="cursor:pointer" onclick="showCMCTradeHistory('${h.ticker}')">${h.ticker}</span></td>
+    <td style="font-family:var(--font-num)">${fmtShares(h.shares)}</td>
+    <td style="font-family:var(--font-num)">${fmtSGD(h.avg_cost)}</td>
+    <td style="font-family:var(--font-num)">${h.live_price>0?fmtSGD(h.live_price):'<span style="color:var(--muted)">—</span>'}</td>
+    <td style="font-family:var(--font-num);font-weight:600">${h.market_value>0?fmtSGD(h.market_value):'<span style="color:var(--muted)">—</span>'}</td>
+    <td class="${plColor(h.unrealised_pl)}" style="font-family:var(--font-num);font-weight:600">${h.market_value>0?plStr(h.unrealised_pl,'S$'):'—'}</td>
+    <td class="${plColor(h.return_pct)}" style="font-family:var(--font-num)">${h.market_value>0?fmtPct(h.return_pct):'—'}</td>
+    <td class="${h.realised_pl!==0?plColor(h.realised_pl):''}" style="${h.realised_pl===0?'color:var(--text)':''}font-family:var(--font-num)">${h.realised_pl!==0?plStr(h.realised_pl,'S$'):'—'}</td>
+  </tr>`).join('') || '<tr><td colspan="8" class="empty">No active holdings</td></tr>';
 }
 
 // ── CMC SG Dividend History Modal ──
