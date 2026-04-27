@@ -2490,23 +2490,26 @@ function renderWlWatchlist() {
 
 // ── Pre-seed watchlist if empty ──
 const WL_SEED = [
-  // From holdings (all brokers)
-  'VOO','SCHG','SPYI',          // Syfe
+  // Syfe holdings
+  'VOO','SCHG','SPYI',
+  // Webull / general US holdings
   'NVDA','AAPL','MSFT','AMZN','META','GOOG','NFLX','AMD','ADBE',
   'INTU','ASML','MU','IREN','DUOL','TXRH','NBIS','BKNG',
-  'SPYI','QBTS','TSM','MA','MCO','CRM','EFX','FICO',
+  'QBTS','TSM','MA','MCO','CRM','EFX','FICO',
   'JPM','UNH','MSCI','CCJ','ELF','DB','BE',
-  'VOO','SCHG','SMH','URA',    // ETFs
+  'SMH','URA',
   // Extra watchlist stocks
   'MRVL','SNDK','COHR','AMKR','VST','LRCX','CIEN',
 ];
 
 async function seedWatchlistIfEmpty() {
-  const existing = await sb('watchlist','GET',null,'?limit=1');
-  if (existing && existing.length > 0) return; // already has rows
-  // Deduplicate
+  // Fetch what's already in the table
+  const existing = await sb('watchlist','GET',null,'?select=ticker');
+  const existingSet = new Set((existing||[]).map(r => r.ticker.toUpperCase()));
   const unique = [...new Set(WL_SEED)];
-  for (const ticker of unique) {
+  // Only insert tickers not already present
+  const toAdd = unique.filter(t => !existingSet.has(t));
+  for (const ticker of toAdd) {
     await sb('watchlist','POST',{ ticker, exchange: 'US' });
   }
 }
