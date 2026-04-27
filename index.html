@@ -318,11 +318,16 @@ tr:hover td { background:var(--surface2); }
   <div class="watchlist" id="watchlist">
     <div class="watchlist-header">
       <span>Watchlist</span>
-      <div class="price-indicator"><div class="price-dot"></div></div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button data-refresh-btn onclick="refreshPrices()" title="Refresh all prices"
+          style="background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:10px;padding:3px 7px;border-radius:6px;font-family:var(--font-mono)">↻</button>
+        <div class="price-indicator"><div class="price-dot"></div></div>
+      </div>
     </div>
     <div id="watchlist-items">
       <div class="wl-loading">Loading...</div>
     </div>
+    <div data-last-updated style="font-size:9px;color:var(--muted);padding:6px 20px 4px;letter-spacing:.4px;text-transform:uppercase;font-family:var(--font-mono)">—</div>
   </div>
   <div class="sidebar-footer">
     <div class="price-indicator"><div class="price-dot"></div><span>Live prices</span></div>
@@ -914,10 +919,11 @@ tr:hover td { background:var(--surface2); }
       <div>
         <div class="page-title">Watchlist</div>
         <div class="page-subtitle">Live prices & performance — Day · Week · Month · 3M · YTD</div>
-        <div class="last-updated" id="wl-page-updated">Fetching prices...</div>
+        <div class="last-updated" data-last-updated id="wl-page-updated">Fetching prices...</div>
       </div>
-      <!-- Toggle buttons -->
+      <!-- Toggle buttons + refresh -->
       <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+        <button data-refresh-btn onclick="refreshPrices()" class="btn btn-sm" style="font-size:10px">↻ Refresh</button>
         <div style="display:flex;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:3px;gap:3px">
           <button id="wl-toggle-holdings" onclick="wlToggle('holdings')"
             style="padding:7px 18px;border-radius:8px;border:none;cursor:pointer;font-size:11px;font-family:var(--font-mono);letter-spacing:.4px;text-transform:uppercase;transition:all .2s;background:var(--accent);color:#fff">
@@ -1215,43 +1221,154 @@ async function sb(table, method='GET', body=null, query='') {
 }
 
 // ============================================================
-// LIVE PRICE FETCHING (Yahoo Finance via CORS proxy)
+// LIVE PRICE FETCHING (Cloudflare Worker → Google + Yahoo Finance)
 // ============================================================
+// Two-layer cache:
+//   1. In-memory (priceCache, dayChangeCache, periodCache) — fastest
+//   2. localStorage with 5-min TTL — survives page refresh
 let priceCache = {};
 let dayChangeCache = {};
 let periodCache = {};
-let _wlRows = []; // Supabase watchlist rows cache
+let _wlRows = [];
+const PRICE_TTL_MS = 5 * 60 * 1000;          // 5-minute cache
+const PRICE_STALE_MS = 24 * 60 * 60 * 1000;  // Show stale price (with warning) for up to 24h
+let _lastPriceFetch = 0;
 
-async function fetchPrices(tickers) {
-  const missing = tickers.filter(t => t && !priceCache[t]);
-  if (!missing.length) return;
+// ── Hydrate caches from localStorage on script load ──
+(function hydratePriceCache() {
+  try {
+    const raw = localStorage.getItem('priceCache_v2');
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    const now = Date.now();
+    Object.entries(data).forEach(([t, entry]) => {
+      // Keep entries up to 24h old, but mark stale ones for refresh
+      if (entry && now - entry.ts < PRICE_STALE_MS) {
+        priceCache[t]    = entry.price;
+        dayChangeCache[t]= entry.day;
+        periodCache[t]   = entry.periods || {};
+      }
+    });
+  } catch(e) { console.warn('Cache hydrate failed:', e.message); }
+})();
+
+function persistPriceCache() {
+  try {
+    const out = {};
+    const ts = Date.now();
+    Object.keys(priceCache).forEach(t => {
+      out[t] = {
+        ts,
+        price:   priceCache[t],
+        day:     dayChangeCache[t],
+        periods: periodCache[t] || {},
+      };
+    });
+    localStorage.setItem('priceCache_v2', JSON.stringify(out));
+  } catch(e) { console.warn('Cache persist failed:', e.message); }
+}
+
+function isPriceFresh(ticker) {
+  try {
+    const raw = localStorage.getItem('priceCache_v2');
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    return data[ticker] && (Date.now() - data[ticker].ts) < PRICE_TTL_MS;
+  } catch { return false; }
+}
+
+async function fetchPrices(tickers, opts = {}) {
+  const force = opts.force === true;
+  // Only fetch tickers that are missing OR have stale localStorage entries
+  const needFresh = tickers.filter(t => t && (force || !priceCache[t] || !isPriceFresh(t)));
+  if (!needFresh.length) return;
 
   try {
-    // Cloudflare Worker — fetches Google Finance prices server-side, no CORS issues
-    const r = await fetch(`${WORKER_URL}?tickers=${missing.join(',')}`, {
+    const r = await fetch(`${WORKER_URL}?tickers=${needFresh.join(',')}`, {
       signal: AbortSignal.timeout(15000)
     });
     if (!r.ok) throw new Error('Worker returned ' + r.status);
     const resp = await r.json();
     Object.entries(resp.data || {}).forEach(([ticker, d]) => {
-      priceCache[ticker] = d.price;
-      dayChangeCache[ticker] = d.dayChangePct;
-      // Store period % changes from same worker response
-      periodCache[ticker] = {
-        day:         d.dayChangePct         ?? null,
-        week:        d.weekChangePct        ?? null,
-        month:       d.monthChangePct       ?? null,
-        three_month: d.threeMonthChangePct  ?? null,
-        ytd:         d.ytdChangePct         ?? null,
+      if (d.price)               priceCache[ticker]    = d.price;
+      if (d.dayChangePct != null) dayChangeCache[ticker] = d.dayChangePct;
+      const newPeriods = {
+        day:         d.dayChangePct        ?? null,
+        week:        d.weekChangePct       ?? null,
+        month:       d.monthChangePct      ?? null,
+        three_month: d.threeMonthChangePct ?? null,
+        ytd:         d.ytdChangePct        ?? null,
       };
+      // Merge so missing fields don't overwrite cached good data
+      periodCache[ticker] = { ...(periodCache[ticker]||{}), ...Object.fromEntries(
+        Object.entries(newPeriods).filter(([_,v]) => v !== null && v !== undefined)
+      )};
     });
     Object.entries(resp.prices || {}).forEach(([ticker, p]) => {
-      if (!priceCache[ticker]) priceCache[ticker] = p;
+      if (p && !priceCache[ticker]) priceCache[ticker] = p;
     });
-    console.log('Prices + periods loaded:', Object.keys(priceCache).length, 'tickers');
+    _lastPriceFetch = Date.now();
+    persistPriceCache();
+    // Update any "Last updated" indicators on the page
+    updateAllLastUpdatedLabels();
+    console.log(`Prices loaded: ${Object.keys(priceCache).length} cached / ${needFresh.length} fetched`);
   } catch(e) {
     console.error('Price fetch error:', e.message);
   }
+}
+
+// ── "Last updated X ago" labels ──
+function updateAllLastUpdatedLabels() {
+  const labels = document.querySelectorAll('[data-last-updated]');
+  if (!_lastPriceFetch) {
+    // Try to read timestamp from localStorage
+    try {
+      const raw = localStorage.getItem('priceCache_v2');
+      if (raw) {
+        const data = JSON.parse(raw);
+        const tss = Object.values(data).map(e => e.ts).filter(Boolean);
+        if (tss.length) _lastPriceFetch = Math.max(...tss);
+      }
+    } catch{}
+  }
+  if (!_lastPriceFetch) return;
+  const ago = Math.floor((Date.now() - _lastPriceFetch) / 1000);
+  let txt = ago < 60 ? `${ago}s ago`
+          : ago < 3600 ? `${Math.floor(ago/60)}m ago`
+          : `${Math.floor(ago/3600)}h ago`;
+  labels.forEach(el => el.textContent = `Prices updated ${txt}`);
+}
+setInterval(updateAllLastUpdatedLabels, 30000); // refresh every 30s
+
+// Manual refresh button — clears in-memory cache and re-fetches
+async function refreshPrices() {
+  const allTickers = [...new Set([
+    ...((_wbHoldings||[]).filter(h=>h.status==='active').map(h=>h.ticker)),
+    ...((_syfeH||[]).map(h=>h.ticker)),
+    ...(getCMCActive ? getCMCActive().map(h=>h.ticker+'.SI') : []),
+    ..._wlRows.map(r => r.exchange==='SGX' ? r.ticker+'.SI' : r.ticker),
+  ])];
+  if (!allTickers.length) return;
+  // Show spinner on refresh buttons
+  document.querySelectorAll('[data-refresh-btn]').forEach(b => {
+    b.disabled = true;
+    b.dataset.origText = b.textContent;
+    b.textContent = '↻ Refreshing...';
+  });
+  await fetchPrices(allTickers, { force: true });
+  document.querySelectorAll('[data-refresh-btn]').forEach(b => {
+    b.disabled = false;
+    b.textContent = b.dataset.origText || '↻ Refresh';
+  });
+  // Reload current page so fresh prices appear
+  const hash = (window.location.hash || '#overview').slice(1);
+  if (hash === 'overview') loadOverview();
+  else if (hash === 'webull') loadWebull();
+  else if (hash === 'syfe') loadSyfe();
+  else if (hash === 'cmc') loadCMC();
+  else if (hash === 'watchlist') loadWatchlistPage();
+  else if (hash === 'dividends') loadDividends();
+  loadWatchlist(); // sidebar
 }
 
 function price(ticker) { return priceCache[ticker] || 0; }
@@ -1336,7 +1453,11 @@ async function loadAllData() {
   _dataLoaded = true;
 }
 
-function invalidateCache() { _dataLoaded = false; _syfeTrades = null; priceCache = {}; dayChangeCache = {}; periodCache = {}; }
+function invalidateCache() {
+  // Only clear data caches, NOT price caches (prices are time-based, not data-based)
+  _dataLoaded = false;
+  _syfeTrades = null;
+}
 
 // ============================================================
 // OVERVIEW
@@ -2533,7 +2654,6 @@ async function loadWatchlistPage() {
   ];
 
   const holdingTickers = [...new Set(holdingsList.map(h => h.ticker))];
-  holdingTickers.forEach(t => { delete priceCache[t]; delete periodCache[t]; delete dayChangeCache[t]; });
   await fetchPrices(holdingTickers);
 
   document.getElementById('wl-holdings-count').textContent = holdingsList.length + ' positions';
