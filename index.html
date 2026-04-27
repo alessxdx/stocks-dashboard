@@ -914,9 +914,42 @@ tr:hover td { background:var(--surface2); }
     <div class="page-subtitle">Live prices & performance — Day · Week · Month · 3M · YTD</div>
     <div class="last-updated" id="wl-page-updated">Fetching prices...</div>
   </div>
+
+  <!-- SECTION 1: MY HOLDINGS -->
+  <div class="section" style="margin-bottom:20px">
+    <div class="section-header">
+      <div>
+        <div class="section-title">My Holdings</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Auto-synced from your portfolios</div>
+      </div>
+      <span class="section-badge" id="wl-holdings-count">—</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Ticker</th>
+          <th>Broker</th>
+          <th>Live Price</th>
+          <th>Day %</th>
+          <th>Week %</th>
+          <th>Month %</th>
+          <th>3 Month %</th>
+          <th>YTD %</th>
+        </tr></thead>
+        <tbody id="wl-holdings-body">
+          <tr><td colspan="8" class="loading"><div class="spinner"></div>Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SECTION 2: WATCHLIST -->
   <div class="section">
     <div class="section-header">
-      <div class="section-title">All Stocks</div>
+      <div>
+        <div class="section-title">Watchlist</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Stocks you want to track</div>
+      </div>
       <div style="display:flex;gap:8px;align-items:center">
         <span class="section-badge" id="wl-count">—</span>
         <button class="btn btn-sm" onclick="openAddTickerModal()">+ Add Stock</button>
@@ -925,16 +958,17 @@ tr:hover td { background:var(--surface2); }
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th onclick="wlSort('ticker')">Ticker</th>
-          <th onclick="wlSort('price')">Live Price</th>
-          <th onclick="wlSort('day')" class="sort-desc">Day %</th>
-          <th onclick="wlSort('week')">Week %</th>
-          <th onclick="wlSort('month')">Month %</th>
-          <th onclick="wlSort('three_month')">3 Month %</th>
-          <th onclick="wlSort('ytd')">YTD %</th>
+          <th>Ticker</th>
+          <th>Live Price</th>
+          <th>Day %</th>
+          <th>Week %</th>
+          <th>Month %</th>
+          <th>3 Month %</th>
+          <th>YTD %</th>
+          <th></th>
         </tr></thead>
         <tbody id="wl-body">
-          <tr><td colspan="7" class="loading"><div class="spinner"></div>Loading...</td></tr>
+          <tr><td colspan="8" class="loading"><div class="spinner"></div>Loading...</td></tr>
         </tbody>
       </table>
     </div>
@@ -2349,60 +2383,106 @@ function showDivHistory(ticker, broker) {
 // _wlRows declared at top of script
 
 async function loadWatchlistPage() {
-  const body     = document.getElementById('wl-body');
+  const updatedEl = document.getElementById('wl-page-updated');
+
+  // ── helper: colour-coded % cell ──
+  function pctCell(val, colspan) {
+    if (val == null) return `<td style="color:var(--muted);text-align:right">—</td>`;
+    const cls = val >= 0 ? 'pos' : 'neg';
+    return `<td class="${cls}" style="font-family:var(--font-num);font-weight:600;text-align:right">${val>=0?'+':''}${val.toFixed(2)}%</td>`;
+  }
+
+  // ══════════════════════════════════════════
+  // SECTION 1 — MY HOLDINGS (from portfolio data)
+  // ══════════════════════════════════════════
+  await loadAllData();
+  const holdingsBody  = document.getElementById('wl-holdings-body');
+  const holdingsCount = document.getElementById('wl-holdings-count');
+
+  const wbActive  = (_wbHoldings||[]).filter(h => h.status==='active' && h.shares > 0.01);
+  const syfeH     = _syfeH || [];
+  const cmcActive = getCMCActive();
+
+  // Build a flat list: { ticker, displayTicker, broker, isSG }
+  const holdingsList = [
+    ...wbActive.map(h  => ({ ticker: h.ticker,        displayTicker: h.ticker,        broker: 'webull', isSG: false })),
+    ...syfeH.map(h     => ({ ticker: h.ticker,        displayTicker: h.ticker,        broker: 'syfe',   isSG: false })),
+    ...cmcActive.map(h => ({ ticker: h.ticker+'.SI',  displayTicker: h.ticker,        broker: 'cmc',    isSG: true  })),
+  ];
+
+  // Deduplicate by ticker (same stock in multiple brokers shows once per broker)
+  const holdingTickers = [...new Set(holdingsList.map(h => h.ticker))];
+  holdingTickers.forEach(t => { delete priceCache[t]; delete periodCache[t]; delete dayChangeCache[t]; });
+  await fetchPrices(holdingTickers);
+
+  if (holdingsCount) holdingsCount.textContent = holdingsList.length + ' positions';
+
+  const brokerBadge = b => `<span class="pill pill-${b}">${b==='cmc'?'CMC':b==='syfe'?'Syfe':'Webull'}</span>`;
+
+  if (holdingsBody) {
+    holdingsBody.innerHTML = holdingsList.map(h => {
+      const lp  = priceCache[h.ticker] || 0;
+      const prd = periodCache[h.ticker] || {};
+      const day = dayChangeCache[h.ticker] ?? null;
+      const priceStr = lp > 0 ? (h.isSG ? fmtSGD(lp) : fmtUSD(lp)) : '—';
+      return `<tr>
+        <td><span class="ticker-badge ${h.broker}">${h.displayTicker}</span></td>
+        <td>${brokerBadge(h.broker)}</td>
+        <td style="font-family:var(--font-num);font-weight:600">${priceStr}</td>
+        ${pctCell(day)}
+        ${pctCell(prd.week        ?? null)}
+        ${pctCell(prd.month       ?? null)}
+        ${pctCell(prd.three_month ?? null)}
+        ${pctCell(prd.ytd         ?? null)}
+      </tr>`;
+    }).join('') || '<tr><td colspan="8" class="empty">No active holdings</td></tr>';
+  }
+
+  // ══════════════════════════════════════════
+  // SECTION 2 — WATCHLIST (from Supabase)
+  // ══════════════════════════════════════════
+  const wlBody   = document.getElementById('wl-body');
   const countEl  = document.getElementById('wl-count');
-  const updatedEl= document.getElementById('wl-page-updated');
-  if (!body) return;
 
-  body.innerHTML = `<tr><td colspan="8" class="loading"><div class="spinner"></div>Loading...</td></tr>`;
-
-  // Fetch watchlist rows from Supabase
   const rows = await sb('watchlist','GET',null,'?order=created_at.asc');
   _wlRows = rows || [];
+  const wlTickers = _wlRows.map(r => r.exchange === 'SGX' ? r.ticker+'.SI' : r.ticker);
 
-  const tickers = _wlRows.map(r => r.exchange === 'SGX' ? r.ticker + '.SI' : r.ticker);
+  if (countEl) countEl.textContent = _wlRows.length + ' stocks';
 
-  if (countEl) countEl.textContent = tickers.length + ' stocks';
+  if (!_wlRows.length) {
+    if (wlBody) wlBody.innerHTML = '<tr><td colspan="8" class="empty">No stocks yet — click + Add Stock</td></tr>';
+  } else {
+    // Only fetch tickers not already in cache from Section 1
+    const missing = wlTickers.filter(t => !priceCache[t]);
+    if (missing.length) await fetchPrices(missing);
 
-  if (!tickers.length) {
-    body.innerHTML = '<tr><td colspan="8" class="empty">No stocks in watchlist — click + Add Stock to get started</td></tr>';
-    return;
+    if (wlBody) {
+      wlBody.innerHTML = _wlRows.map(r => {
+        const t   = r.exchange === 'SGX' ? r.ticker+'.SI' : r.ticker;
+        const isSG = r.exchange === 'SGX';
+        const lp  = priceCache[t] || 0;
+        const prd = periodCache[t] || {};
+        const day = dayChangeCache[t] ?? null;
+        const priceStr = lp > 0 ? (isSG ? fmtSGD(lp) : fmtUSD(lp)) : '—';
+        return `<tr>
+          <td><span class="ticker-badge default">${r.ticker}</span></td>
+          <td style="font-family:var(--font-num);font-weight:600">${priceStr}</td>
+          ${pctCell(day)}
+          ${pctCell(prd.week        ?? null)}
+          ${pctCell(prd.month       ?? null)}
+          ${pctCell(prd.three_month ?? null)}
+          ${pctCell(prd.ytd         ?? null)}
+          <td style="text-align:right">
+            <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
+              onclick="removeWatchlistTicker(${r.id},'${r.ticker}')">✕</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
   }
-
-  // Force fresh price fetch
-  tickers.forEach(t => { delete priceCache[t]; delete periodCache[t]; delete dayChangeCache[t]; });
-  await fetchPrices(tickers);
 
   if (updatedEl) updatedEl.textContent = 'Live prices as of ' + new Date().toLocaleTimeString('en-SG');
-
-  function pctCell(val) {
-    if (val == null) return '<td style="color:var(--muted);text-align:right">—</td>';
-    const cls = val >= 0 ? 'pos' : 'neg';
-    return `<td class="${cls}" style="font-family:var(--font-num);font-weight:600;text-align:right">${(val>=0?'+':'')+val.toFixed(2)}%</td>`;
-  }
-
-  body.innerHTML = _wlRows.map(r => {
-    const t         = r.exchange === 'SGX' ? r.ticker + '.SI' : r.ticker;
-    const isSG      = r.exchange === 'SGX';
-    const livePrice = priceCache[t] || 0;
-    const dayChg    = dayChangeCache[t] ?? null;
-    const prd       = periodCache[t] || {};
-    const priceStr  = livePrice > 0 ? (isSG ? fmtSGD(livePrice) : fmtUSD(livePrice)) : '—';
-
-    return `<tr>
-      <td><span class="ticker-badge default">${r.ticker}</span></td>
-      <td style="font-family:var(--font-num);font-weight:600">${priceStr}</td>
-      ${pctCell(dayChg)}
-      ${pctCell(prd.week   ?? null)}
-      ${pctCell(prd.month  ?? null)}
-      ${pctCell(prd.three_month ?? null)}
-      ${pctCell(prd.ytd    ?? null)}
-      <td style="text-align:right">
-        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
-          onclick="removeWatchlistTicker(${r.id},'${r.ticker}')">✕</button>
-      </td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="8" class="empty">No stocks in watchlist</td></tr>';
 }
 
 async function removeWatchlistTicker(id, ticker) {
