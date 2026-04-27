@@ -2181,13 +2181,9 @@ let _fxFilter = 'all';
 async function loadFX() {
   await loadAllData();
   const fx = (_fx||[]);
-  const filterEl = document.getElementById('fx-filter');
-  if (filterEl) _fxFilter = filterEl.value || 'all';
-
-  const filtered = _fxFilter === 'all' ? fx : fx.filter(f => f.brokerage === _fxFilter);
   const body = document.getElementById('fx-body');
   if (!body) return;
-
+  const filtered = fx;
   body.innerHTML = filtered.sort((a,b) => new Date(b.date)-new Date(a.date)).map(f => `<tr>
     <td>${fmtDate(f.date)}</td>
     <td style="text-transform:capitalize">${f.brokerage}</td>
@@ -2204,8 +2200,8 @@ async function loadFX() {
   // Summary
   const totalSGDtoUSD = fx.filter(f=>f.from_currency==='SGD'&&f.to_currency==='USD').reduce((s,f)=>s+f.amount_from,0);
   const totalUSDtoSGD = fx.filter(f=>f.from_currency==='USD'&&f.to_currency==='SGD').reduce((s,f)=>s+f.amount_from,0);
-  const el1 = document.getElementById('fx-sgd-usd'); if(el1) el1.textContent = fmtSGD(totalSGDtoUSD);
-  const el2 = document.getElementById('fx-usd-sgd'); if(el2) el2.textContent = fmtUSD(totalUSDtoSGD);
+  const el1 = document.getElementById('fx-sgd-to-usd-sgd'); if(el1) el1.textContent = fmtSGD(totalSGDtoUSD);
+  const el2 = document.getElementById('fx-usd-to-sgd-usd'); if(el2) el2.textContent = fmtUSD(totalUSDtoSGD);
 }
 
 async function deleteFX(id) {
@@ -2253,10 +2249,10 @@ async function loadDividends() {
   const allTotal = usTotal + syTotal; // USD total (SGD separate)
 
   // Summary cards
-  const el1 = document.getElementById('div-total'); if(el1) el1.innerHTML = fmtUSD(allTotal) + '<br><span style="font-size:12px;color:var(--muted)">+'+fmtSGD(sgTotal)+'</span>';
-  const el2 = document.getElementById('div-wb-total'); if(el2) el2.textContent = fmtUSD(usTotal);
-  const el3 = document.getElementById('div-cmc-total'); if(el3) el3.textContent = fmtSGD(sgTotal);
-  const el4 = document.getElementById('div-sy-total'); if(el4) el4.textContent = fmtUSD(syTotal);
+  const el1 = document.getElementById('div-grand-total'); if(el1) el1.innerHTML = fmtUSD(allTotal) + '<br><span style="font-size:12px;color:var(--muted)">+'+fmtSGD(sgTotal)+'</span>';
+  const el2 = document.getElementById('div-us-total'); if(el2) el2.textContent = fmtUSD(usTotal);
+  const el3 = document.getElementById('div-sg-total'); if(el3) el3.textContent = fmtSGD(sgTotal);
+  const el4 = document.getElementById('div-syfe-total-card'); if(el4) el4.textContent = fmtUSD(syTotal);
 
   // Fetch dividend data from worker for next dates
   let divData = {};
@@ -2769,8 +2765,6 @@ function filterWbTrades() {
 
 
 
-async 
-
 async function recalculateAllPL() {
   const allTrades=await sb('webull_trades','GET',null,'?order=date.asc');
   const trades=[...(allTrades||[])];
@@ -2808,6 +2802,42 @@ async
 // ── CMC Div modal ──
 async 
 
+
+// ── Global modal close: click outside or ESC ──
+document.addEventListener('click', function(e) {
+  if (e.target.classList.contains('modal-overlay')) {
+    e.target.classList.remove('open');
+  }
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.open').forEach(function(m) { m.classList.remove('open'); });
+  }
+});
+
+// ── FX Filter ──
+function filterFX(broker, el) {
+  document.querySelectorAll('.broker-tab').forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  loadFX_withFilter(broker);
+}
+
+async function loadFX_withFilter(filter) {
+  await loadAllData();
+  const fx = (_fx||[]);
+  const filtered = !filter || filter==='all' ? fx : fx.filter(f=>f.brokerage===filter);
+  const body = document.getElementById('fx-body');
+  if (!body) return;
+  body.innerHTML = filtered.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(f=>`<tr>
+    <td>${fmtDate(f.date)}</td>
+    <td style="text-transform:capitalize">${f.brokerage==='cmc'?'CMC Invest':f.brokerage==='syfe'?'Syfe':'Webull'}</td>
+    <td>${f.from_currency} → ${f.to_currency}</td>
+    <td style="font-family:var(--font-num)">${f.rate}</td>
+    <td style="font-family:var(--font-num)">${f.from_currency==='SGD'?fmtSGD(f.amount_from):fmtUSD(f.amount_from)}</td>
+    <td style="font-family:var(--font-num)">${f.to_currency==='USD'?fmtUSD(f.amount_to):fmtSGD(f.amount_to)}</td>
+    <td><button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40" onclick="deleteFX(${f.id})">Del</button></td>
+  </tr>`).join('')||'<tr><td colspan="7" class="empty">No conversions</td></tr>';
+}
 
 </script>
 
