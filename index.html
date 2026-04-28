@@ -1923,7 +1923,11 @@ function showPage(id, el) {
     if (navEl) navEl.classList.add('active');
   }
   // Update URL hash so refresh works
-  window.location.hash = id;
+  // Mark internal so the hashchange listener doesn't double-trigger
+  if (window.location.hash !== '#'+id) {
+    _internalHashChange = true;
+    window.location.hash = id;
+  }
   if (id === 'overview') loadOverview();
   else if (id === 'webull') loadWebull();
   else if (id === 'syfe') loadSyfe();
@@ -2751,7 +2755,11 @@ async function showStockDetail(ticker, broker, isSG, sourcePage) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-stock').classList.add('active');
-  window.location.hash = 'stock/' + ticker;
+  // Mark internal so hashchange listener doesn't double-trigger
+  if (window.location.hash !== '#stock/'+ticker) {
+    _internalHashChange = true;
+    window.location.hash = 'stock/' + ticker;
+  }
 
   // Scroll to top — fixes the "page opens scrolled down" issue
   window.scrollTo({ top: 0, behavior: 'instant' });
@@ -4034,7 +4042,22 @@ async function deleteCMCTrade(id, ticker) {
 // ============================================================
 // INIT
 // ============================================================
-loadOverview();
+let _internalHashChange = false;
+
+// Honour the URL hash on first load (so direct links + reload work)
+restorePageFromHash();
+
+// Listen for browser back/forward navigation
+// Without this, the SPA wouldn't know when to swap pages on hash change
+window.addEventListener('hashchange', () => {
+  // Skip if we triggered the change ourselves via showPage()
+  if (_internalHashChange) {
+    _internalHashChange = false;
+    return;
+  }
+  // User pressed browser back/forward — re-render the page that the URL now points to
+  restorePageFromHash();
+});
 
 // ============================================================
 // WATCHLIST
