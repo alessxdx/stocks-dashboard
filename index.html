@@ -121,6 +121,54 @@ body { background:var(--bg); color:var(--text); font-family:var(--font-mono); mi
 .chart-legend-value { font-family:var(--font-num); font-weight:600; color:var(--muted); font-size:11px; }
 .stat-sub { font-size:11px; color:var(--muted); margin-top:4px; }
 #page-insights { min-width:0; overflow:hidden; }
+
+/* ── Holdings card list (clean) ── */
+.holding-row {
+  display:grid;
+  grid-template-columns: 56px 1fr 90px 110px;
+  align-items:center;
+  gap:14px;
+  padding:14px 20px;
+  border-bottom:1px solid var(--border);
+  position:relative;
+  transition:background .15s;
+}
+.holding-row:last-child { border-bottom:none; }
+.holding-row:hover { background:var(--surface2); }
+.holding-row .h-bar {
+  position:absolute; left:0; top:0; bottom:0;
+  background:linear-gradient(90deg, var(--accent)15, transparent);
+  pointer-events:none;
+  z-index:0;
+}
+.holding-row > * { position:relative; z-index:1; }
+.h-logo {
+  width:42px; height:42px; border-radius:50%;
+  background:#fff; border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  overflow:hidden; flex-shrink:0;
+}
+.h-logo img { width:100%; height:100%; object-fit:contain; padding:2px; }
+.h-logo.fallback {
+  background:linear-gradient(135deg, #1f2937, #111827);
+  color:#cdd5e0; font-family:var(--font-mono); font-weight:700;
+  font-size:11px; letter-spacing:.4px;
+}
+.h-logo.cmc { background:linear-gradient(135deg, #052e1d, #064430); color:#3dd68c; border-color:#3dd68c40; }
+.h-ticker {
+  font-family:var(--font-mono); font-weight:700; font-size:15px;
+  color:var(--text); letter-spacing:.3px;
+}
+.h-pct { text-align:right; font-family:var(--font-num); font-weight:700; font-size:15px; color:var(--text); }
+.h-return {
+  text-align:right; font-family:var(--font-num); font-weight:700; font-size:14px;
+  display:flex; align-items:center; justify-content:flex-end; gap:5px;
+}
+@media (max-width:780px) {
+  .holding-row { grid-template-columns: 44px 1fr 70px 90px; gap:10px; padding:12px 14px; }
+  .h-logo { width:36px; height:36px; }
+  .h-ticker { font-size:13px; }
+}
 .section-header {
   padding:16px 20px; border-bottom:1px solid var(--border);
   display:flex; align-items:center; justify-content:space-between;
@@ -1033,13 +1081,18 @@ tr:hover td { background:var(--surface2); }
     </div>
   </div>
 
-  <!-- Top 10 Holdings Bar Chart -->
+  <!-- Holdings list with logos -->
   <div class="section">
     <div class="section-header">
-      <div class="section-title">Top 10 Holdings</div>
-      <div style="font-size:11px;color:var(--muted)">Largest positions by market value</div>
+      <div>
+        <div class="section-title">All Holdings</div>
+        <div style="font-size:11px;color:var(--muted)">Sorted by portfolio weight</div>
+      </div>
+      <span class="section-badge" id="ins-holdings-count">—</span>
     </div>
-    <div class="chart-container" style="height:380px"><canvas id="chart-top10"></canvas></div>
+    <div id="ins-holdings-list" style="padding:6px 0">
+      <div class="loading" style="padding:30px"><div class="spinner"></div>Loading holdings...</div>
+    </div>
   </div>
 </div>
 <div id="page-watchlist" class="page">
@@ -1860,6 +1913,54 @@ async function loadInsights() {
     warnEl.style.display = 'none';
   }
 
+  // All holdings (not just top 10) — for the card list
+  // Each entry already has cost basis info for return calculation
+  const allHoldings = [];
+  wbActive.forEach(h => {
+    const lp = price(h.ticker), valUSD = h.shares * lp;
+    const costUSD = h.total_cost || (h.shares * (h.avg_cost||0));
+    allHoldings.push({
+      ticker:h.ticker, broker:'Webull', isSG:false,
+      shares:h.shares, avgCost:h.avg_cost||0, livePrice:lp,
+      valueUSD: valUSD, valueSGD: valUSD * usdToSgd, valueNative: valUSD,
+      costUSD: costUSD, costSGD: costUSD * usdToSgd, costNative: costUSD,
+      nativeCcy:'USD',
+    });
+  });
+  syfeH.forEach(h => {
+    const lp = price(h.ticker), valUSD = h.shares * lp;
+    const costUSD = h.total_invested || (h.shares * (h.avg_cost||0));
+    allHoldings.push({
+      ticker:h.ticker, broker:'Syfe', isSG:false,
+      shares:h.shares, avgCost:h.avg_cost||0, livePrice:lp,
+      valueUSD: valUSD, valueSGD: valUSD * usdToSgd, valueNative: valUSD,
+      costUSD: costUSD, costSGD: costUSD * usdToSgd, costNative: costUSD,
+      nativeCcy:'USD',
+    });
+  });
+  cmcActive.forEach(h => {
+    const lp = price(h.ticker+'.SI'), valSGD = h.shares * lp;
+    const costSGD = h.cost || (h.shares * (h.avgPrice||0));
+    allHoldings.push({
+      ticker:h.ticker, broker:'CMC Invest', isSG:true,
+      shares:h.shares, avgCost:h.avgPrice||0, livePrice:lp,
+      valueUSD: valSGD * sgdToUsd, valueSGD: valSGD, valueNative: valSGD,
+      costUSD: costSGD * sgdToUsd, costSGD: costSGD, costNative: costSGD,
+      nativeCcy:'SGD',
+    });
+  });
+
+  // Sort by selected currency value
+  allHoldings.forEach(h => {
+    h.value = useUSD ? h.valueUSD : h.valueSGD;
+    h.cost  = useUSD ? h.costUSD  : h.costSGD;
+    h.returnPct = h.cost > 0 ? ((h.value - h.cost) / h.cost) * 100 : 0;
+    h.pctOfPortfolio = (h.value / totalValue) * 100;
+  });
+  allHoldings.sort((a,b) => b.value - a.value);
+
+  renderHoldingsList(allHoldings, fmtCcy);
+
   // ── Render charts ──
   Object.values(_insightsCharts).forEach(c => { try { c && c.destroy(); } catch(e){} });
   _insightsCharts = {};
@@ -1869,12 +1970,88 @@ async function loadInsights() {
   _insightsCharts.geo       = renderDoughnut('chart-geo',       byGeo,    GEO_COLORS,    fmtCcy);
   _insightsCharts.assettype = renderDoughnut('chart-assettype', byAsset,  ASSET_COLORS,  fmtCcy);
   _insightsCharts.broker    = renderDoughnut('chart-broker',    byBroker, BROKER_COLORS, fmtCcy);
-  _insightsCharts.top10     = renderTop10('chart-top10', top10, totalValue, fmtCcy, ccyLabel);
 
   renderLegend('legend-sector',    bySector, SECTOR_COLORS);
   renderLegend('legend-geo',       byGeo,    GEO_COLORS);
   renderLegend('legend-assettype', byAsset,  ASSET_COLORS);
   renderLegend('legend-broker',    byBroker, BROKER_COLORS);
+}
+
+// ── Holdings card list with logos ──
+// Tickers where Financial Modeling Prep CDN doesn't work well — fallback to Clearbit by domain
+const TICKER_TO_DOMAIN = {
+  'GOOG':'google.com','GOOGL':'google.com','META':'meta.com','BRK.B':'berkshirehathaway.com',
+  'BKNG':'booking.com','NFLX':'netflix.com','AAPL':'apple.com','MSFT':'microsoft.com',
+  'AMZN':'amazon.com','NVDA':'nvidia.com','TSM':'tsmc.com','ASML':'asml.com',
+  'JPM':'jpmorgan.com','UNH':'unitedhealthgroup.com','CRM':'salesforce.com',
+  'ADBE':'adobe.com','AMD':'amd.com','INTU':'intuit.com','MA':'mastercard.com',
+  'MCO':'moodys.com','MSCI':'msci.com','FICO':'fico.com','EFX':'equifax.com',
+  'TXRH':'texasroadhouse.com','DUOL':'duolingo.com','ELF':'elfcosmetics.com',
+  'BE':'bloomenergy.com','VST':'vistracorp.com','CCJ':'cameco.com',
+  'MU':'micron.com','IREN':'irisenergy.com','NBIS':'nebius.com','QBTS':'dwavequantum.com',
+  'MRVL':'marvell.com','SNDK':'sandisk.com','COHR':'coherent.com','AMKR':'amkor.com',
+  'LRCX':'lamresearch.com','CIEN':'ciena.com','DB':'db.com','NFLX':'netflix.com',
+  // ETFs (issuers)
+  'VOO':'vanguard.com','SCHG':'schwab.com','SPYI':'neosfunds.com','SMH':'vaneck.com','URA':'globalxetfs.com',
+};
+
+function getLogoUrl(ticker, isSG) {
+  if (isSG) return null;
+  const clean = ticker.toUpperCase();
+  // Primary: Financial Modeling Prep stock logo CDN
+  return `https://financialmodelingprep.com/image-stock/${clean}.png`;
+}
+
+function getLogoFallbackUrl(ticker) {
+  const clean = ticker.toUpperCase();
+  const domain = TICKER_TO_DOMAIN[clean];
+  return domain ? `https://logo.clearbit.com/${domain}` : null;
+}
+
+function renderHoldingsList(holdings, fmtCcy) {
+  const el = document.getElementById('ins-holdings-list');
+  const countEl = document.getElementById('ins-holdings-count');
+  if (!el) return;
+  if (countEl) countEl.textContent = `${holdings.length} positions`;
+  if (!holdings.length) { el.innerHTML = '<div class="empty" style="padding:30px">No active holdings</div>'; return; }
+
+  el.innerHTML = holdings.map(h => {
+    const fb     = getLogoFallbackUrl(h.ticker);
+    const primary= getLogoUrl(h.ticker, h.isSG);
+    const initials = h.ticker.slice(0,3);
+
+    let logoHTML;
+    if (h.isSG) {
+      logoHTML = `<div class="h-logo cmc">${initials}</div>`;
+    } else if (primary) {
+      // Two-tier fallback: primary fails → try clearbit → final ticker badge
+      const fbAttr = fb ? `this.onerror=null;this.src='${fb}';this.dataset.tier='2';`
+                        : `this.onerror=null;this.parentNode.classList.add('fallback');this.style.display='none';this.parentNode.textContent='${initials}';`;
+      const finalFallback = `this.onerror=null;this.parentNode.classList.add('fallback');this.style.display='none';this.parentNode.textContent='${initials}';`;
+      logoHTML = `<div class="h-logo">
+        <img src="${primary}" alt="${h.ticker}" loading="lazy"
+          onerror="${fb ? `this.onerror=function(){${finalFallback}};this.src='${fb}'` : finalFallback}">
+      </div>`;
+    } else {
+      logoHTML = `<div class="h-logo fallback">${initials}</div>`;
+    }
+
+    const flag = h.isSG ? ' 🇸🇬' : '';
+    const retClass = h.returnPct >= 0 ? 'pos' : 'neg';
+    const retArrow = h.returnPct >= 0 ? '↑' : '↓';
+    const retStr   = `${retArrow} ${(h.returnPct>=0?'+':'')}${h.returnPct.toFixed(2)}%`;
+
+    // Bar width = % of portfolio (amplified for visibility on smaller positions)
+    const barPct = Math.min(h.pctOfPortfolio * 2.5, 100);
+
+    return `<div class="holding-row">
+      <div class="h-bar" style="width:${barPct}%"></div>
+      ${logoHTML}
+      <div class="h-ticker">${h.ticker}${flag}</div>
+      <div class="h-pct">${h.pctOfPortfolio.toFixed(2)}%</div>
+      <div class="h-return ${retClass}">${retStr}</div>
+    </div>`;
+  }).join('');
 }
 
 function renderDoughnut(canvasId, data, colorMap, fmtCcy) {
@@ -1929,69 +2106,6 @@ function renderDoughnut(canvasId, data, colorMap, fmtCcy) {
               return lines;
             }
           }
-        }
-      }
-    }
-  });
-}
-
-function renderTop10(canvasId, data, totalValue, fmtCcy, ccyLabel) {
-  const ctx = document.getElementById(canvasId);
-  if (!ctx) return null;
-  // Decorate label so SGX stocks are visually distinct
-  const labels = data.map(d => d.isSG ? `${d.ticker} 🇸🇬` : d.ticker);
-  return new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Market Value',
-        data: data.map(d => d.value),
-        backgroundColor: data.map((d,i) => d.isSG ? '#10b981' : `hsl(${210 - i*8}, 70%, ${60 - i*2}%)`),
-        borderRadius: 6,
-        barThickness: 24,
-        _native: data.map(d => ({ ccy: d.nativeCcy, val: d.valueNative })),
-      }]
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: { duration: 400 },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#1a1f2e',
-          borderColor: '#2a3142',
-          borderWidth: 1,
-          padding: 12,
-          titleFont: { size: 13, weight: '700', family: 'DM Mono, monospace' },
-          bodyFont:  { size: 11, family: 'DM Mono, monospace' },
-          callbacks: {
-            label: (ctx) => {
-              const pct = (ctx.parsed.x/totalValue*100).toFixed(1);
-              return `${fmtCcy(ctx.parsed.x)} (${pct}%)`;
-            },
-            afterLabel: (ctx) => {
-              const native = ctx.dataset._native[ctx.dataIndex];
-              if (!native || native.ccy === ccyLabel) return null;
-              const fmt = native.ccy === 'USD' ? fmtUSD : fmtSGD;
-              return `Native: ${fmt(native.val)} ${native.ccy}`;
-            }
-          }
-        }
-      },
-      scales: {
-        x: {
-          grid: { color: '#2a3142' },
-          ticks: {
-            color: '#7d8597', font: { size: 11 },
-            callback: v => (ccyLabel==='USD'?'$':'S$') + (v/1000).toFixed(0) + 'k'
-          }
-        },
-        y: {
-          grid: { display: false },
-          ticks: { color: '#cdd5e0', font: { family: 'DM Mono, monospace', size: 12, weight: '600' } }
         }
       }
     }
