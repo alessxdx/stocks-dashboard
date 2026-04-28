@@ -79,6 +79,7 @@ body { background:var(--bg); color:var(--text); font-family:var(--font-mono); mi
 .stat-grid { display:grid; gap:16px; margin-bottom:28px; }
 .stat-grid-4 { grid-template-columns:repeat(4,1fr); }
 .stat-grid-5 { grid-template-columns:repeat(5,1fr); }
+.stat-grid-6 { grid-template-columns:repeat(6,1fr); }
 .stat-grid-3 { grid-template-columns:repeat(3,1fr); }
 .stat-grid-2 { grid-template-columns:repeat(2,1fr); }
 .stat-card {
@@ -337,12 +338,16 @@ tr:hover td { background:var(--surface2); }
 .btn-submit { background:var(--accent); border-color:var(--accent); color:#fff; }
 .btn-submit:hover { background:#6b5ce7; }
 
+@media (max-width:1400px) {
+  .stat-grid-6 { grid-template-columns:repeat(3,1fr); }
+}
 @media (max-width:1200px) {
   .stat-grid-5 { grid-template-columns:repeat(3,1fr); }
 }
 @media (max-width:900px) {
   .stat-grid-4 { grid-template-columns:repeat(2,1fr); }
   .stat-grid-5 { grid-template-columns:repeat(2,1fr); }
+  .stat-grid-6 { grid-template-columns:repeat(2,1fr); }
   .sidebar { width:64px; }
   .sidebar .logo, .sidebar .nav-item span, .sidebar-footer { display:none; }
   .main { margin-left:64px; padding:20px; }
@@ -1349,7 +1354,7 @@ tr:hover td { background:var(--surface2); }
   </div>
 
   <!-- KPI cards -->
-  <div class="stat-grid stat-grid-5" style="margin-bottom:20px">
+  <div class="stat-grid stat-grid-6" style="margin-bottom:20px">
     <div class="stat-card">
       <div class="stat-label">Total Shares</div>
       <div class="stat-value" id="stock-shares">—</div>
@@ -1369,6 +1374,11 @@ tr:hover td { background:var(--surface2); }
       <div class="stat-label">Unrealised P&L</div>
       <div class="stat-value" id="stock-unreal-pl">—</div>
       <div class="stat-sub" id="stock-unreal-pct">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Realised P&L</div>
+      <div class="stat-value" id="stock-real-pl">—</div>
+      <div class="stat-sub" id="stock-real-sub">—</div>
     </div>
     <div class="stat-card gold">
       <div class="stat-label">Total Dividends</div>
@@ -2782,16 +2792,20 @@ function goBackFromStock() {
 async function loadStockDetail(ticker, broker, isSG) {
   await loadAllData();
 
-  // Auto-detect broker if not given (look up where the ticker exists)
+  // Auto-detect broker if not given (look up where the ticker exists in active OR closed)
   let detectedBroker = broker;
   let detectedIsSG = !!isSG;
   if (!detectedBroker) {
+    // Webull: any holding (active or closed)
     const wb = (_wbHoldings||[]).find(h => h.ticker === ticker);
     const sy = (_syfeH||[]).find(h => h.ticker === ticker);
-    const cmc = getCMCActive().find(h => h.ticker === ticker);
+    // CMC: check both active and closed positions, plus any historical trades
+    const cmcA = getCMCActive().find(h => h.ticker === ticker);
+    const cmcC = (typeof getCMCClosed === 'function' ? getCMCClosed() : []).find(h => h.ticker === ticker);
+    const cmcAnyTrade = (_cmcTrades||[]).find(t => t.ticker === ticker && t.brokerage === 'cmc');
     if (wb) detectedBroker = 'webull';
     else if (sy) detectedBroker = 'syfe';
-    else if (cmc) { detectedBroker = 'cmc'; detectedIsSG = true; }
+    else if (cmcA || cmcC || cmcAnyTrade) { detectedBroker = 'cmc'; detectedIsSG = true; }
   }
   _stockCurrent = { ticker, broker: detectedBroker, isSG: detectedIsSG };
 
@@ -2810,9 +2824,7 @@ async function loadStockDetail(ticker, broker, isSG) {
   const sectorName = getSector(ticker, detectedIsSG);
   const geoName = getGeography(detectedIsSG);
   const brokerLabel = detectedBroker === 'cmc' ? 'CMC Invest' : detectedBroker === 'syfe' ? 'Syfe' : detectedBroker === 'webull' ? 'Webull' : 'Watchlist';
-  document.getElementById('stock-broker-badge').innerHTML = detectedBroker
-    ? `<span class="pill pill-${detectedBroker}">${brokerLabel}</span>`
-    : `<span class="pill" style="background:#1a2030;color:var(--muted);border:1px solid var(--border)">Watchlist only</span>`;
+  // (broker badge is set in the KPI section below to combine with the optional CLOSED badge)
   document.getElementById('stock-subtitle').textContent = `${sectorName} · ${geoName}`;
   document.getElementById('stock-price').textContent = livePrice > 0 ? fmtCcy(livePrice) : '—';
   if (dayChg != null) {
@@ -2824,30 +2836,53 @@ async function loadStockDetail(ticker, broker, isSG) {
     document.getElementById('stock-day-change').textContent = '—';
   }
 
-  // ── KPIs (your position) ──
-  let shares = 0, avgCost = 0, totalCost = 0;
+  // ── KPIs (your position) — works for both active and closed ──
+  let shares = 0, avgCost = 0, totalCost = 0, isClosedPosition = false;
   if (detectedBroker === 'webull') {
     const h = (_wbHoldings||[]).find(x => x.ticker === ticker);
-    if (h) { shares = h.shares; avgCost = h.avg_cost||0; totalCost = h.total_cost || (shares*avgCost); }
+    if (h) {
+      shares = h.shares || 0;
+      avgCost = h.avg_cost||0;
+      totalCost = h.total_cost || (shares*avgCost);
+      isClosedPosition = (h.status === 'closed' || shares <= 0.01);
+    }
   } else if (detectedBroker === 'syfe') {
     const h = (_syfeH||[]).find(x => x.ticker === ticker);
     if (h) { shares = h.shares; avgCost = h.avg_cost||0; totalCost = h.total_invested || (shares*avgCost); }
   } else if (detectedBroker === 'cmc') {
-    const h = getCMCActive().find(x => x.ticker === ticker);
-    if (h) { shares = h.shares; avgCost = h.avgPrice||0; totalCost = h.cost || (shares*avgCost); }
+    const hA = getCMCActive().find(x => x.ticker === ticker);
+    const hC = (typeof getCMCClosed === 'function' ? getCMCClosed() : []).find(x => x.ticker === ticker);
+    const h = hA || hC;
+    if (h) {
+      shares = h.shares || 0;
+      avgCost = h.avgPrice||0;
+      totalCost = h.cost || (shares*avgCost);
+      isClosedPosition = !hA && !!hC;
+    }
   }
 
-  const mktValue = shares * livePrice;
-  const unreal = mktValue - totalCost;
-  const unrealPct = totalCost > 0 ? unreal/totalCost*100 : 0;
+  const mktValue = isClosedPosition ? 0 : shares * livePrice;
+  const unreal = isClosedPosition ? 0 : (mktValue - totalCost);
+  const unrealPct = (!isClosedPosition && totalCost > 0) ? unreal/totalCost*100 : 0;
+
+  // Show closed badge in hero subtitle if applicable
+  const closedBadge = isClosedPosition
+    ? `<span style="margin-left:8px;padding:3px 9px;background:#1f2937;border:1px solid #4b5563;border-radius:8px;font-family:var(--font-mono);font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:#9ca3af">CLOSED</span>`
+    : '';
+  document.getElementById('stock-broker-badge').innerHTML = (detectedBroker
+    ? `<span class="pill pill-${detectedBroker}">${brokerLabel}</span>`
+    : `<span class="pill" style="background:#1a2030;color:var(--muted);border:1px solid var(--border)">Watchlist only</span>`) + closedBadge;
 
   document.getElementById('stock-shares').textContent = shares > 0 ? fmtShares(shares) : '0';
-  document.getElementById('stock-shares-sub').textContent = shares > 0 ? `${brokerLabel}` : 'No active position';
+  document.getElementById('stock-shares-sub').textContent = isClosedPosition ? 'Position closed' : (shares > 0 ? brokerLabel : 'No active position');
   document.getElementById('stock-mkt-value').textContent = mktValue > 0 ? fmtCcy(mktValue) : '—';
-  document.getElementById('stock-mkt-value-sub').textContent = livePrice > 0 ? `@ ${fmtCcy(livePrice)}` : '—';
+  document.getElementById('stock-mkt-value-sub').textContent = isClosedPosition ? 'N/A — closed' : (livePrice > 0 ? `@ ${fmtCcy(livePrice)}` : '—');
   document.getElementById('stock-total-cost').textContent = totalCost > 0 ? fmtCcy(totalCost) : '—';
   document.getElementById('stock-avg-cost').textContent = avgCost > 0 ? `Avg: ${fmtCcy(avgCost)}` : '—';
-  if (mktValue > 0 && totalCost > 0) {
+  if (isClosedPosition) {
+    document.getElementById('stock-unreal-pl').innerHTML = '<span style="color:var(--muted)">N/A</span>';
+    document.getElementById('stock-unreal-pct').textContent = 'Position closed';
+  } else if (mktValue > 0 && totalCost > 0) {
     const cls = unreal >= 0 ? 'pos' : 'neg';
     document.getElementById('stock-unreal-pl').innerHTML = `<span class="${cls}">${plStr(unreal, detectedIsSG?'S$':'$')}</span>`;
     document.getElementById('stock-unreal-pct').innerHTML = `<span class="${cls}">${(unrealPct>=0?'+':'')}${unrealPct.toFixed(2)}%</span>`;
@@ -2931,6 +2966,17 @@ async function loadStockDetail(ticker, broker, isSG) {
 
   document.getElementById('stock-trades-sub').textContent =
     `${trades.length} trades · Bought ${fmtCcy(totalBought)}${totalSold>0?` · Sold ${fmtCcy(totalSold)}`:''}${totalRealised!==0?` · Realised ${plStr(totalRealised, detectedIsSG?'S$':'$')}`:''}`;
+
+  // ── Realised P&L card ──
+  const numSells = sortedAsc.filter(t => /sell/i.test(t.action || '')).length;
+  if (numSells === 0) {
+    document.getElementById('stock-real-pl').innerHTML = '<span style="color:var(--muted)">$0.00</span>';
+    document.getElementById('stock-real-sub').textContent = 'No sells yet';
+  } else {
+    const realCls = totalRealised >= 0 ? 'pos' : 'neg';
+    document.getElementById('stock-real-pl').innerHTML = `<span class="${realCls}">${plStr(totalRealised, detectedIsSG?'S$':'$')}</span>`;
+    document.getElementById('stock-real-sub').textContent = `${numSells} sell${numSells===1?'':'s'} · realised gain/loss`;
+  }
 
   // Render newest first
   document.getElementById('stock-trades-body').innerHTML = tradeRows.reverse().map(t => {
@@ -3267,8 +3313,8 @@ async function loadWebull() {
   // Closed table
   let cRows = '';
   closed.forEach(h => {
-    cRows += `<tr>
-      <td><span class="ticker-badge webull" style="cursor:pointer" onclick="showWbTradeHistory('${h.ticker}')">${h.ticker}</span></td>
+    cRows += `<tr style="cursor:pointer" onclick="showStockDetail('${h.ticker}','webull',false,'webull')">
+      <td><span class="ticker-badge webull">${h.ticker}</span></td>
       <td class="${h.total_realised_pl != 0 ? plColor(h.total_realised_pl) : ''}" style="${h.total_realised_pl == 0 ? 'color:var(--text)' : ''}">${h.total_realised_pl != 0 ? plStr(h.total_realised_pl) : '—'}</td>
       <td><span class="status-closed">Closed</span></td>
     </tr>`;
@@ -3571,8 +3617,8 @@ async function loadCMC() {
   // Closed positions
   const closed = getCMCClosed();
   document.getElementById('cmc-closed-count').textContent = closed.length + ' stocks';
-  document.getElementById('cmc-closed-body').innerHTML = closed.map(h => `<tr>
-    <td><span class="ticker-badge cmc" style="cursor:pointer" onclick="showCMCTradeHistory('${h.ticker}')">${h.ticker}</span></td>
+  document.getElementById('cmc-closed-body').innerHTML = closed.map(h => `<tr style="cursor:pointer" onclick="showStockDetail('${h.ticker}','cmc',true,'cmc')">
+    <td><span class="ticker-badge cmc">${h.ticker}</span></td>
     <td class="${h.realisedPL!==0?plColor(h.realisedPL):''}" style="${h.realisedPL===0?'color:var(--text)':''};font-family:var(--font-num)">${h.realisedPL!==0?plStr(h.realisedPL,'S$'):'—'}</td>
     <td><span class="status-closed">Closed</span></td>
   </tr>`).join('') || '<tr><td colspan="3" class="empty">No closed positions</td></tr>';
