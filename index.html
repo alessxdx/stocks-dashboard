@@ -674,6 +674,23 @@ tr:hover td { background:var(--surface2); }
       <div class="stat-sub">VOO + SCHG + SPYI cash</div>
     </div>
   </div>
+  <div class="stat-grid stat-grid-3">
+    <div class="stat-card" style="cursor:pointer" onclick="showSyfeDepositBreakdown()" title="Click to see yearly breakdown">
+      <div class="stat-label">Total Deposits <span style="font-size:9px;color:var(--muted)">↗ breakdown</span></div>
+      <div class="stat-value" id="sy-dep-combined">—</div>
+      <div class="stat-sub" id="sy-dep-sgd" style="display:none">—</div>
+      <div class="stat-sub" id="sy-dep-usd" style="display:none">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Withdrawals</div>
+      <div class="stat-value" id="sy-wd">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Net Deposits</div>
+      <div class="stat-value" id="sy-net-dep">—</div>
+      <div class="stat-sub">Deposits − Withdrawals</div>
+    </div>
+  </div>
 
   <!-- VOO -->
   <div class="section">
@@ -732,7 +749,7 @@ tr:hover td { background:var(--surface2); }
     </div>
   </div>
 
-  <!-- Syfe Deposits/FX -->
+  <!-- Syfe Deposits + Withdrawals -->
   <div class="stat-grid stat-grid-2">
     <div class="section" style="margin:0">
       <div class="section-header">
@@ -741,27 +758,41 @@ tr:hover td { background:var(--surface2); }
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Date</th><th>Currency</th><th>Amount</th><th>Source</th></tr></thead>
+          <thead><tr><th>Date</th><th>Currency</th><th>Amount</th><th>Source</th><th></th></tr></thead>
           <tbody id="sy-deposits-body"></tbody>
         </table>
       </div>
     </div>
     <div class="section" style="margin:0">
       <div class="section-header">
-        <div class="section-title">Dividends Received</div>
-        <button class="btn btn-sm" onclick="openDivModal('','syfe')">+ Add</button>
+        <div class="section-title">Withdrawals</div>
+        <button class="btn btn-sm" onclick="openModal('add-withdrawal-modal','syfe')">+ Add</button>
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr>
-            <th>Ticker</th>
-            <th>Total Received</th>
-            <th>Payments</th>
-            <th></th>
-          </tr></thead>
-          <tbody id="sy-divs-body"></tbody>
+          <thead><tr><th>Date</th><th>Currency</th><th>Amount</th><th>Note</th><th></th></tr></thead>
+          <tbody id="sy-withdrawals-body"></tbody>
         </table>
       </div>
+    </div>
+  </div>
+
+  <!-- Syfe Dividends Received (full width) -->
+  <div class="section" style="margin-top:20px">
+    <div class="section-header">
+      <div class="section-title">Dividends Received</div>
+      <button class="btn btn-sm" onclick="openDivModal('','syfe')">+ Add</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Ticker</th>
+          <th>Total Received</th>
+          <th>Payments</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="sy-divs-body"></tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -2516,6 +2547,30 @@ async function loadSyfe() {
   document.getElementById('sy-total-invested').textContent = fmtUSD(totalInvested);
   document.getElementById('sy-total-divs').textContent = fmtUSD(totalDivs + (_divSyfe||[]).reduce((s,d)=>s+d.amount_usd,0));
 
+  // Syfe deposits + withdrawals KPI calc
+  const syfeDeps = (_deps||[]).filter(d => d.brokerage==='syfe');
+  const syfeWds  = (_wds ||[]).filter(w => w.brokerage==='syfe');
+  const sDepSGD = syfeDeps.filter(d=>d.currency==='SGD').reduce((s,d)=>s+d.amount,0);
+  const sDepUSD = syfeDeps.filter(d=>d.currency==='USD').reduce((s,d)=>s+d.amount,0);
+  const sWdSGD  = syfeWds.filter(w=>w.currency==='SGD').reduce((s,w)=>s+w.amount,0);
+  const sWdUSD  = syfeWds.filter(w=>w.currency==='USD').reduce((s,w)=>s+w.amount,0);
+  document.getElementById('sy-dep-sgd').textContent = fmtSGD(sDepSGD);
+  document.getElementById('sy-dep-usd').textContent = fmtUSD(sDepUSD);
+  document.getElementById('sy-dep-combined').innerHTML =
+    fmtSGD(sDepSGD) + ' <span style="color:var(--muted);font-size:14px">+</span> ' + fmtUSD(sDepUSD);
+  // Withdrawals can be in either currency — show combined if both
+  const wdParts = [];
+  if (sWdSGD > 0) wdParts.push(fmtSGD(sWdSGD));
+  if (sWdUSD > 0) wdParts.push(fmtUSD(sWdUSD));
+  document.getElementById('sy-wd').innerHTML = wdParts.length
+    ? wdParts.join(' <span style="color:var(--muted);font-size:14px">+</span> ')
+    : fmtUSD(0);
+  // Net (per-currency to avoid mixing)
+  const netSGD = sDepSGD - sWdSGD;
+  const netUSD = sDepUSD - sWdUSD;
+  document.getElementById('sy-net-dep').innerHTML =
+    fmtSGD(netSGD) + ' <span style="color:var(--muted);font-size:14px">+</span> ' + fmtUSD(netUSD);
+
   ['VOO','SCHG','SPYI'].forEach(ticker => {
     const h = holdings.find(x => x.ticker===ticker);
     if (!h) return;
@@ -2547,6 +2602,23 @@ async function loadSyfe() {
       </div>
     </td>
   </tr>`).join('') || '<tr><td colspan="5" class="empty">No deposits</td></tr>';
+
+  // Syfe withdrawals
+  const syWds = (_wds||[]).filter(w=>w.brokerage==='syfe');
+  document.getElementById('sy-withdrawals-body').innerHTML = syWds.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(w => `<tr>
+    <td>${fmtDate(w.date)}</td>
+    <td>${w.currency||'SGD'}</td>
+    <td>${(w.currency||'SGD')==='USD'?fmtUSD(w.amount):fmtSGD(w.amount)}</td>
+    <td>${w.note||'—'}</td>
+    <td>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
+          onclick="openEditWithdrawalModal(${w.id},'syfe','${w.date}','${w.currency||'SGD'}',${w.amount})">Edit</button>
+        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
+          onclick="deleteWithdrawalEntry(${w.id},'syfe')">Del</button>
+      </div>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="5" class="empty">No withdrawals</td></tr>';
 
   // SPYI divs
   // Group Syfe divs by ticker — VOO, SCHG, SPYI
@@ -2923,6 +2995,36 @@ async function showCMCDepositBreakdown() {
     <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-weight:600">${r.year}</td>
     <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-num)">${fmtSGD(r.sgd)}</td>
     <td style="padding:10px 12px;border-bottom:1px solid var(--border)">—</td>
+  </tr>`).join('') || '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--muted)">No deposits</td></tr>';
+
+  document.getElementById('deposit-breakdown-modal').classList.add('open');
+}
+
+
+// ── Syfe Deposit Breakdown by Year ──
+async function showSyfeDepositBreakdown() {
+  await loadAllData();
+  const deps = (_deps||[]).filter(d => d.brokerage === 'syfe');
+
+  const byYear = {};
+  deps.forEach(d => {
+    const year = d.date.substring(0,4);
+    if (!byYear[year]) byYear[year] = {year, sgd:0, usd:0};
+    if (d.currency === 'SGD') byYear[year].sgd += d.amount;
+    else byYear[year].usd += d.amount;
+  });
+
+  const rows = Object.values(byYear).sort((a,b) => b.year.localeCompare(a.year));
+  const totalSGD = deps.filter(d=>d.currency==='SGD').reduce((s,d)=>s+d.amount,0);
+  const totalUSD = deps.filter(d=>d.currency==='USD').reduce((s,d)=>s+d.amount,0);
+
+  document.getElementById('dep-breakdown-total').innerHTML = `${fmtSGD(totalSGD)} + ${fmtUSD(totalUSD)}`;
+  document.getElementById('deposit-breakdown-modal').querySelector('.modal-title').textContent = 'Syfe Deposits by Year';
+
+  document.getElementById('dep-breakdown-body').innerHTML = rows.map(r => `<tr>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-weight:600">${r.year}</td>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-num)">${r.sgd > 0 ? fmtSGD(r.sgd) : '<span style="color:var(--muted)">—</span>'}</td>
+    <td style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-num)">${r.usd > 0 ? fmtUSD(r.usd) : '<span style="color:var(--muted)">—</span>'}</td>
   </tr>`).join('') || '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--muted)">No deposits</td></tr>';
 
   document.getElementById('deposit-breakdown-modal').classList.add('open');
