@@ -179,6 +179,15 @@ body { background:var(--bg); color:var(--text); font-family:var(--font-mono); mi
 .year-header td { transition:background .15s; }
 .year-header:hover td { background:#1c2230 !important; }
 .year-header.open td { border-bottom:1px solid var(--border); }
+
+/* ── Perf range toggle ── */
+.perf-range-btn {
+  padding:6px 12px; border:none; background:transparent; color:var(--muted);
+  font-family:var(--font-mono); font-size:10px; font-weight:700; letter-spacing:.5px;
+  cursor:pointer; border-radius:6px; transition:all .15s;
+}
+.perf-range-btn:hover { color:var(--text); }
+.perf-range-btn.active { background:var(--accent); color:#fff; }
 .h-ticker {
   font-family:var(--font-mono); font-weight:700; font-size:15px;
   color:var(--text); letter-spacing:.3px;
@@ -1110,7 +1119,7 @@ tr:hover td { background:var(--surface2); }
   </div>
 
   <!-- KPI Cards -->
-  <div class="stat-grid stat-grid-4" style="margin-bottom:20px">
+  <div class="stat-grid stat-grid-3" style="margin-bottom:20px">
     <div class="stat-card">
       <div class="stat-label" id="ins-total-label">Total Portfolio (USD eq.)</div>
       <div class="stat-value" id="ins-total-value">—</div>
@@ -1125,11 +1134,6 @@ tr:hover td { background:var(--surface2); }
       <div class="stat-label">Top Sector</div>
       <div class="stat-value" id="ins-top-sector" style="font-size:18px">—</div>
       <div class="stat-sub" id="ins-top-sector-sub">—</div>
-    </div>
-    <div class="stat-card gold">
-      <div class="stat-label">Diversification</div>
-      <div class="stat-value" id="ins-diversification">—</div>
-      <div class="stat-sub" id="ins-diversification-sub">—</div>
     </div>
   </div>
 
@@ -1193,6 +1197,41 @@ tr:hover td { background:var(--surface2); }
     </div>
     <div id="ins-holdings-list" style="padding:6px 0">
       <div class="loading" style="padding:30px"><div class="spinner"></div>Loading holdings...</div>
+    </div>
+  </div>
+
+  <!-- ── Performance Over Time ── -->
+  <div class="section">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Performance Over Time</div>
+        <div style="font-size:11px;color:var(--muted)">Daily portfolio value · auto-captured</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:2px;gap:2px" id="perf-range-toggle">
+          <button onclick="setPerfRange('7d')" data-range="7d" class="perf-range-btn">7D</button>
+          <button onclick="setPerfRange('30d')" data-range="30d" class="perf-range-btn active">30D</button>
+          <button onclick="setPerfRange('90d')" data-range="90d" class="perf-range-btn">90D</button>
+          <button onclick="setPerfRange('ytd')" data-range="ytd" class="perf-range-btn">YTD</button>
+          <button onclick="setPerfRange('all')" data-range="all" class="perf-range-btn">ALL</button>
+        </div>
+      </div>
+    </div>
+    <div id="perf-empty-state" style="padding:40px;text-align:center;color:var(--muted);display:none">
+      <div style="font-size:32px;margin-bottom:8px">📈</div>
+      <div style="font-weight:600;margin-bottom:4px">Building your performance history</div>
+      <div style="font-size:12px">A snapshot is captured each day you open the dashboard. Check back tomorrow for your first comparison point.</div>
+    </div>
+    <div class="chart-container" id="perf-chart-wrapper" style="height:340px">
+      <canvas id="chart-performance"></canvas>
+    </div>
+    <div id="perf-stats" style="padding:0 18px 16px;display:none">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;font-family:var(--font-mono);font-size:11px">
+        <div><div style="color:var(--muted);font-size:10px;letter-spacing:.4px;text-transform:uppercase;margin-bottom:3px">First snapshot</div><div id="perf-first" style="font-family:var(--font-num);font-weight:600;color:var(--text)">—</div></div>
+        <div><div style="color:var(--muted);font-size:10px;letter-spacing:.4px;text-transform:uppercase;margin-bottom:3px">Latest</div><div id="perf-latest" style="font-family:var(--font-num);font-weight:600;color:var(--text)">—</div></div>
+        <div><div style="color:var(--muted);font-size:10px;letter-spacing:.4px;text-transform:uppercase;margin-bottom:3px">Change</div><div id="perf-change" style="font-family:var(--font-num);font-weight:600">—</div></div>
+        <div><div style="color:var(--muted);font-size:10px;letter-spacing:.4px;text-transform:uppercase;margin-bottom:3px">Snapshots</div><div id="perf-count" style="font-family:var(--font-num);font-weight:600;color:var(--text)">—</div></div>
+      </div>
     </div>
   </div>
 </div>
@@ -1787,7 +1826,7 @@ const SECTOR_MAP = {
   'NBIS':'Information Technology','QBTS':'Information Technology','TSM':'Information Technology',
   'MRVL':'Information Technology','SNDK':'Information Technology','COHR':'Information Technology',
   'AMKR':'Information Technology','LRCX':'Information Technology','CIEN':'Information Technology',
-  'CRM':'Information Technology','SMH':'Information Technology',
+  'CRM':'Information Technology','SMH':'Information Technology','AAOI':'Information Technology',
   // Communication Services
   'META':'Communication Services','GOOG':'Communication Services','GOOGL':'Communication Services',
   'NFLX':'Communication Services',
@@ -2061,13 +2100,7 @@ async function loadInsights() {
       `${fmtCcy(topSec.value)} (${topSec.pct.toFixed(1)}%)`;
   }
 
-  // Diversification (currency-independent)
-  const hhi = positions.reduce((s,p) => s + Math.pow(p.value/totalValue, 2), 0);
-  const effective = 1/hhi;
-  const divLabel = effective > 15 ? 'Excellent' : effective > 10 ? 'Good' : effective > 6 ? 'Moderate' : 'Concentrated';
-  document.getElementById('ins-diversification').textContent = effective.toFixed(1);
-  document.getElementById('ins-diversification-sub').textContent =
-    `${divLabel} · effective # of holdings`;
+  // Diversification card removed — no longer needed
 
   // ── Concentration warnings ──
   const warnings = [];
@@ -2155,6 +2188,17 @@ async function loadInsights() {
   renderLegend('legend-geo',       byGeo,    GEO_COLORS);
   renderLegend('legend-assettype', byAsset,  ASSET_COLORS);
   renderLegend('legend-broker',    byBroker, BROKER_COLORS);
+
+  // ── Capture today's snapshot + render performance chart ──
+  await captureDailySnapshot({
+    totalUSD: useUSD ? totalValue : positions.reduce((s,p)=>s+p.valueUSD,0),
+    webullUSD: positions.filter(p=>p.broker==='Webull').reduce((s,p)=>s+p.valueUSD,0),
+    syfeUSD:   positions.filter(p=>p.broker==='Syfe').reduce((s,p)=>s+p.valueUSD,0),
+    cmcUSD:    positions.filter(p=>p.broker==='CMC Invest').reduce((s,p)=>s+p.valueUSD,0),
+    cmcSGD:    positions.filter(p=>p.broker==='CMC Invest').reduce((s,p)=>s+p.valueSGD,0),
+    sgdToUsd:  sgdToUsd,
+  });
+  await renderPerformanceChart();
 }
 
 // ── Manual logo overrides (use these instead of the CDN when ticker matches) ──
@@ -2342,6 +2386,220 @@ function renderLegend(elId, data, colorMap) {
       <div class="chart-legend-value">${d.pct.toFixed(1)}%</div>
     </div>`;
   }).join('');
+}
+
+// ============================================================
+// PERFORMANCE OVER TIME — daily snapshots + chart
+// ============================================================
+let _perfRange = '30d';
+let _perfChart = null;
+
+async function captureDailySnapshot(snap) {
+  // snap = { totalUSD, webullUSD, syfeUSD, cmcUSD, cmcSGD, sgdToUsd }
+  if (!snap.totalUSD || snap.totalUSD <= 0) return;
+  const today = new Date().toISOString().slice(0,10); // YYYY-MM-DD
+
+  try {
+    // Upsert: if today's row exists, update it (so latest value of the day wins)
+    const existing = await sb('daily_snapshots','GET',null,`?date=eq.${today}&select=id`);
+    const payload = {
+      date: today,
+      total_usd:       Math.round(snap.totalUSD * 100) / 100,
+      webull_usd:      Math.round(snap.webullUSD * 100) / 100,
+      syfe_usd:        Math.round(snap.syfeUSD * 100) / 100,
+      cmc_usd:         Math.round(snap.cmcUSD * 100) / 100,
+      cmc_sgd:         Math.round(snap.cmcSGD * 100) / 100,
+      sgd_to_usd_rate: Math.round(snap.sgdToUsd * 10000) / 10000,
+    };
+    if (existing && existing.length) {
+      await sb('daily_snapshots','PATCH', payload, `?id=eq.${existing[0].id}`);
+    } else {
+      await sb('daily_snapshots','POST', payload);
+    }
+  } catch(e) { console.warn('Snapshot capture failed (table may not exist yet):', e.message); }
+}
+
+function setPerfRange(range) {
+  _perfRange = range;
+  document.querySelectorAll('.perf-range-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.range === range);
+  });
+  renderPerformanceChart();
+}
+
+async function renderPerformanceChart() {
+  let snapshots = [];
+  try {
+    snapshots = await sb('daily_snapshots','GET',null,'?order=date.asc') || [];
+  } catch(e) { console.warn('Snapshots fetch failed:', e.message); }
+
+  const wrapper  = document.getElementById('perf-chart-wrapper');
+  const empty    = document.getElementById('perf-empty-state');
+  const stats    = document.getElementById('perf-stats');
+  if (!wrapper) return;
+
+  // Need at least 2 data points for a meaningful line
+  if (!snapshots || snapshots.length < 2) {
+    wrapper.style.display = 'none';
+    stats.style.display = 'none';
+    empty.style.display = 'block';
+    return;
+  }
+
+  empty.style.display = 'none';
+  wrapper.style.display = 'block';
+  stats.style.display = 'block';
+
+  // Apply range filter
+  const today = new Date();
+  let cutoff = null;
+  if (_perfRange === '7d')   cutoff = new Date(today.getTime() - 7*86400000);
+  else if (_perfRange === '30d') cutoff = new Date(today.getTime() - 30*86400000);
+  else if (_perfRange === '90d') cutoff = new Date(today.getTime() - 90*86400000);
+  else if (_perfRange === 'ytd') cutoff = new Date(today.getFullYear(), 0, 1);
+  // 'all' → no cutoff
+
+  let filtered = snapshots;
+  if (cutoff) filtered = snapshots.filter(s => new Date(s.date) >= cutoff);
+  if (filtered.length < 2) filtered = snapshots; // fallback to all if range too tight
+
+  const labels = filtered.map(s => s.date);
+  const totals = filtered.map(s => Number(s.total_usd) || 0);
+  const wb     = filtered.map(s => Number(s.webull_usd) || 0);
+  const sy     = filtered.map(s => Number(s.syfe_usd) || 0);
+  const cmc    = filtered.map(s => Number(s.cmc_usd) || 0);
+
+  // Stats
+  const first = totals[0];
+  const last  = totals[totals.length - 1];
+  const change = last - first;
+  const changePct = first > 0 ? (change/first*100) : 0;
+  const changeColor = change >= 0 ? '#3dd68c' : '#ef4444';
+  const changeArrow = change >= 0 ? '↑' : '↓';
+
+  document.getElementById('perf-first').textContent  = fmtUSD(first);
+  document.getElementById('perf-latest').textContent = fmtUSD(last);
+  document.getElementById('perf-change').innerHTML =
+    `<span style="color:${changeColor}">${changeArrow} ${(change>=0?'+':'')}${fmtUSD(Math.abs(change))} (${(changePct>=0?'+':'')}${changePct.toFixed(2)}%)</span>`;
+  document.getElementById('perf-count').textContent = filtered.length + ' days';
+
+  // Render chart
+  if (_perfChart) { try { _perfChart.destroy(); } catch{} }
+  await new Promise(r => requestAnimationFrame(r));
+
+  const ctx = document.getElementById('chart-performance');
+  if (!ctx) return;
+
+  _perfChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Total Portfolio',
+          data: totals,
+          borderColor: '#38bdf8',
+          backgroundColor: 'rgba(56,189,248,0.10)',
+          borderWidth: 2.5,
+          tension: 0.25,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#38bdf8',
+          pointHoverBorderColor: '#fff',
+          pointHoverBorderWidth: 2,
+          fill: true,
+        },
+        {
+          label: 'Webull',
+          data: wb,
+          borderColor: '#3b82f6',
+          borderWidth: 1.5,
+          borderDash: [4,4],
+          tension: 0.25,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          fill: false,
+          hidden: filtered.every(s => !s.webull_usd),
+        },
+        {
+          label: 'Syfe',
+          data: sy,
+          borderColor: '#a78bfa',
+          borderWidth: 1.5,
+          borderDash: [4,4],
+          tension: 0.25,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          fill: false,
+          hidden: filtered.every(s => !s.syfe_usd),
+        },
+        {
+          label: 'CMC Invest',
+          data: cmc,
+          borderColor: '#3dd68c',
+          borderWidth: 1.5,
+          borderDash: [4,4],
+          tension: 0.25,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          fill: false,
+          hidden: filtered.every(s => !s.cmc_usd),
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 600 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          position: 'top',
+          align: 'end',
+          labels: {
+            color: '#cdd5e0', font: { family: 'DM Mono, monospace', size: 11 },
+            usePointStyle: true, pointStyle: 'line',
+            padding: 14, boxWidth: 30,
+          }
+        },
+        tooltip: {
+          backgroundColor: '#1a1f2e',
+          borderColor: '#2a3142',
+          borderWidth: 1,
+          padding: 12,
+          titleFont: { size: 12, weight: '700', family: 'DM Mono, monospace' },
+          bodyFont: { size: 11, family: 'DM Mono, monospace' },
+          callbacks: {
+            title: (items) => {
+              const d = new Date(items[0].label);
+              return d.toLocaleDateString('en-SG', {weekday:'short', day:'2-digit', month:'short', year:'numeric'});
+            },
+            label: (ctx) => ` ${ctx.dataset.label}: ${fmtUSD(ctx.parsed.y)}`,
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(42,49,66,0.4)' },
+          ticks: {
+            color: '#7d8597', font: { size: 10, family: 'DM Mono, monospace' },
+            maxRotation: 0, autoSkip: true, maxTicksLimit: 8,
+            callback: function(v) {
+              const d = new Date(this.getLabelForValue(v));
+              return d.toLocaleDateString('en-SG', {day:'2-digit', month:'short'});
+            }
+          }
+        },
+        y: {
+          grid: { color: 'rgba(42,49,66,0.4)' },
+          ticks: {
+            color: '#7d8597', font: { size: 10, family: 'DM Mono, monospace' },
+            callback: v => '$' + (v/1000).toFixed(1) + 'k',
+          }
+        }
+      }
+    }
+  });
 }
 
 // On load, restore page from URL hash
