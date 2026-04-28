@@ -1977,7 +1977,19 @@ async function loadInsights() {
   renderLegend('legend-broker',    byBroker, BROKER_COLORS);
 }
 
-// ── Holdings card list with logos ──
+// ── Manual logo overrides (use these instead of the CDN when ticker matches) ──
+// Add more here as needed. URLs must be publicly accessible image links.
+const LOGO_OVERRIDES = {
+  'AMZN': 'https://companieslogo.com/img/orig/AMZN-e9f942e4.png?t=1740113564',
+  'IREN': 'https://companieslogo.com/img/orig/IREN-f3e8d4f9.png?t=1723010978',
+  'SPYI': 'https://neosfunds.com/wp-content/themes/HVM-ALTERA/img/assets/neos-logo.png',
+  'SCHG': 'https://s3-symbol-logo.tradingview.com/schwab--600.png',
+  // SGX
+  'D05':  'https://companieslogo.com/img/orig/D05.SI-edfcd000.png?t=1720244491',
+  'O39':  'https://companieslogo.com/img/orig/O39.SI-d00b23e8.png?t=1729873664',
+  'ME8U': 'https://companieslogo.com/img/orig/ME8U.SI_BIG-57144bd9.png?t=1720244492',
+};
+
 // Tickers where Financial Modeling Prep CDN doesn't work well — fallback to Clearbit by domain
 const TICKER_TO_DOMAIN = {
   'GOOG':'google.com','GOOGL':'google.com','META':'meta.com','BRK.B':'berkshirehathaway.com',
@@ -1990,20 +2002,25 @@ const TICKER_TO_DOMAIN = {
   'BE':'bloomenergy.com','VST':'vistracorp.com','CCJ':'cameco.com',
   'MU':'micron.com','IREN':'irisenergy.com','NBIS':'nebius.com','QBTS':'dwavequantum.com',
   'MRVL':'marvell.com','SNDK':'sandisk.com','COHR':'coherent.com','AMKR':'amkor.com',
-  'LRCX':'lamresearch.com','CIEN':'ciena.com','DB':'db.com','NFLX':'netflix.com',
+  'LRCX':'lamresearch.com','CIEN':'ciena.com','DB':'db.com',
   // ETFs (issuers)
   'VOO':'vanguard.com','SCHG':'schwab.com','SPYI':'neosfunds.com','SMH':'vaneck.com','URA':'globalxetfs.com',
 };
 
 function getLogoUrl(ticker, isSG) {
-  if (isSG) return null;
   const clean = ticker.toUpperCase();
-  // Primary: Financial Modeling Prep stock logo CDN
+  // Manual override always wins
+  if (LOGO_OVERRIDES[clean]) return LOGO_OVERRIDES[clean];
+  // SGX without override → use ticker badge
+  if (isSG) return null;
+  // US default: Financial Modeling Prep CDN
   return `https://financialmodelingprep.com/image-stock/${clean}.png`;
 }
 
 function getLogoFallbackUrl(ticker) {
   const clean = ticker.toUpperCase();
+  // Don't fallback if there's a manual override (it should just work)
+  if (LOGO_OVERRIDES[clean]) return null;
   const domain = TICKER_TO_DOMAIN[clean];
   return domain ? `https://logo.clearbit.com/${domain}` : null;
 }
@@ -2016,24 +2033,23 @@ function renderHoldingsList(holdings, fmtCcy) {
   if (!holdings.length) { el.innerHTML = '<div class="empty" style="padding:30px">No active holdings</div>'; return; }
 
   el.innerHTML = holdings.map(h => {
-    const fb     = getLogoFallbackUrl(h.ticker);
-    const primary= getLogoUrl(h.ticker, h.isSG);
+    const primary  = getLogoUrl(h.ticker, h.isSG);
+    const fb       = getLogoFallbackUrl(h.ticker);
     const initials = h.ticker.slice(0,3);
 
     let logoHTML;
-    if (h.isSG) {
-      logoHTML = `<div class="h-logo cmc">${initials}</div>`;
-    } else if (primary) {
+    if (primary) {
       // Two-tier fallback: primary fails → try clearbit → final ticker badge
-      const fbAttr = fb ? `this.onerror=null;this.src='${fb}';this.dataset.tier='2';`
-                        : `this.onerror=null;this.parentNode.classList.add('fallback');this.style.display='none';this.parentNode.textContent='${initials}';`;
-      const finalFallback = `this.onerror=null;this.parentNode.classList.add('fallback');this.style.display='none';this.parentNode.textContent='${initials}';`;
+      const finalFallback = `this.onerror=null;this.parentNode.classList.add('${h.isSG?'cmc':'fallback'}');this.style.display='none';this.parentNode.textContent='${initials}';`;
+      const errorChain = fb
+        ? `this.onerror=function(){${finalFallback}};this.src='${fb}';`
+        : finalFallback;
       logoHTML = `<div class="h-logo">
-        <img src="${primary}" alt="${h.ticker}" loading="lazy"
-          onerror="${fb ? `this.onerror=function(){${finalFallback}};this.src='${fb}'` : finalFallback}">
+        <img src="${primary}" alt="${h.ticker}" loading="lazy" onerror="${errorChain}">
       </div>`;
     } else {
-      logoHTML = `<div class="h-logo fallback">${initials}</div>`;
+      // No URL available — show styled ticker badge
+      logoHTML = `<div class="h-logo ${h.isSG?'cmc':'fallback'}">${initials}</div>`;
     }
 
     const flag = h.isSG ? ' 🇸🇬' : '';
