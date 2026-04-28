@@ -78,6 +78,7 @@ body { background:var(--bg); color:var(--text); font-family:var(--font-mono); mi
 /* STAT CARDS */
 .stat-grid { display:grid; gap:16px; margin-bottom:28px; }
 .stat-grid-4 { grid-template-columns:repeat(4,1fr); }
+.stat-grid-5 { grid-template-columns:repeat(5,1fr); }
 .stat-grid-3 { grid-template-columns:repeat(3,1fr); }
 .stat-grid-2 { grid-template-columns:repeat(2,1fr); }
 .stat-card {
@@ -336,8 +337,12 @@ tr:hover td { background:var(--surface2); }
 .btn-submit { background:var(--accent); border-color:var(--accent); color:#fff; }
 .btn-submit:hover { background:#6b5ce7; }
 
+@media (max-width:1200px) {
+  .stat-grid-5 { grid-template-columns:repeat(3,1fr); }
+}
 @media (max-width:900px) {
   .stat-grid-4 { grid-template-columns:repeat(2,1fr); }
+  .stat-grid-5 { grid-template-columns:repeat(2,1fr); }
   .sidebar { width:64px; }
   .sidebar .logo, .sidebar .nav-item span, .sidebar-footer { display:none; }
   .main { margin-left:64px; padding:20px; }
@@ -1344,9 +1349,9 @@ tr:hover td { background:var(--surface2); }
   </div>
 
   <!-- KPI cards -->
-  <div class="stat-grid stat-grid-4" style="margin-bottom:20px">
+  <div class="stat-grid stat-grid-5" style="margin-bottom:20px">
     <div class="stat-card">
-      <div class="stat-label">Your Shares</div>
+      <div class="stat-label">Total Shares</div>
       <div class="stat-value" id="stock-shares">—</div>
       <div class="stat-sub" id="stock-shares-sub">—</div>
     </div>
@@ -1364,6 +1369,11 @@ tr:hover td { background:var(--surface2); }
       <div class="stat-label">Unrealised P&L</div>
       <div class="stat-value" id="stock-unreal-pl">—</div>
       <div class="stat-sub" id="stock-unreal-pct">—</div>
+    </div>
+    <div class="stat-card gold">
+      <div class="stat-label">Total Dividends</div>
+      <div class="stat-value" id="stock-total-divs">—</div>
+      <div class="stat-sub" id="stock-total-divs-sub">—</div>
     </div>
   </div>
 
@@ -2416,7 +2426,7 @@ function renderHoldingsList(holdings, fmtCcy, maxPct) {
     // Bar width: largest position fills the full row, others scaled proportionally
     const barPct = maxPct > 0 ? Math.max((h.pctOfPortfolio / maxPct) * 100, 4) : 4;
 
-    return `<div class="holding-row" style="cursor:pointer" onclick="showStockDetail('${h.ticker}','${h.broker==='Webull'?'webull':h.broker==='Syfe'?'syfe':'cmc'}',${h.isSG})">
+    return `<div class="holding-row" style="cursor:pointer" onclick="showStockDetail('${h.ticker}','${h.broker==='Webull'?'webull':h.broker==='Syfe'?'syfe':'cmc'}',${h.isSG},'insights')">
       <div class="h-bar" style="width:${barPct}%"></div>
       ${logoHTML}
       <div class="h-ticker">${h.ticker}</div>
@@ -2718,13 +2728,22 @@ async function renderPerformanceChart() {
 let _stockPrev = 'overview'; // remember where the user came from for Back button
 let _stockCurrent = null;    // {ticker, isSG, broker}
 
-async function showStockDetail(ticker, broker, isSG) {
+async function showStockDetail(ticker, broker, isSG, sourcePage) {
   if (!ticker) return;
   ticker = ticker.toUpperCase();
 
-  // Remember which page user came from (default to overview)
-  const currentHash = (window.location.hash || '#overview').replace('#','').split('/')[0];
-  if (currentHash && currentHash !== 'stock') _stockPrev = currentHash;
+  // Track where the user came from so Back works correctly.
+  // 1st priority: explicit sourcePage from caller
+  // 2nd: current location.hash (only if it's NOT already on the stock page)
+  if (sourcePage) {
+    _stockPrev = sourcePage;
+  } else {
+    const currentHash = (window.location.hash || '#overview').replace('#','').split('/')[0];
+    if (currentHash && currentHash !== 'stock' && currentHash !== '') {
+      _stockPrev = currentHash;
+    }
+    // If we're already on a stock page (clicking from one stock to another), preserve _stockPrev as-is
+  }
 
   _stockCurrent = { ticker, broker: broker || null, isSG: !!isSG };
 
@@ -2742,7 +2761,14 @@ async function showStockDetail(ticker, broker, isSG) {
 }
 
 function goBackFromStock() {
-  showPage(_stockPrev || 'overview');
+  // Use stored source page; if missing or invalid, use browser history; final fallback = overview
+  const target = _stockPrev || 'overview';
+  const valid = ['overview','webull','syfe','cmc','fx','dividends','insights','watchlist'];
+  if (valid.includes(target)) {
+    showPage(target);
+  } else {
+    showPage('overview');
+  }
 }
 
 async function loadStockDetail(ticker, broker, isSG) {
@@ -2821,6 +2847,23 @@ async function loadStockDetail(ticker, broker, isSG) {
     document.getElementById('stock-unreal-pl').textContent = '—';
     document.getElementById('stock-unreal-pct').textContent = '—';
   }
+
+  // ── Total Dividends KPI (computed early so the card can populate before the table) ──
+  let divsForCard = [];
+  if (detectedBroker === 'webull') {
+    divsForCard = (_divUS||[]).filter(d => d.ticker === ticker)
+      .map(d => ({ id:d.id, date:d.date, amount: d.amount_usd * US_TAX, ccy:'USD' }));
+  } else if (detectedBroker === 'syfe') {
+    divsForCard = (_divSyfe||[]).filter(d => d.ticker === ticker)
+      .map(d => ({ id:d.id, date:d.date, amount: d.amount_usd, ccy:'USD' }));
+  } else if (detectedBroker === 'cmc') {
+    divsForCard = (_divSG||[]).filter(d => d.ticker === ticker)
+      .map(d => ({ id:d.id, date:d.date, amount: d.total_sgd, ccy:'SGD' }));
+  }
+  const totalDivsCard = divsForCard.reduce((s,d) => s + d.amount, 0);
+  document.getElementById('stock-total-divs').textContent = totalDivsCard > 0 ? fmtCcy(totalDivsCard) : '—';
+  document.getElementById('stock-total-divs-sub').textContent =
+    divsForCard.length ? `${divsForCard.length} payment${divsForCard.length===1?'':'s'}` : 'None received';
 
   // ── Performance metrics ──
   function pPct(id, v) {
@@ -3140,7 +3183,7 @@ function renderPositions() {
     const priceStr = h.live_price > 0 ? (h.isSG ? fmtSGD(h.live_price) : fmtUSD(h.live_price)) : '<span style="color:var(--muted)">—</span>';
     const valStr = h.market_value > 0 ? (h.isSG ? fmtSGD(h.market_value) : fmtUSD(h.market_value)) : '<span style="color:var(--muted)">—</span>';
     const avgStr = h.isSG ? fmtSGD(h.avg_cost) : fmtUSD(h.avg_cost);
-    return `<tr style="cursor:pointer" onclick="showStockDetail('${h.ticker}','${h.broker}',${h.isSG})">
+    return `<tr style="cursor:pointer" onclick="showStockDetail('${h.ticker}','${h.broker}',${h.isSG},'overview')">
       <td>
         <div style="display:flex;align-items:center;gap:10px">
           ${miniLogoHTML(h.ticker, h.isSG)}
