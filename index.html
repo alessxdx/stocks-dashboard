@@ -943,14 +943,27 @@ tr:hover td { background:var(--surface2); }
         <div class="page-subtitle">Portfolio composition · Sector · Geography · Concentration</div>
         <div class="last-updated" data-last-updated>Loading...</div>
       </div>
-      <button data-refresh-btn onclick="refreshPrices()" class="btn btn-sm" style="font-size:10px;margin-top:6px">↻ Refresh</button>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+        <!-- Currency toggle -->
+        <div style="display:flex;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:3px;gap:3px">
+          <button id="ins-ccy-usd" onclick="insSetCurrency('USD')"
+            style="padding:7px 14px;border-radius:8px;border:none;cursor:pointer;font-size:11px;font-family:var(--font-mono);letter-spacing:.4px;text-transform:uppercase;transition:all .2s;background:var(--accent);color:#fff">
+            USD
+          </button>
+          <button id="ins-ccy-sgd" onclick="insSetCurrency('SGD')"
+            style="padding:7px 14px;border-radius:8px;border:none;cursor:pointer;font-size:11px;font-family:var(--font-mono);letter-spacing:.4px;text-transform:uppercase;transition:all .2s;background:transparent;color:var(--muted)">
+            SGD
+          </button>
+        </div>
+        <button data-refresh-btn onclick="refreshPrices()" class="btn btn-sm" style="font-size:10px">↻ Refresh</button>
+      </div>
     </div>
   </div>
 
   <!-- KPI Cards -->
   <div class="stat-grid stat-grid-4" style="margin-bottom:20px">
     <div class="stat-card">
-      <div class="stat-label">Total Portfolio (USD eq.)</div>
+      <div class="stat-label" id="ins-total-label">Total Portfolio (USD eq.)</div>
       <div class="stat-value" id="ins-total-value">—</div>
       <div class="stat-sub" id="ins-total-sub">All brokers combined</div>
     </div>
@@ -1645,8 +1658,41 @@ async function getLiveSgdToUsd() {
   return { rate: 0.74, source: 'default', cached: false };
 }
 
+// ── Currency mode (USD or SGD) — persisted in localStorage ──
+let _insCurrency = localStorage.getItem('insCurrency') || 'USD';
+
+function insSetCurrency(ccy) {
+  _insCurrency = ccy;
+  localStorage.setItem('insCurrency', ccy);
+  // Update toggle button styling
+  const btnU = document.getElementById('ins-ccy-usd');
+  const btnS = document.getElementById('ins-ccy-sgd');
+  if (ccy === 'USD') {
+    btnU.style.background = 'var(--accent)'; btnU.style.color = '#fff';
+    btnS.style.background = 'transparent';   btnS.style.color = 'var(--muted)';
+  } else {
+    btnS.style.background = 'var(--accent)'; btnS.style.color = '#fff';
+    btnU.style.background = 'transparent';   btnU.style.color = 'var(--muted)';
+  }
+  // Re-render with new currency
+  loadInsights();
+}
+
 async function loadInsights() {
   await loadAllData();
+
+  // Sync toggle visual state to current _insCurrency on first load
+  const btnU = document.getElementById('ins-ccy-usd');
+  const btnS = document.getElementById('ins-ccy-sgd');
+  if (btnU && btnS) {
+    if (_insCurrency === 'USD') {
+      btnU.style.background = 'var(--accent)'; btnU.style.color = '#fff';
+      btnS.style.background = 'transparent';   btnS.style.color = 'var(--muted)';
+    } else {
+      btnS.style.background = 'var(--accent)'; btnS.style.color = '#fff';
+      btnU.style.background = 'transparent';   btnU.style.color = 'var(--muted)';
+    }
+  }
 
   // Gather all active positions
   const wbActive  = (_wbHoldings||[]).filter(h => h.status==='active' && h.shares > 0.01);
@@ -1662,46 +1708,72 @@ async function loadInsights() {
   await fetchPrices(allTickers);
 
   const fxInfo = await getLiveSgdToUsd();
-  const sgdRate = fxInfo.rate;
+  const sgdToUsd = fxInfo.rate;
+  const usdToSgd = 1 / sgdToUsd;
 
-  // Build flat positions list
+  // ── Currency-aware helpers ──
+  const useUSD = _insCurrency === 'USD';
+  const ccyLabel = useUSD ? 'USD' : 'SGD';
+  const fmtCcy   = useUSD ? fmtUSD : fmtSGD;
+
+  // Build flat positions list — value stored in BOTH currencies for easy switching
   const positions = [];
   wbActive.forEach(h => {
-    const p = price(h.ticker), val = h.shares * p;
-    positions.push({ ticker:h.ticker, broker:'Webull', valueUSD:val, isSG:false });
+    const p = price(h.ticker), valUSD = h.shares * p;
+    positions.push({
+      ticker:h.ticker, broker:'Webull', isSG:false,
+      valueUSD: valUSD,
+      valueSGD: valUSD * usdToSgd,
+      valueNative: valUSD,
+      nativeCcy: 'USD',
+    });
   });
   syfeH.forEach(h => {
-    const p = price(h.ticker), val = h.shares * p;
-    positions.push({ ticker:h.ticker, broker:'Syfe', valueUSD:val, isSG:false });
+    const p = price(h.ticker), valUSD = h.shares * p;
+    positions.push({
+      ticker:h.ticker, broker:'Syfe', isSG:false,
+      valueUSD: valUSD,
+      valueSGD: valUSD * usdToSgd,
+      valueNative: valUSD,
+      nativeCcy: 'USD',
+    });
   });
   cmcActive.forEach(h => {
     const p = price(h.ticker+'.SI'), valSGD = h.shares * p;
-    positions.push({ ticker:h.ticker, broker:'CMC Invest', valueUSD:valSGD * sgdRate, valueSGD:valSGD, isSG:true });
+    positions.push({
+      ticker:h.ticker, broker:'CMC Invest', isSG:true,
+      valueUSD: valSGD * sgdToUsd,
+      valueSGD: valSGD,
+      valueNative: valSGD,
+      nativeCcy: 'SGD',
+    });
   });
 
-  const totalValue = positions.reduce((s,p) => s + p.valueUSD, 0);
+  // Pick which value to use for charts/calculations based on toggle
+  positions.forEach(p => { p.value = useUSD ? p.valueUSD : p.valueSGD; });
+
+  const totalValue = positions.reduce((s,p) => s + p.value, 0);
   if (!totalValue) {
     document.getElementById('ins-total-value').textContent = '—';
     return;
   }
 
-  // ── Aggregate by category, tracking constituent stocks for tooltips ──
+  // ── Aggregate by category, tracking constituent stocks ──
   function aggregate(getCategoryFn) {
     const buckets = {};
     positions.forEach(p => {
       const cat = getCategoryFn(p);
       if (!buckets[cat]) buckets[cat] = { total: 0, stocks: {} };
-      buckets[cat].total += p.valueUSD;
+      buckets[cat].total += p.value;
       const k = p.ticker;
       if (!buckets[cat].stocks[k]) buckets[cat].stocks[k] = 0;
-      buckets[cat].stocks[k] += p.valueUSD;
+      buckets[cat].stocks[k] += p.value;
     });
     return Object.entries(buckets)
       .map(([label, data]) => ({
         label,
         value: data.total,
         pct: data.total/totalValue*100,
-        // Sorted list of constituent stocks (top 8 + "and X more")
         stocks: Object.entries(data.stocks)
           .map(([t,v]) => ({ ticker:t, value:v, pct:v/data.total*100 }))
           .sort((a,b) => b.value - a.value),
@@ -1718,17 +1790,18 @@ async function loadInsights() {
   const byTicker = {};
   positions.forEach(p => {
     const k = p.ticker + (p.isSG ? '.SI' : '');
-    if (!byTicker[k]) byTicker[k] = { ticker:p.ticker, isSG:p.isSG, value:0 };
-    byTicker[k].value += p.valueUSD;
+    if (!byTicker[k]) byTicker[k] = { ticker:p.ticker, isSG:p.isSG, value:0, valueNative:0, nativeCcy:p.nativeCcy };
+    byTicker[k].value += p.value;
+    byTicker[k].valueNative += p.valueNative;
   });
   const top10 = Object.values(byTicker).sort((a,b)=>b.value-a.value).slice(0,10);
 
   // ── KPIs ──
-  const sgdOnlyUSD = positions.filter(p=>p.isSG).reduce((s,p)=>s+p.valueUSD,0);
-  const usdOnlyUSD = totalValue - sgdOnlyUSD;
-  const sgdNativeTotal = positions.filter(p=>p.isSG).reduce((s,p)=>s+p.valueSGD,0);
+  const sgValueInToggle = positions.filter(p=>p.isSG).reduce((s,p)=>s+p.value,0);
+  const usValueInToggle = totalValue - sgValueInToggle;
+  const sgValueNative   = positions.filter(p=>p.isSG).reduce((s,p)=>s+p.valueNative,0);
+  const usValueNative   = positions.filter(p=>!p.isSG).reduce((s,p)=>s+p.valueNative,0);
 
-  // Build FX source description
   let fxLabel;
   if (fxInfo.source === 'live') {
     const ageMin = fxInfo.ts ? Math.floor((Date.now()-fxInfo.ts)/60000) : 0;
@@ -1737,29 +1810,30 @@ async function loadInsights() {
   } else if (fxInfo.source === 'historical') {
     fxLabel = `your avg historical rate (live API unavailable)`;
   } else {
-    fxLabel = `default rate (no data available)`;
+    fxLabel = `default rate`;
   }
 
-  document.getElementById('ins-total-value').textContent = fmtUSD(totalValue);
+  document.getElementById('ins-total-label').textContent = `Total Portfolio (${ccyLabel} eq.)`;
+  document.getElementById('ins-total-value').textContent = fmtCcy(totalValue);
   document.getElementById('ins-total-sub').innerHTML =
-    `${positions.length} positions · ${fmtUSD(usdOnlyUSD)} USD + ${fmtSGD(sgdNativeTotal)} @${sgdRate.toFixed(4)} <span style="opacity:.6">(${fxLabel})</span>`;
+    `${positions.length} positions · ${fmtUSD(usValueNative)} USD + ${fmtSGD(sgValueNative)} SGD <span style="opacity:.6">(${fxLabel} @${sgdToUsd.toFixed(4)})</span>`;
 
   const largest = top10[0];
   if (largest) {
     document.getElementById('ins-largest').textContent = largest.ticker;
     document.getElementById('ins-largest-sub').textContent =
-      `${fmtUSD(largest.value)} (${(largest.value/totalValue*100).toFixed(1)}%)`;
+      `${fmtCcy(largest.value)} (${(largest.value/totalValue*100).toFixed(1)}%)`;
   }
 
   const topSec = bySector[0];
   if (topSec) {
     document.getElementById('ins-top-sector').textContent = topSec.label;
     document.getElementById('ins-top-sector-sub').textContent =
-      `${fmtUSD(topSec.value)} (${topSec.pct.toFixed(1)}%)`;
+      `${fmtCcy(topSec.value)} (${topSec.pct.toFixed(1)}%)`;
   }
 
-  // Diversification: Herfindahl-Hirschman Index
-  const hhi = positions.reduce((s,p) => s + Math.pow(p.valueUSD/totalValue, 2), 0);
+  // Diversification (currency-independent)
+  const hhi = positions.reduce((s,p) => s + Math.pow(p.value/totalValue, 2), 0);
   const effective = 1/hhi;
   const divLabel = effective > 15 ? 'Excellent' : effective > 10 ? 'Good' : effective > 6 ? 'Moderate' : 'Concentrated';
   document.getElementById('ins-diversification').textContent = effective.toFixed(1);
@@ -1786,18 +1860,16 @@ async function loadInsights() {
     warnEl.style.display = 'none';
   }
 
-  // ── Render charts (with proper destroy + resize fix) ──
+  // ── Render charts ──
   Object.values(_insightsCharts).forEach(c => { try { c && c.destroy(); } catch(e){} });
   _insightsCharts = {};
-
-  // Wait one frame so the page is fully laid out before sizing canvases
   await new Promise(r => requestAnimationFrame(r));
 
-  _insightsCharts.sector    = renderDoughnut('chart-sector',    bySector, SECTOR_COLORS);
-  _insightsCharts.geo       = renderDoughnut('chart-geo',       byGeo,    GEO_COLORS);
-  _insightsCharts.assettype = renderDoughnut('chart-assettype', byAsset,  ASSET_COLORS);
-  _insightsCharts.broker    = renderDoughnut('chart-broker',    byBroker, BROKER_COLORS);
-  _insightsCharts.top10     = renderTop10('chart-top10', top10, totalValue);
+  _insightsCharts.sector    = renderDoughnut('chart-sector',    bySector, SECTOR_COLORS, fmtCcy);
+  _insightsCharts.geo       = renderDoughnut('chart-geo',       byGeo,    GEO_COLORS,    fmtCcy);
+  _insightsCharts.assettype = renderDoughnut('chart-assettype', byAsset,  ASSET_COLORS,  fmtCcy);
+  _insightsCharts.broker    = renderDoughnut('chart-broker',    byBroker, BROKER_COLORS, fmtCcy);
+  _insightsCharts.top10     = renderTop10('chart-top10', top10, totalValue, fmtCcy, ccyLabel);
 
   renderLegend('legend-sector',    bySector, SECTOR_COLORS);
   renderLegend('legend-geo',       byGeo,    GEO_COLORS);
@@ -1805,7 +1877,7 @@ async function loadInsights() {
   renderLegend('legend-broker',    byBroker, BROKER_COLORS);
 }
 
-function renderDoughnut(canvasId, data, colorMap) {
+function renderDoughnut(canvasId, data, colorMap, fmtCcy) {
   const ctx = document.getElementById(canvasId);
   if (!ctx) return null;
   return new Chart(ctx, {
@@ -1818,7 +1890,6 @@ function renderDoughnut(canvasId, data, colorMap) {
         borderColor: '#0f1419',
         borderWidth: 2,
         hoverOffset: 8,
-        // Stash constituent stocks on the dataset so tooltip can reach them
         _stocks: data.map(d => d.stocks || []),
       }]
     },
@@ -1842,7 +1913,7 @@ function renderDoughnut(canvasId, data, colorMap) {
             label: (ctx) => {
               const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
               const pct = (ctx.parsed/total*100).toFixed(1);
-              return `Total: ${fmtUSD(ctx.parsed)}  (${pct}%)`;
+              return `Total: ${fmtCcy(ctx.parsed)}  (${pct}%)`;
             },
             afterBody: (items) => {
               const i = items[0].dataIndex;
@@ -1852,12 +1923,75 @@ function renderDoughnut(canvasId, data, colorMap) {
               const max = Math.min(stocks.length, 8);
               for (let k = 0; k < max; k++) {
                 const s = stocks[k];
-                lines.push(`${s.ticker.padEnd(7)} ${fmtUSD(s.value)} (${s.pct.toFixed(1)}%)`);
+                lines.push(`${s.ticker.padEnd(7)} ${fmtCcy(s.value)} (${s.pct.toFixed(1)}%)`);
               }
               if (stocks.length > max) lines.push(`+ ${stocks.length - max} more`);
               return lines;
             }
           }
+        }
+      }
+    }
+  });
+}
+
+function renderTop10(canvasId, data, totalValue, fmtCcy, ccyLabel) {
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return null;
+  // Decorate label so SGX stocks are visually distinct
+  const labels = data.map(d => d.isSG ? `${d.ticker} 🇸🇬` : d.ticker);
+  return new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Market Value',
+        data: data.map(d => d.value),
+        backgroundColor: data.map((d,i) => d.isSG ? '#10b981' : `hsl(${210 - i*8}, 70%, ${60 - i*2}%)`),
+        borderRadius: 6,
+        barThickness: 24,
+        _native: data.map(d => ({ ccy: d.nativeCcy, val: d.valueNative })),
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 400 },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1a1f2e',
+          borderColor: '#2a3142',
+          borderWidth: 1,
+          padding: 12,
+          titleFont: { size: 13, weight: '700', family: 'DM Mono, monospace' },
+          bodyFont:  { size: 11, family: 'DM Mono, monospace' },
+          callbacks: {
+            label: (ctx) => {
+              const pct = (ctx.parsed.x/totalValue*100).toFixed(1);
+              return `${fmtCcy(ctx.parsed.x)} (${pct}%)`;
+            },
+            afterLabel: (ctx) => {
+              const native = ctx.dataset._native[ctx.dataIndex];
+              if (!native || native.ccy === ccyLabel) return null;
+              const fmt = native.ccy === 'USD' ? fmtUSD : fmtSGD;
+              return `Native: ${fmt(native.val)} ${native.ccy}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: '#2a3142' },
+          ticks: {
+            color: '#7d8597', font: { size: 11 },
+            callback: v => (ccyLabel==='USD'?'$':'S$') + (v/1000).toFixed(0) + 'k'
+          }
+        },
+        y: {
+          grid: { display: false },
+          ticks: { color: '#cdd5e0', font: { family: 'DM Mono, monospace', size: 12, weight: '600' } }
         }
       }
     }
@@ -1875,54 +2009,6 @@ function renderLegend(elId, data, colorMap) {
       <div class="chart-legend-value">${d.pct.toFixed(1)}%</div>
     </div>`;
   }).join('');
-}
-
-function renderTop10(canvasId, data, totalValue) {
-  const ctx = document.getElementById(canvasId);
-  if (!ctx) return null;
-  return new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: data.map(d => d.ticker),
-      datasets: [{
-        label: 'Market Value',
-        data: data.map(d => d.value),
-        backgroundColor: data.map((_,i) => `hsl(${210 - i*8}, 70%, ${60 - i*2}%)`),
-        borderRadius: 6,
-        barThickness: 24,
-      }]
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#1a1f2e',
-          borderColor: '#2a3142',
-          borderWidth: 1,
-          padding: 12,
-          callbacks: {
-            label: (ctx) => {
-              const pct = (ctx.parsed.x/totalValue*100).toFixed(1);
-              return ` ${fmtUSD(ctx.parsed.x)} (${pct}% of portfolio)`;
-            }
-          }
-        }
-      },
-      scales: {
-        x: {
-          grid: { color: '#2a3142' },
-          ticks: { color: '#7d8597', font: { size: 11 }, callback: v => '$' + (v/1000).toFixed(0) + 'k' }
-        },
-        y: {
-          grid: { display: false },
-          ticks: { color: '#cdd5e0', font: { family: 'DM Mono, monospace', size: 12, weight: '600' } }
-        }
-      }
-    }
-  });
 }
 
 // On load, restore page from URL hash
