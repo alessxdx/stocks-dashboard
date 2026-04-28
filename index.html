@@ -1321,6 +1321,115 @@ tr:hover td { background:var(--surface2); }
 </div>
 
 
+<!-- ===================== STOCK DETAIL PAGE ===================== -->
+<div id="page-stock" class="page">
+  <div class="page-header">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div style="display:flex;align-items:center;gap:18px">
+        <button onclick="goBackFromStock()" class="btn btn-sm" style="font-size:11px">← Back</button>
+        <div id="stock-hero-logo"></div>
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <div class="page-title" id="stock-ticker" style="margin:0">—</div>
+            <span id="stock-broker-badge"></span>
+          </div>
+          <div class="page-subtitle" id="stock-subtitle">—</div>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-family:var(--font-num);font-weight:700;font-size:28px" id="stock-price">—</div>
+        <div style="font-family:var(--font-num);font-weight:600;font-size:13px" id="stock-day-change">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI cards -->
+  <div class="stat-grid stat-grid-4" style="margin-bottom:20px">
+    <div class="stat-card">
+      <div class="stat-label">Your Shares</div>
+      <div class="stat-value" id="stock-shares">—</div>
+      <div class="stat-sub" id="stock-shares-sub">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Market Value</div>
+      <div class="stat-value" id="stock-mkt-value">—</div>
+      <div class="stat-sub" id="stock-mkt-value-sub">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Cost</div>
+      <div class="stat-value" id="stock-total-cost">—</div>
+      <div class="stat-sub" id="stock-avg-cost">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Unrealised P&L</div>
+      <div class="stat-value" id="stock-unreal-pl">—</div>
+      <div class="stat-sub" id="stock-unreal-pct">—</div>
+    </div>
+  </div>
+
+  <!-- Performance metrics -->
+  <div class="section" style="margin-bottom:20px">
+    <div class="section-header">
+      <div class="section-title">Price Performance</div>
+      <div style="font-size:11px;color:var(--muted)">Live percentage changes</div>
+    </div>
+    <div style="padding:18px 22px;display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:14px">
+      <div><div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Today</div><div style="font-family:var(--font-num);font-weight:700;font-size:18px" id="stock-perf-day">—</div></div>
+      <div><div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">1 Week</div><div style="font-family:var(--font-num);font-weight:700;font-size:18px" id="stock-perf-week">—</div></div>
+      <div><div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">1 Month</div><div style="font-family:var(--font-num);font-weight:700;font-size:18px" id="stock-perf-month">—</div></div>
+      <div><div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">3 Month</div><div style="font-family:var(--font-num);font-weight:700;font-size:18px" id="stock-perf-3m">—</div></div>
+      <div><div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">YTD</div><div style="font-family:var(--font-num);font-weight:700;font-size:18px" id="stock-perf-ytd">—</div></div>
+    </div>
+  </div>
+
+  <!-- Trade History -->
+  <div class="section" style="margin-bottom:20px">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Trade History</div>
+        <div style="font-size:11px;color:var(--muted)" id="stock-trades-sub">—</div>
+      </div>
+      <button class="btn btn-sm" onclick="openStockAddTrade()">+ Add Trade</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Date</th><th>Action</th><th>Qty</th><th>Price</th><th>Amount</th><th>Realised P&L</th>
+        </tr></thead>
+        <tbody id="stock-trades-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Dividends Received -->
+  <div class="section" style="margin-bottom:20px" id="stock-divs-section">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Dividends Received</div>
+        <div style="font-size:11px;color:var(--muted)" id="stock-divs-sub">—</div>
+      </div>
+      <button class="btn btn-sm" onclick="openStockAddDividend()">+ Add Dividend</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Date</th><th>Amount</th>
+        </tr></thead>
+        <tbody id="stock-divs-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Research placeholder -->
+  <div class="section" style="background:linear-gradient(135deg, #1a1f2e, #1f1a2e);border:1px dashed var(--border);text-align:center;padding:30px 20px">
+    <div style="font-size:24px;margin-bottom:8px;opacity:.5">🔬</div>
+    <div style="font-family:var(--font-mono);font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Coming next</div>
+    <div style="color:var(--text);font-weight:600">Company Research</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:4px">Business model, moat, competition, financials</div>
+  </div>
+</div>
+
+
 </main>
 </div>
 
@@ -1813,6 +1922,7 @@ function showPage(id, el) {
   else if (id === 'dividends') loadDividends();
   else if (id === 'insights') loadInsights();
   else if (id === 'watchlist') loadWatchlistPage();
+  else if (id === 'stock') {} // loadStockDetail is called separately via showStockDetail()
 }
 
 // ============================================================
@@ -2306,7 +2416,7 @@ function renderHoldingsList(holdings, fmtCcy, maxPct) {
     // Bar width: largest position fills the full row, others scaled proportionally
     const barPct = maxPct > 0 ? Math.max((h.pctOfPortfolio / maxPct) * 100, 4) : 4;
 
-    return `<div class="holding-row">
+    return `<div class="holding-row" style="cursor:pointer" onclick="showStockDetail('${h.ticker}','${h.broker==='Webull'?'webull':h.broker==='Syfe'?'syfe':'cmc'}',${h.isSG})">
       <div class="h-bar" style="width:${barPct}%"></div>
       ${logoHTML}
       <div class="h-ticker">${h.ticker}</div>
@@ -2602,9 +2712,244 @@ async function renderPerformanceChart() {
   });
 }
 
+// ============================================================
+// STOCK DETAIL PAGE
+// ============================================================
+let _stockPrev = 'overview'; // remember where the user came from for Back button
+let _stockCurrent = null;    // {ticker, isSG, broker}
+
+async function showStockDetail(ticker, broker, isSG) {
+  if (!ticker) return;
+  ticker = ticker.toUpperCase();
+
+  // Remember which page user came from (default to overview)
+  const currentHash = (window.location.hash || '#overview').replace('#','').split('/')[0];
+  if (currentHash && currentHash !== 'stock') _stockPrev = currentHash;
+
+  _stockCurrent = { ticker, broker: broker || null, isSG: !!isSG };
+
+  // Switch to stock page
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-stock').classList.add('active');
+  window.location.hash = 'stock/' + ticker;
+
+  await loadStockDetail(ticker, broker, isSG);
+}
+
+function goBackFromStock() {
+  showPage(_stockPrev || 'overview');
+}
+
+async function loadStockDetail(ticker, broker, isSG) {
+  await loadAllData();
+
+  // Auto-detect broker if not given (look up where the ticker exists)
+  let detectedBroker = broker;
+  let detectedIsSG = !!isSG;
+  if (!detectedBroker) {
+    const wb = (_wbHoldings||[]).find(h => h.ticker === ticker);
+    const sy = (_syfeH||[]).find(h => h.ticker === ticker);
+    const cmc = getCMCActive().find(h => h.ticker === ticker);
+    if (wb) detectedBroker = 'webull';
+    else if (sy) detectedBroker = 'syfe';
+    else if (cmc) { detectedBroker = 'cmc'; detectedIsSG = true; }
+  }
+  _stockCurrent = { ticker, broker: detectedBroker, isSG: detectedIsSG };
+
+  const pricedTicker = detectedIsSG ? ticker + '.SI' : ticker;
+  await fetchPrices([pricedTicker]);
+  const livePrice = price(pricedTicker) || 0;
+  const dayChg = dayChangeCache[pricedTicker];
+  const periods = periodCache[pricedTicker] || {};
+  const fmtCcy  = detectedIsSG ? fmtSGD : fmtUSD;
+
+  // ── Hero section ──
+  document.getElementById('stock-hero-logo').innerHTML = `<div style="width:64px;height:64px;border-radius:50%;background:#fff;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden">
+    ${miniLogoBigHTML(ticker, detectedIsSG)}
+  </div>`;
+  document.getElementById('stock-ticker').textContent = ticker;
+  const sectorName = getSector(ticker, detectedIsSG);
+  const geoName = getGeography(detectedIsSG);
+  const brokerLabel = detectedBroker === 'cmc' ? 'CMC Invest' : detectedBroker === 'syfe' ? 'Syfe' : detectedBroker === 'webull' ? 'Webull' : 'Watchlist';
+  document.getElementById('stock-broker-badge').innerHTML = detectedBroker
+    ? `<span class="pill pill-${detectedBroker}">${brokerLabel}</span>`
+    : `<span class="pill" style="background:#1a2030;color:var(--muted);border:1px solid var(--border)">Watchlist only</span>`;
+  document.getElementById('stock-subtitle').textContent = `${sectorName} · ${geoName}`;
+  document.getElementById('stock-price').textContent = livePrice > 0 ? fmtCcy(livePrice) : '—';
+  if (dayChg != null) {
+    const cls = dayChg >= 0 ? 'pos' : 'neg';
+    const arrow = dayChg >= 0 ? '↑' : '↓';
+    document.getElementById('stock-day-change').innerHTML =
+      `<span class="${cls}">${arrow} ${(dayChg>=0?'+':'')}${dayChg.toFixed(2)}%</span>`;
+  } else {
+    document.getElementById('stock-day-change').textContent = '—';
+  }
+
+  // ── KPIs (your position) ──
+  let shares = 0, avgCost = 0, totalCost = 0;
+  if (detectedBroker === 'webull') {
+    const h = (_wbHoldings||[]).find(x => x.ticker === ticker);
+    if (h) { shares = h.shares; avgCost = h.avg_cost||0; totalCost = h.total_cost || (shares*avgCost); }
+  } else if (detectedBroker === 'syfe') {
+    const h = (_syfeH||[]).find(x => x.ticker === ticker);
+    if (h) { shares = h.shares; avgCost = h.avg_cost||0; totalCost = h.total_invested || (shares*avgCost); }
+  } else if (detectedBroker === 'cmc') {
+    const h = getCMCActive().find(x => x.ticker === ticker);
+    if (h) { shares = h.shares; avgCost = h.avgPrice||0; totalCost = h.cost || (shares*avgCost); }
+  }
+
+  const mktValue = shares * livePrice;
+  const unreal = mktValue - totalCost;
+  const unrealPct = totalCost > 0 ? unreal/totalCost*100 : 0;
+
+  document.getElementById('stock-shares').textContent = shares > 0 ? fmtShares(shares) : '0';
+  document.getElementById('stock-shares-sub').textContent = shares > 0 ? `${brokerLabel}` : 'No active position';
+  document.getElementById('stock-mkt-value').textContent = mktValue > 0 ? fmtCcy(mktValue) : '—';
+  document.getElementById('stock-mkt-value-sub').textContent = livePrice > 0 ? `@ ${fmtCcy(livePrice)}` : '—';
+  document.getElementById('stock-total-cost').textContent = totalCost > 0 ? fmtCcy(totalCost) : '—';
+  document.getElementById('stock-avg-cost').textContent = avgCost > 0 ? `Avg: ${fmtCcy(avgCost)}` : '—';
+  if (mktValue > 0 && totalCost > 0) {
+    const cls = unreal >= 0 ? 'pos' : 'neg';
+    document.getElementById('stock-unreal-pl').innerHTML = `<span class="${cls}">${plStr(unreal, detectedIsSG?'S$':'$')}</span>`;
+    document.getElementById('stock-unreal-pct').innerHTML = `<span class="${cls}">${(unrealPct>=0?'+':'')}${unrealPct.toFixed(2)}%</span>`;
+  } else {
+    document.getElementById('stock-unreal-pl').textContent = '—';
+    document.getElementById('stock-unreal-pct').textContent = '—';
+  }
+
+  // ── Performance metrics ──
+  function pPct(id, v) {
+    const el = document.getElementById(id);
+    if (v == null) { el.textContent = '—'; el.className = ''; return; }
+    el.style.color = v >= 0 ? 'var(--green)' : 'var(--red)';
+    el.textContent = (v>=0?'+':'') + v.toFixed(2) + '%';
+  }
+  pPct('stock-perf-day',   dayChg);
+  pPct('stock-perf-week',  periods.week);
+  pPct('stock-perf-month', periods.month);
+  pPct('stock-perf-3m',    periods.three_month);
+  pPct('stock-perf-ytd',   periods.ytd);
+
+  // ── Trade history ──
+  let trades = [];
+  if (detectedBroker === 'webull') {
+    trades = (_wbTrades||[]).filter(t => t.brokerage==='webull' && t.ticker === ticker);
+  } else if (detectedBroker === 'syfe') {
+    trades = (_syfeTrades||[]).filter(t => t.ticker === ticker);
+  } else if (detectedBroker === 'cmc') {
+    trades = (_cmcTrades||[]).filter(t => t.brokerage==='cmc' && t.ticker === ticker);
+  }
+  // Sort newest first, but compute realised P&L using forward FIFO logic
+  const sortedAsc = [...trades].sort((a,b) => new Date(a.date) - new Date(b.date));
+  let runShares = 0, runCost = 0;
+  const tradeRows = [];
+  sortedAsc.forEach(t => {
+    const qty = parseFloat(t.qty);
+    const amt = parseFloat(t.amount);
+    let realisedRow = null;
+    if (t.action === 'Buy' || t.action === 'BUY') {
+      runShares += qty; runCost += amt;
+    } else if ((t.action === 'Sell' || t.action === 'SELL') && runShares > 0) {
+      const avg = runCost / runShares;
+      realisedRow = (amt/qty - avg) * qty;
+      runShares -= qty; runCost -= avg * qty;
+    }
+    tradeRows.push({ ...t, realised: realisedRow });
+  });
+
+  const totalBought = sortedAsc.filter(t => /buy/i.test(t.action)).reduce((s,t)=>s+parseFloat(t.amount),0);
+  const totalSold   = sortedAsc.filter(t => /sell/i.test(t.action)).reduce((s,t)=>s+parseFloat(t.amount),0);
+  const totalRealised = tradeRows.reduce((s,t) => s + (t.realised || 0), 0);
+
+  document.getElementById('stock-trades-sub').textContent =
+    `${trades.length} trades · Bought ${fmtCcy(totalBought)} · Sold ${fmtCcy(totalSold)}${totalRealised!==0?` · Realised ${plStr(totalRealised, detectedIsSG?'S$':'$')}`:''}`;
+
+  // Render newest first
+  document.getElementById('stock-trades-body').innerHTML = tradeRows.reverse().map(t => {
+    const isBuy = /buy/i.test(t.action);
+    const actClass = isBuy ? 'pos' : 'neg';
+    const realStr = t.realised != null
+      ? `<span class="${t.realised>=0?'pos':'neg'}">${plStr(t.realised, detectedIsSG?'S$':'$')}</span>`
+      : '<span style="color:var(--muted)">—</span>';
+    return `<tr>
+      <td>${fmtDate(t.date)}</td>
+      <td><strong class="${actClass}">${t.action}</strong></td>
+      <td style="font-family:var(--font-num)">${fmtShares(t.qty)}</td>
+      <td style="font-family:var(--font-num)">${fmtCcy(parseFloat(t.amount)/parseFloat(t.qty))}</td>
+      <td style="font-family:var(--font-num)">${fmtCcy(parseFloat(t.amount))}</td>
+      <td style="font-family:var(--font-num);font-weight:600">${realStr}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" class="empty">No trades for this stock</td></tr>';
+
+  // ── Dividends ──
+  let divs = [];
+  if (detectedBroker === 'webull') {
+    divs = (_divUS||[]).filter(d => d.ticker === ticker)
+      .map(d => ({ id:d.id, date:d.date, amount: d.amount_usd * US_TAX, ccy:'USD' }));
+  } else if (detectedBroker === 'syfe') {
+    divs = (_divSyfe||[]).filter(d => d.ticker === ticker)
+      .map(d => ({ id:d.id, date:d.date, amount: d.amount_usd, ccy:'USD' }));
+  } else if (detectedBroker === 'cmc') {
+    divs = (_divSG||[]).filter(d => d.ticker === ticker)
+      .map(d => ({ id:d.id, date:d.date, amount: d.total_sgd, ccy:'SGD' }));
+  }
+  const totalDivs = divs.reduce((s,d) => s + d.amount, 0);
+  document.getElementById('stock-divs-sub').textContent =
+    divs.length ? `${divs.length} payments · Total ${fmtCcy(totalDivs)}` : 'No dividends recorded';
+
+  divs.sort((a,b) => new Date(b.date) - new Date(a.date));
+  document.getElementById('stock-divs-body').innerHTML = divs.map(d => `<tr>
+    <td>${fmtDate(d.date)}</td>
+    <td class="pos" style="font-family:var(--font-num);font-weight:600">${fmtCcy(d.amount)}</td>
+  </tr>`).join('') || '<tr><td colspan="2" class="empty">No dividends</td></tr>';
+}
+
+// Helper: bigger logo for hero (uses same logo system)
+function miniLogoBigHTML(ticker, isSG) {
+  const clean = ticker.toUpperCase();
+  const initials = clean.slice(0,3);
+  const override = LOGO_OVERRIDES[clean];
+  const primary = isSG ? null : getLogoUrl(ticker, isSG);
+  const fb = getLogoFallbackUrl(ticker);
+  const src = override || primary;
+  if (!src) return `<div style="font-family:var(--font-mono);font-weight:700;font-size:14px;color:#cdd5e0">${initials}</div>`;
+  const finalFb = `this.onerror=null;this.parentNode.innerHTML='<div style=\\'font-family:var(--font-mono);font-weight:700;font-size:14px;color:#cdd5e0\\'>${initials}</div>';`;
+  const chain = (fb && fb !== src)
+    ? `this.onerror=function(){${finalFb}};this.src='${fb}'`
+    : finalFb;
+  return `<img src="${src}" alt="${ticker}" style="width:100%;height:100%;object-fit:contain;padding:4px" loading="lazy" onerror="${chain}">`;
+}
+
+// Quick-action shortcuts
+function openStockAddTrade() {
+  const s = _stockCurrent; if (!s) return;
+  if (s.broker === 'webull') openModal('add-trade-modal','webull');
+  else if (s.broker === 'syfe') openModal('syfe-add-trade-modal','syfe');
+  else if (s.broker === 'cmc') openModal('add-sg-trade-modal','cmc');
+  else openModal('add-trade-modal','webull');
+  // Pre-fill ticker if the field exists
+  setTimeout(() => {
+    ['trade-ticker','syfe-ticker','sg-trade-ticker'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && !el.value) el.value = s.ticker;
+    });
+  }, 50);
+}
+function openStockAddDividend() {
+  const s = _stockCurrent; if (!s) return;
+  openDivModal(s.ticker, s.broker || 'webull');
+}
+
 // On load, restore page from URL hash
 function restorePageFromHash() {
   const hash = window.location.hash.replace('#','');
+  // Handle #stock/TICKER pattern
+  if (hash.startsWith('stock/')) {
+    const ticker = hash.replace('stock/','');
+    showStockDetail(ticker);
+    return;
+  }
   const valid = ['overview','webull','syfe','cmc','fx','dividends','insights','watchlist'];
   if (hash && valid.includes(hash)) {
     showPage(hash);
@@ -2776,7 +3121,7 @@ function renderPositions() {
     const priceStr = h.live_price > 0 ? (h.isSG ? fmtSGD(h.live_price) : fmtUSD(h.live_price)) : '<span style="color:var(--muted)">—</span>';
     const valStr = h.market_value > 0 ? (h.isSG ? fmtSGD(h.market_value) : fmtUSD(h.market_value)) : '<span style="color:var(--muted)">—</span>';
     const avgStr = h.isSG ? fmtSGD(h.avg_cost) : fmtUSD(h.avg_cost);
-    return `<tr>
+    return `<tr style="cursor:pointer" onclick="showStockDetail('${h.ticker}','${h.broker}',${h.isSG})">
       <td>
         <div style="display:flex;align-items:center;gap:10px">
           ${miniLogoHTML(h.ticker, h.isSG)}
