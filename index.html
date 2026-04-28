@@ -137,7 +137,8 @@ body { background:var(--bg); color:var(--text); font-family:var(--font-mono); mi
 .holding-row:hover { background:var(--surface2); }
 .holding-row .h-bar {
   position:absolute; left:0; top:0; bottom:0;
-  background:linear-gradient(90deg, var(--accent)15, transparent);
+  background:linear-gradient(90deg, rgba(56,189,248,0.22) 0%, rgba(56,189,248,0.10) 60%, rgba(56,189,248,0) 100%);
+  border-left:2px solid var(--accent);
   pointer-events:none;
   z-index:0;
 }
@@ -1988,6 +1989,8 @@ const LOGO_OVERRIDES = {
   'D05':  'https://companieslogo.com/img/orig/D05.SI-edfcd000.png?t=1720244491',
   'O39':  'https://companieslogo.com/img/orig/O39.SI-d00b23e8.png?t=1729873664',
   'ME8U': 'https://companieslogo.com/img/orig/ME8U.SI_BIG-57144bd9.png?t=1720244492',
+  'C38U': 'https://s3-symbol-logo.tradingview.com/capitamall-trust--600.png',
+  'A17U': 'https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgt3xZjQ6tLBQK65fff8qxJKT08SVtrJoJd-QoEe4bsbbjokz9YmbHM_zsuhDtoD-n8GMAwM7CUiq18SeaWkXVPXhB2DXJTOLRArgJF_70EiyRUPAX4_L-4YbdcMXOuipVZRp5DuUsoEMLOv56nvuw0oAkhiZ0FD5WGrkof-eB1AWcbL-qNuiGb2unLqA/s250/',
 };
 
 // Tickers where Financial Modeling Prep CDN doesn't work well — fallback to Clearbit by domain
@@ -2052,7 +2055,6 @@ function renderHoldingsList(holdings, fmtCcy) {
       logoHTML = `<div class="h-logo ${h.isSG?'cmc':'fallback'}">${initials}</div>`;
     }
 
-    const flag = h.isSG ? ' 🇸🇬' : '';
     const retClass = h.returnPct >= 0 ? 'pos' : 'neg';
     const retArrow = h.returnPct >= 0 ? '↑' : '↓';
     const retStr   = `${retArrow} ${(h.returnPct>=0?'+':'')}${h.returnPct.toFixed(2)}%`;
@@ -2063,7 +2065,7 @@ function renderHoldingsList(holdings, fmtCcy) {
     return `<div class="holding-row">
       <div class="h-bar" style="width:${barPct}%"></div>
       ${logoHTML}
-      <div class="h-ticker">${h.ticker}${flag}</div>
+      <div class="h-ticker">${h.ticker}</div>
       <div class="h-pct">${h.pctOfPortfolio.toFixed(2)}%</div>
       <div class="h-return ${retClass}">${retStr}</div>
     </div>`;
