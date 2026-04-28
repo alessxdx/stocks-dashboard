@@ -174,6 +174,11 @@ body { background:var(--bg); color:var(--text); font-family:var(--font-mono); mi
   color:#cdd5e0; font-family:var(--font-mono); font-weight:700;
   font-size:9px; letter-spacing:.3px;
 }
+
+/* ── Year-grouped collapsible rows ── */
+.year-header td { transition:background .15s; }
+.year-header:hover td { background:#1c2230 !important; }
+.year-header.open td { border-bottom:1px solid var(--border); }
 .h-ticker {
   font-family:var(--font-mono); font-weight:700; font-size:15px;
   color:var(--text); letter-spacing:.3px;
@@ -1625,6 +1630,81 @@ function fmtShares(v) {
 function plColor(v) { return v >= 0 ? 'pos' : 'neg'; }
 function plStr(v, prefix='$') { return (v>=0?'+':'')+prefix+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 
+// ── Year-grouped collapsible row renderer ──
+// items: array of objects with .date and .currency and .amount (and optional .id, .source_note)
+// rowFn: function(item) → returns HTML string for one <tr>
+// colspan: number of columns in the parent table
+// groupKey: unique key for this section (e.g. "wb-deps") so each year-row is uniquely identifiable
+function renderYearGroupedRows(items, rowFn, colspan, groupKey) {
+  if (!items || !items.length) {
+    return `<tr><td colspan="${colspan}" class="empty">No entries</td></tr>`;
+  }
+
+  // Group by year (descending)
+  const byYear = {};
+  items.forEach(it => {
+    const yr = (it.date || '').substring(0,4);
+    if (!byYear[yr]) byYear[yr] = [];
+    byYear[yr].push(it);
+  });
+  const years = Object.keys(byYear).sort((a,b) => b.localeCompare(a));
+  const currentYear = String(new Date().getFullYear());
+
+  let html = '';
+  years.forEach(yr => {
+    const yrItems = byYear[yr].sort((a,b) => new Date(b.date) - new Date(a.date));
+    // Compute totals per currency
+    const totalSGD = yrItems.filter(x=>x.currency==='SGD').reduce((s,x)=>s+(x.amount||0),0);
+    const totalUSD = yrItems.filter(x=>x.currency!=='SGD').reduce((s,x)=>s+(x.amount||0),0);
+    const totalParts = [];
+    if (totalSGD > 0) totalParts.push(fmtSGD(totalSGD));
+    if (totalUSD > 0) totalParts.push(fmtUSD(totalUSD));
+    const totalStr = totalParts.join(' + ') || '—';
+    const isOpen = yr === currentYear;
+    const rowId = `${groupKey}-yr-${yr}`;
+
+    // Year header row — clickable
+    html += `<tr class="year-header ${isOpen?'open':''}" id="${rowId}-header" onclick="toggleYearGroup('${rowId}')">
+      <td colspan="${colspan}" style="padding:11px 14px;background:var(--surface2);border-top:1px solid var(--border);cursor:pointer;user-select:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="year-toggle" id="${rowId}-toggle" style="font-family:var(--font-mono);font-size:10px;color:var(--muted);width:14px;display:inline-block">${isOpen?'▼':'▶'}</span>
+            <span style="font-family:var(--font-mono);font-weight:700;font-size:13px;letter-spacing:.5px">${yr}</span>
+            <span style="font-size:10px;color:var(--muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.4px">${yrItems.length} entr${yrItems.length===1?'y':'ies'}</span>
+          </div>
+          <div style="font-family:var(--font-num);font-weight:600;font-size:13px;color:var(--text)">${totalStr}</div>
+        </div>
+      </td>
+    </tr>`;
+
+    // Data rows for this year — wrapped so we can hide them
+    yrItems.forEach((it, idx) => {
+      // Inject group class onto each row so toggle can target them
+      const inner = rowFn(it);
+      // Replace opening <tr> with a tagged version
+      const tagged = inner.replace(/^<tr/, `<tr class="${rowId}-row" data-year-row="${rowId}" style="${isOpen?'':'display:none'}"`);
+      html += tagged;
+    });
+  });
+  return html;
+}
+
+function toggleYearGroup(rowId) {
+  const headerToggle = document.getElementById(rowId + '-toggle');
+  const headerRow = document.getElementById(rowId + '-header');
+  const rows = document.querySelectorAll(`tr[data-year-row="${rowId}"]`);
+  const isOpen = headerToggle.textContent === '▼';
+  if (isOpen) {
+    rows.forEach(r => r.style.display = 'none');
+    headerToggle.textContent = '▶';
+    headerRow.classList.remove('open');
+  } else {
+    rows.forEach(r => r.style.display = '');
+    headerToggle.textContent = '▼';
+    headerRow.classList.add('open');
+  }
+}
+
 // ============================================================
 // NAVIGATION
 // ============================================================
@@ -2499,35 +2579,43 @@ async function loadWebull() {
   window._wbAllTrades = wbTrades;;
 
   // Deposits
-  document.getElementById('wb-deposits-body').innerHTML = wbDeps.map(d => `<tr>
-    <td>${fmtDate(d.date)}</td>
-    <td>${d.currency}</td>
-    <td>${d.currency==='SGD'?fmtSGD(d.amount):fmtUSD(d.amount)}</td>
-    <td>
-      <div style="display:flex;gap:6px">
-        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
-          onclick="openEditDepositModal(${d.id},'webull','${d.date}','${d.currency}',${d.amount},'${d.source_note||''}')">Edit</button>
-        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
-          onclick="deleteDepositEntry(${d.id},'webull')">Del</button>
-      </div>
-    </td>
-  </tr>`).join('') || '<tr><td colspan="4" class="empty">No deposits</td></tr>';
+  document.getElementById('wb-deposits-body').innerHTML = renderYearGroupedRows(
+    wbDeps,
+    d => `<tr>
+      <td>${fmtDate(d.date)}</td>
+      <td>${d.currency}</td>
+      <td>${d.currency==='SGD'?fmtSGD(d.amount):fmtUSD(d.amount)}</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
+            onclick="openEditDepositModal(${d.id},'webull','${d.date}','${d.currency}',${d.amount},'${(d.source_note||'').replace(/'/g,"\\'")}')">Edit</button>
+          <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
+            onclick="deleteDepositEntry(${d.id},'webull')">Del</button>
+        </div>
+      </td>
+    </tr>`,
+    4, 'wb-deps'
+  );
 
   // Withdrawals
   const wbWdList = (_wds||[]).filter(w => w.brokerage==='webull');
-  document.getElementById('wb-withdrawals-body').innerHTML = wbWdList.map(w => `<tr>
-    <td>${fmtDate(w.date)}</td>
-    <td>${w.currency}</td>
-    <td>${fmtSGD(w.amount)}</td>
-    <td>
-      <div style="display:flex;gap:6px">
-        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
-          onclick="openEditWithdrawalModal(${w.id},'webull','${w.date}','${w.currency}',${w.amount})">Edit</button>
-        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
-          onclick="deleteWithdrawalEntry(${w.id},'webull')">Del</button>
-      </div>
-    </td>
-  </tr>`).join('') || '<tr><td colspan="4" class="empty">No withdrawals</td></tr>';
+  document.getElementById('wb-withdrawals-body').innerHTML = renderYearGroupedRows(
+    wbWdList,
+    w => `<tr>
+      <td>${fmtDate(w.date)}</td>
+      <td>${w.currency}</td>
+      <td>${fmtSGD(w.amount)}</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
+            onclick="openEditWithdrawalModal(${w.id},'webull','${w.date}','${w.currency}',${w.amount})">Edit</button>
+          <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
+            onclick="deleteWithdrawalEntry(${w.id},'webull')">Del</button>
+        </div>
+      </td>
+    </tr>`,
+    4, 'wb-wds'
+  );
 }
 
 // ============================================================
@@ -2589,36 +2677,44 @@ async function loadSyfe() {
 
   // Syfe deposits
   const syDeps = (_deps||[]).filter(d=>d.brokerage==='syfe');
-  document.getElementById('sy-deposits-body').innerHTML = syDeps.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(d => `<tr>
-    <td>${fmtDate(d.date)}</td><td>${d.currency}</td>
-    <td>${d.currency==='SGD'?fmtSGD(d.amount):fmtUSD(d.amount)}</td>
-    <td>${d.source_note||'—'}</td>
-    <td>
-      <div style="display:flex;gap:6px">
-        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
-          onclick="openEditDepositModal(${d.id},'syfe','${d.date}','${d.currency}',${d.amount},'${d.source_note||''}')">Edit</button>
-        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
-          onclick="deleteDepositEntry(${d.id},'syfe')">Del</button>
-      </div>
-    </td>
-  </tr>`).join('') || '<tr><td colspan="5" class="empty">No deposits</td></tr>';
+  document.getElementById('sy-deposits-body').innerHTML = renderYearGroupedRows(
+    syDeps,
+    d => `<tr>
+      <td>${fmtDate(d.date)}</td><td>${d.currency}</td>
+      <td>${d.currency==='SGD'?fmtSGD(d.amount):fmtUSD(d.amount)}</td>
+      <td>${d.source_note||'—'}</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
+            onclick="openEditDepositModal(${d.id},'syfe','${d.date}','${d.currency}',${d.amount},'${(d.source_note||'').replace(/'/g,"\\'")}')">Edit</button>
+          <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
+            onclick="deleteDepositEntry(${d.id},'syfe')">Del</button>
+        </div>
+      </td>
+    </tr>`,
+    5, 'sy-deps'
+  );
 
   // Syfe withdrawals
   const syWds = (_wds||[]).filter(w=>w.brokerage==='syfe');
-  document.getElementById('sy-withdrawals-body').innerHTML = syWds.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(w => `<tr>
-    <td>${fmtDate(w.date)}</td>
-    <td>${w.currency||'SGD'}</td>
-    <td>${(w.currency||'SGD')==='USD'?fmtUSD(w.amount):fmtSGD(w.amount)}</td>
-    <td>${w.note||'—'}</td>
-    <td>
-      <div style="display:flex;gap:6px">
-        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
-          onclick="openEditWithdrawalModal(${w.id},'syfe','${w.date}','${w.currency||'SGD'}',${w.amount})">Edit</button>
-        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
-          onclick="deleteWithdrawalEntry(${w.id},'syfe')">Del</button>
-      </div>
-    </td>
-  </tr>`).join('') || '<tr><td colspan="5" class="empty">No withdrawals</td></tr>';
+  document.getElementById('sy-withdrawals-body').innerHTML = renderYearGroupedRows(
+    syWds,
+    w => `<tr>
+      <td>${fmtDate(w.date)}</td>
+      <td>${w.currency||'SGD'}</td>
+      <td>${(w.currency||'SGD')==='USD'?fmtUSD(w.amount):fmtSGD(w.amount)}</td>
+      <td>${w.note||'—'}</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
+            onclick="openEditWithdrawalModal(${w.id},'syfe','${w.date}','${w.currency||'SGD'}',${w.amount})">Edit</button>
+          <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40"
+            onclick="deleteWithdrawalEntry(${w.id},'syfe')">Del</button>
+        </div>
+      </td>
+    </tr>`,
+    5, 'sy-wds'
+  );
 
   // SPYI divs
   // Group Syfe divs by ticker — VOO, SCHG, SPYI
@@ -2778,24 +2874,32 @@ async function loadCMC() {
     </tr>`).join('') || '<tr><td colspan="4" class="empty">No dividends yet</td></tr>';
 
   // Deposits
-  document.getElementById('cmc-deposits-body').innerHTML = cmcDeps.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(d => `<tr>
-    <td>${fmtDate(d.date)}</td>
-    <td>${fmtSGD(d.amount)}</td>
-    <td><div style="display:flex;gap:6px">
-      <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40" onclick="openEditDepositModal(${d.id},'cmc','${d.date}','${d.currency||'SGD'}',${d.amount},'${d.source_note||''}')">Edit</button>
-      <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40" onclick="deleteDepositEntry(${d.id},'cmc')">Del</button>
-    </div></td>
-  </tr>`).join('') || '<tr><td colspan="3" class="empty">No deposits</td></tr>';
+  document.getElementById('cmc-deposits-body').innerHTML = renderYearGroupedRows(
+    cmcDeps.map(d => ({ ...d, currency: d.currency || 'SGD' })),
+    d => `<tr>
+      <td>${fmtDate(d.date)}</td>
+      <td>${fmtSGD(d.amount)}</td>
+      <td><div style="display:flex;gap:6px">
+        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40" onclick="openEditDepositModal(${d.id},'cmc','${d.date}','${d.currency||'SGD'}',${d.amount},'${(d.source_note||'').replace(/'/g,"\\'")}')">Edit</button>
+        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40" onclick="deleteDepositEntry(${d.id},'cmc')">Del</button>
+      </div></td>
+    </tr>`,
+    3, 'cmc-deps'
+  );
 
   // Withdrawals
-  document.getElementById('cmc-withdrawals-body').innerHTML = cmcWds.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(w => `<tr>
-    <td>${fmtDate(w.date)}</td>
-    <td style="font-family:var(--font-num)">${fmtSGD(w.amount)}</td>
-    <td><div style="display:flex;gap:6px">
-      <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40" onclick="openEditWithdrawalModal(${w.id},'cmc','${w.date}','${w.currency||'SGD'}',${w.amount})">Edit</button>
-      <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40" onclick="deleteWithdrawalEntry(${w.id},'cmc')">Del</button>
-    </div></td>
-  </tr>`).join('') || '<tr><td colspan="3" class="empty">No withdrawals</td></tr>';
+  document.getElementById('cmc-withdrawals-body').innerHTML = renderYearGroupedRows(
+    cmcWds.map(w => ({ ...w, currency: w.currency || 'SGD' })),
+    w => `<tr>
+      <td>${fmtDate(w.date)}</td>
+      <td style="font-family:var(--font-num)">${fmtSGD(w.amount)}</td>
+      <td><div style="display:flex;gap:6px">
+        <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40" onclick="openEditWithdrawalModal(${w.id},'cmc','${w.date}','${w.currency||'SGD'}',${w.amount})">Edit</button>
+        <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40" onclick="deleteWithdrawalEntry(${w.id},'cmc')">Del</button>
+      </div></td>
+    </tr>`,
+    3, 'cmc-wds'
+  );
 }
 
 
