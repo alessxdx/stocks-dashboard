@@ -125,7 +125,7 @@ body { background:var(--bg); color:var(--text); font-family:var(--font-mono); mi
 /* ── Holdings card list (clean) ── */
 .holding-row {
   display:grid;
-  grid-template-columns: 56px 1fr 90px 110px;
+  grid-template-columns: 56px 1fr 130px 90px 110px;
   align-items:center;
   gap:14px;
   padding:14px 20px;
@@ -184,14 +184,17 @@ body { background:var(--bg); color:var(--text); font-family:var(--font-mono); mi
   color:var(--text); letter-spacing:.3px;
 }
 .h-pct { text-align:right; font-family:var(--font-num); font-weight:700; font-size:15px; color:var(--text); }
+.h-value { text-align:right; font-family:var(--font-num); font-weight:600; font-size:14px; color:var(--text); }
 .h-return {
   text-align:right; font-family:var(--font-num); font-weight:700; font-size:14px;
   display:flex; align-items:center; justify-content:flex-end; gap:5px;
 }
 @media (max-width:780px) {
-  .holding-row { grid-template-columns: 44px 1fr 70px 90px; gap:10px; padding:12px 14px; }
+  .holding-row { grid-template-columns: 44px 1fr 100px 70px 80px; gap:8px; padding:12px 14px; }
   .h-logo { width:36px; height:36px; }
   .h-ticker { font-size:13px; }
+  .h-value { font-size:12px; }
+  .h-pct, .h-return { font-size:12px; }
 }
 .section-header {
   padding:16px 20px; border-bottom:1px solid var(--border);
@@ -2220,6 +2223,7 @@ function renderHoldingsList(holdings, fmtCcy, maxPct) {
       <div class="h-bar" style="width:${barPct}%"></div>
       ${logoHTML}
       <div class="h-ticker">${h.ticker}</div>
+      <div class="h-value">${fmtCcy(h.value)}</div>
       <div class="h-pct">${h.pctOfPortfolio.toFixed(2)}%</div>
       <div class="h-return ${retClass}">${retStr}</div>
     </div>`;
