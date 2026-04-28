@@ -160,6 +160,20 @@ body { background:var(--bg); color:var(--text); font-family:var(--font-mono); mi
   font-size:11px; letter-spacing:.4px;
 }
 .h-logo.cmc { background:linear-gradient(135deg, #052e1d, #064430); color:#3dd68c; border-color:#3dd68c40; }
+
+/* ── Mini logo for inline use in tables ── */
+.mini-logo {
+  width:26px; height:26px; border-radius:50%;
+  background:#fff; border:1px solid var(--border);
+  display:inline-flex; align-items:center; justify-content:center;
+  overflow:hidden; flex-shrink:0;
+}
+.mini-logo img { width:100%; height:100%; object-fit:contain; padding:1px; }
+.mini-logo.fallback {
+  background:linear-gradient(135deg, #1f2937, #111827);
+  color:#cdd5e0; font-family:var(--font-mono); font-weight:700;
+  font-size:9px; letter-spacing:.3px;
+}
 .h-ticker {
   font-family:var(--font-mono); font-weight:700; font-size:15px;
   color:var(--text); letter-spacing:.3px;
@@ -368,11 +382,14 @@ tr:hover td { background:var(--surface2); }
     <div class="nav-item active" onclick="showPage('overview',this)">
       <div class="dot"></div><span>Overview</span>
     </div>
-    <div class="nav-item" onclick="showPage('webull',this)">
-      <div class="dot nav-dot-webull"></div><span>Webull</span>
+    <div class="nav-item" onclick="showPage('insights',this)">
+      <div class="dot" style="background:#a78bfa"></div><span>Insights</span>
     </div>
     <div class="nav-item" onclick="showPage('syfe',this)">
       <div class="dot nav-dot-syfe"></div><span>Syfe</span>
+    </div>
+    <div class="nav-item" onclick="showPage('webull',this)">
+      <div class="dot nav-dot-webull"></div><span>Webull</span>
     </div>
     <div class="nav-item" onclick="showPage('cmc',this)">
       <div class="dot nav-dot-cmc"></div><span>CMC Invest</span>
@@ -382,9 +399,6 @@ tr:hover td { background:var(--surface2); }
     </div>
     <div class="nav-item" onclick="showPage('dividends',this)">
       <div class="dot"></div><span>Dividends</span>
-    </div>
-    <div class="nav-item" onclick="showPage('insights',this)">
-      <div class="dot" style="background:#a78bfa"></div><span>Insights</span>
     </div>
     <div class="nav-item" onclick="showPage('watchlist',this)">
       <div class="dot"></div><span>Watchlist</span>
@@ -2036,6 +2050,27 @@ function getLogoFallbackUrl(ticker) {
   return domain ? `https://logo.clearbit.com/${domain}` : null;
 }
 
+// Compact logo for inline use in tables (24px circle, fallback gracefully)
+function miniLogoHTML(ticker, isSG) {
+  const clean = ticker.toUpperCase();
+  const initials = clean.slice(0,3);
+  const override = LOGO_OVERRIDES[clean];
+  const primary  = isSG ? null : getLogoUrl(ticker, isSG);
+  const fb       = getLogoFallbackUrl(ticker);
+
+  // Use override first (works for both US and SGX); else fall through to primary
+  const src = override || primary;
+
+  if (!src) {
+    return `<div class="mini-logo fallback">${initials}</div>`;
+  }
+  const finalFallback = `this.onerror=null;this.parentNode.classList.add('fallback');this.style.display='none';this.parentNode.textContent='${initials}';`;
+  const onerrorChain = (fb && fb !== src)
+    ? `this.onerror=function(){${finalFallback}};this.src='${fb}'`
+    : finalFallback;
+  return `<div class="mini-logo"><img src="${src}" alt="${ticker}" loading="lazy" onerror="${onerrorChain}"></div>`;
+}
+
 function renderHoldingsList(holdings, fmtCcy, maxPct) {
   const el = document.getElementById('ins-holdings-list');
   const countEl = document.getElementById('ins-holdings-count');
@@ -2326,7 +2361,12 @@ function renderPositions() {
     const valStr = h.market_value > 0 ? (h.isSG ? fmtSGD(h.market_value) : fmtUSD(h.market_value)) : '<span style="color:var(--muted)">—</span>';
     const avgStr = h.isSG ? fmtSGD(h.avg_cost) : fmtUSD(h.avg_cost);
     return `<tr>
-      <td><span class="ticker-badge ${h.broker || 'default'}">${h.ticker}</span></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px">
+          ${miniLogoHTML(h.ticker, h.isSG)}
+          <span class="ticker-badge ${h.broker || 'default'}">${h.ticker}</span>
+        </div>
+      </td>
       <td><span class="pill pill-${h.broker}">${h.broker === 'cmc' ? 'CMC' : h.broker.charAt(0).toUpperCase()+h.broker.slice(1)}</span></td>
       <td>${fmtShares(h.shares)}</td>
       <td>${avgStr}</td>
