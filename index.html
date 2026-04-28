@@ -2734,6 +2734,10 @@ async function showStockDetail(ticker, broker, isSG) {
   document.getElementById('page-stock').classList.add('active');
   window.location.hash = 'stock/' + ticker;
 
+  // Scroll to top — fixes the "page opens scrolled down" issue
+  window.scrollTo({ top: 0, behavior: 'instant' });
+  document.querySelector('main')?.scrollTo?.({ top: 0, behavior: 'instant' });
+
   await loadStockDetail(ticker, broker, isSG);
 }
 
@@ -2832,25 +2836,37 @@ async function loadStockDetail(ticker, broker, isSG) {
   pPct('stock-perf-ytd',   periods.ytd);
 
   // ── Trade history ──
+  // Webull/CMC trades use: action, qty, amount (Buy/Sell)
+  // Syfe trades use: shares, price_usd, amount_usd (buy-only, no action column)
   let trades = [];
   if (detectedBroker === 'webull') {
     trades = (_wbTrades||[]).filter(t => t.brokerage==='webull' && t.ticker === ticker);
   } else if (detectedBroker === 'syfe') {
-    trades = (_syfeTrades||[]).filter(t => t.ticker === ticker);
+    // Normalize Syfe schema → unified shape
+    trades = (_syfeTrades||[]).filter(t => t.ticker === ticker).map(t => ({
+      id: t.id,
+      ticker: t.ticker,
+      date: t.date,
+      action: 'Buy',
+      qty: t.shares,
+      amount: t.amount_usd,
+    }));
   } else if (detectedBroker === 'cmc') {
     trades = (_cmcTrades||[]).filter(t => t.brokerage==='cmc' && t.ticker === ticker);
   }
-  // Sort newest first, but compute realised P&L using forward FIFO logic
+  // Sort oldest first to compute running FIFO P&L
   const sortedAsc = [...trades].sort((a,b) => new Date(a.date) - new Date(b.date));
   let runShares = 0, runCost = 0;
   const tradeRows = [];
   sortedAsc.forEach(t => {
-    const qty = parseFloat(t.qty);
-    const amt = parseFloat(t.amount);
+    const qty = parseFloat(t.qty) || 0;
+    const amt = parseFloat(t.amount) || 0;
     let realisedRow = null;
-    if (t.action === 'Buy' || t.action === 'BUY') {
+    const isBuy = /buy/i.test(t.action || '');
+    const isSell = /sell/i.test(t.action || '');
+    if (isBuy) {
       runShares += qty; runCost += amt;
-    } else if ((t.action === 'Sell' || t.action === 'SELL') && runShares > 0) {
+    } else if (isSell && runShares > 0) {
       const avg = runCost / runShares;
       realisedRow = (amt/qty - avg) * qty;
       runShares -= qty; runCost -= avg * qty;
@@ -2858,26 +2874,29 @@ async function loadStockDetail(ticker, broker, isSG) {
     tradeRows.push({ ...t, realised: realisedRow });
   });
 
-  const totalBought = sortedAsc.filter(t => /buy/i.test(t.action)).reduce((s,t)=>s+parseFloat(t.amount),0);
-  const totalSold   = sortedAsc.filter(t => /sell/i.test(t.action)).reduce((s,t)=>s+parseFloat(t.amount),0);
+  const totalBought = sortedAsc.filter(t => /buy/i.test(t.action || '')).reduce((s,t)=>s+(parseFloat(t.amount)||0),0);
+  const totalSold   = sortedAsc.filter(t => /sell/i.test(t.action || '')).reduce((s,t)=>s+(parseFloat(t.amount)||0),0);
   const totalRealised = tradeRows.reduce((s,t) => s + (t.realised || 0), 0);
 
   document.getElementById('stock-trades-sub').textContent =
-    `${trades.length} trades · Bought ${fmtCcy(totalBought)} · Sold ${fmtCcy(totalSold)}${totalRealised!==0?` · Realised ${plStr(totalRealised, detectedIsSG?'S$':'$')}`:''}`;
+    `${trades.length} trades · Bought ${fmtCcy(totalBought)}${totalSold>0?` · Sold ${fmtCcy(totalSold)}`:''}${totalRealised!==0?` · Realised ${plStr(totalRealised, detectedIsSG?'S$':'$')}`:''}`;
 
   // Render newest first
   document.getElementById('stock-trades-body').innerHTML = tradeRows.reverse().map(t => {
-    const isBuy = /buy/i.test(t.action);
+    const isBuy = /buy/i.test(t.action || '');
     const actClass = isBuy ? 'pos' : 'neg';
     const realStr = t.realised != null
       ? `<span class="${t.realised>=0?'pos':'neg'}">${plStr(t.realised, detectedIsSG?'S$':'$')}</span>`
       : '<span style="color:var(--muted)">—</span>';
+    const qty = parseFloat(t.qty) || 0;
+    const amt = parseFloat(t.amount) || 0;
+    const pricePerShare = qty > 0 ? amt / qty : 0;
     return `<tr>
       <td>${fmtDate(t.date)}</td>
-      <td><strong class="${actClass}">${t.action}</strong></td>
-      <td style="font-family:var(--font-num)">${fmtShares(t.qty)}</td>
-      <td style="font-family:var(--font-num)">${fmtCcy(parseFloat(t.amount)/parseFloat(t.qty))}</td>
-      <td style="font-family:var(--font-num)">${fmtCcy(parseFloat(t.amount))}</td>
+      <td><strong class="${actClass}">${t.action || '—'}</strong></td>
+      <td style="font-family:var(--font-num)">${fmtShares(qty)}</td>
+      <td style="font-family:var(--font-num)">${fmtCcy(pricePerShare)}</td>
+      <td style="font-family:var(--font-num)">${fmtCcy(amt)}</td>
       <td style="font-family:var(--font-num);font-weight:600">${realStr}</td>
     </tr>`;
   }).join('') || '<tr><td colspan="6" class="empty">No trades for this stock</td></tr>';
