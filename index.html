@@ -105,9 +105,11 @@ body { background:var(--bg); color:var(--text); font-family:var(--font-mono); mi
 .section { background:var(--surface); border:1px solid var(--border); border-radius:12px; margin-bottom:20px; overflow:hidden; }
 
 /* ── Insights page charts ── */
-.charts-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px; }
+.charts-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px; min-width:0; }
 @media (max-width:1100px) { .charts-grid { grid-template-columns:1fr; } }
-.chart-container { position:relative; height:280px; padding:14px 18px; }
+.charts-grid > .section { min-width:0; overflow:hidden; }
+.chart-container { position:relative; height:280px; padding:14px 18px; min-width:0; width:100%; }
+.chart-container > canvas { max-width:100% !important; }
 .chart-legend {
   padding:0 18px 16px; display:grid;
   grid-template-columns:repeat(auto-fill, minmax(180px, 1fr));
@@ -118,6 +120,7 @@ body { background:var(--bg); color:var(--text); font-family:var(--font-mono); mi
 .chart-legend-label { color:var(--text); flex:1; }
 .chart-legend-value { font-family:var(--font-num); font-weight:600; color:var(--muted); font-size:11px; }
 .stat-sub { font-size:11px; color:var(--muted); margin-top:4px; }
+#page-insights { min-width:0; overflow:hidden; }
 .section-header {
   padding:16px 20px; border-bottom:1px solid var(--border);
   display:flex; align-items:center; justify-content:space-between;
@@ -1603,13 +1606,43 @@ const BROKER_COLORS = { 'Webull':'#3b82f6', 'Syfe':'#a855f7', 'CMC Invest':'#10b
 
 let _insightsCharts = {}; // hold chart instances so we can destroy/recreate
 
-// Get average SGD→USD rate from FX conversions
-function getAvgSgdToUsd() {
+// ── Live SGD→USD rate (cached for 1h in localStorage) ──
+async function getLiveSgdToUsd() {
+  const CACHE_KEY = 'sgdUsdRate_v1';
+  const TTL_MS = 60 * 60 * 1000; // 1 hour cache
+
+  // Try cached value first
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (raw) {
+      const { rate, ts } = JSON.parse(raw);
+      if (Date.now() - ts < TTL_MS && rate > 0) return { rate, source: 'live', cached: true, ts };
+    }
+  } catch {}
+
+  // Fetch fresh from open.er-api.com (free, no key)
+  try {
+    const r = await fetch('https://open.er-api.com/v6/latest/SGD', { signal: AbortSignal.timeout(5000) });
+    if (r.ok) {
+      const data = await r.json();
+      const rate = data?.rates?.USD;
+      if (rate && rate > 0) {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ rate, ts: Date.now() }));
+        return { rate, source: 'live', cached: false, ts: Date.now() };
+      }
+    }
+  } catch(e) { console.warn('Live FX fetch failed:', e.message); }
+
+  // Fallback to historical average from your FX conversions
   const fx = _fx || [];
   const sgdToUsd = fx.filter(f => f.from_currency === 'SGD' && f.to_currency === 'USD');
-  if (!sgdToUsd.length) return 0.74; // sensible default
-  const avg = sgdToUsd.reduce((s,f) => s + f.rate, 0) / sgdToUsd.length;
-  return avg;
+  if (sgdToUsd.length) {
+    const avg = sgdToUsd.reduce((s,f) => s + f.rate, 0) / sgdToUsd.length;
+    return { rate: avg, source: 'historical', cached: false };
+  }
+
+  // Last-resort default
+  return { rate: 0.74, source: 'default', cached: false };
 }
 
 async function loadInsights() {
@@ -1628,7 +1661,8 @@ async function loadInsights() {
 
   await fetchPrices(allTickers);
 
-  const sgdRate = getAvgSgdToUsd();
+  const fxInfo = await getLiveSgdToUsd();
+  const sgdRate = fxInfo.rate;
 
   // Build flat positions list
   const positions = [];
@@ -1651,16 +1685,27 @@ async function loadInsights() {
     return;
   }
 
-  // ── Aggregate by category ──
+  // ── Aggregate by category, tracking constituent stocks for tooltips ──
   function aggregate(getCategoryFn) {
     const buckets = {};
     positions.forEach(p => {
       const cat = getCategoryFn(p);
-      if (!buckets[cat]) buckets[cat] = 0;
-      buckets[cat] += p.valueUSD;
+      if (!buckets[cat]) buckets[cat] = { total: 0, stocks: {} };
+      buckets[cat].total += p.valueUSD;
+      const k = p.ticker;
+      if (!buckets[cat].stocks[k]) buckets[cat].stocks[k] = 0;
+      buckets[cat].stocks[k] += p.valueUSD;
     });
     return Object.entries(buckets)
-      .map(([label,value]) => ({ label, value, pct: value/totalValue*100 }))
+      .map(([label, data]) => ({
+        label,
+        value: data.total,
+        pct: data.total/totalValue*100,
+        // Sorted list of constituent stocks (top 8 + "and X more")
+        stocks: Object.entries(data.stocks)
+          .map(([t,v]) => ({ ticker:t, value:v, pct:v/data.total*100 }))
+          .sort((a,b) => b.value - a.value),
+      }))
       .sort((a,b) => b.value - a.value);
   }
 
@@ -1679,9 +1724,25 @@ async function loadInsights() {
   const top10 = Object.values(byTicker).sort((a,b)=>b.value-a.value).slice(0,10);
 
   // ── KPIs ──
+  const sgdOnlyUSD = positions.filter(p=>p.isSG).reduce((s,p)=>s+p.valueUSD,0);
+  const usdOnlyUSD = totalValue - sgdOnlyUSD;
+  const sgdNativeTotal = positions.filter(p=>p.isSG).reduce((s,p)=>s+p.valueSGD,0);
+
+  // Build FX source description
+  let fxLabel;
+  if (fxInfo.source === 'live') {
+    const ageMin = fxInfo.ts ? Math.floor((Date.now()-fxInfo.ts)/60000) : 0;
+    const ageStr = ageMin < 1 ? 'just now' : ageMin < 60 ? `${ageMin}m ago` : `${Math.floor(ageMin/60)}h ago`;
+    fxLabel = `live rate, updated ${ageStr}`;
+  } else if (fxInfo.source === 'historical') {
+    fxLabel = `your avg historical rate (live API unavailable)`;
+  } else {
+    fxLabel = `default rate (no data available)`;
+  }
+
   document.getElementById('ins-total-value').textContent = fmtUSD(totalValue);
-  document.getElementById('ins-total-sub').textContent =
-    `${positions.length} positions · SGD/USD: ${sgdRate.toFixed(4)}`;
+  document.getElementById('ins-total-sub').innerHTML =
+    `${positions.length} positions · ${fmtUSD(usdOnlyUSD)} USD + ${fmtSGD(sgdNativeTotal)} @${sgdRate.toFixed(4)} <span style="opacity:.6">(${fxLabel})</span>`;
 
   const largest = top10[0];
   if (largest) {
@@ -1697,8 +1758,7 @@ async function loadInsights() {
       `${fmtUSD(topSec.value)} (${topSec.pct.toFixed(1)}%)`;
   }
 
-  // Diversification: Herfindahl-Hirschman Index (lower = more diversified)
-  // 1/HHI gives "effective number of holdings"
+  // Diversification: Herfindahl-Hirschman Index
   const hhi = positions.reduce((s,p) => s + Math.pow(p.valueUSD/totalValue, 2), 0);
   const effective = 1/hhi;
   const divLabel = effective > 15 ? 'Excellent' : effective > 10 ? 'Good' : effective > 6 ? 'Moderate' : 'Concentrated';
@@ -1708,16 +1768,13 @@ async function loadInsights() {
 
   // ── Concentration warnings ──
   const warnings = [];
-  // Single position > 20%
   top10.forEach(t => {
     const pct = t.value/totalValue*100;
     if (pct > 20) warnings.push(`<strong>${t.ticker}</strong> is ${pct.toFixed(1)}% of your portfolio — high single-stock risk`);
   });
-  // Single sector > 50%
   bySector.forEach(s => {
     if (s.pct > 50) warnings.push(`<strong>${s.label}</strong> is ${s.pct.toFixed(1)}% of your portfolio — sector concentration`);
   });
-  // Single geo > 90% (note, not warn)
   byGeo.forEach(g => {
     if (g.pct > 90) warnings.push(`${g.pct.toFixed(1)}% of your portfolio is in <strong>${g.label}</strong> — consider geographic diversification`);
   });
@@ -1729,9 +1786,12 @@ async function loadInsights() {
     warnEl.style.display = 'none';
   }
 
-  // ── Render charts ──
-  Object.values(_insightsCharts).forEach(c => c && c.destroy());
+  // ── Render charts (with proper destroy + resize fix) ──
+  Object.values(_insightsCharts).forEach(c => { try { c && c.destroy(); } catch(e){} });
   _insightsCharts = {};
+
+  // Wait one frame so the page is fully laid out before sizing canvases
+  await new Promise(r => requestAnimationFrame(r));
 
   _insightsCharts.sector    = renderDoughnut('chart-sector',    bySector, SECTOR_COLORS);
   _insightsCharts.geo       = renderDoughnut('chart-geo',       byGeo,    GEO_COLORS);
@@ -1758,12 +1818,15 @@ function renderDoughnut(canvasId, data, colorMap) {
         borderColor: '#0f1419',
         borderWidth: 2,
         hoverOffset: 8,
+        // Stash constituent stocks on the dataset so tooltip can reach them
+        _stocks: data.map(d => d.stocks || []),
       }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      cutout: '65%',
+      cutout: '62%',
+      animation: { duration: 400 },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -1771,13 +1834,28 @@ function renderDoughnut(canvasId, data, colorMap) {
           borderColor: '#2a3142',
           borderWidth: 1,
           padding: 12,
-          titleFont: { size: 12, weight: '600' },
-          bodyFont: { size: 12 },
+          titleFont: { size: 13, weight: '700', family: 'DM Mono, monospace' },
+          bodyFont:  { size: 11, family: 'DM Mono, monospace' },
+          bodySpacing: 4,
           callbacks: {
+            title: (items) => items[0].label,
             label: (ctx) => {
               const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
               const pct = (ctx.parsed/total*100).toFixed(1);
-              return ` ${fmtUSD(ctx.parsed)} (${pct}%)`;
+              return `Total: ${fmtUSD(ctx.parsed)}  (${pct}%)`;
+            },
+            afterBody: (items) => {
+              const i = items[0].dataIndex;
+              const stocks = items[0].dataset._stocks?.[i] || [];
+              if (!stocks.length) return [];
+              const lines = ['', '─── Holdings ───'];
+              const max = Math.min(stocks.length, 8);
+              for (let k = 0; k < max; k++) {
+                const s = stocks[k];
+                lines.push(`${s.ticker.padEnd(7)} ${fmtUSD(s.value)} (${s.pct.toFixed(1)}%)`);
+              }
+              if (stocks.length > max) lines.push(`+ ${stocks.length - max} more`);
+              return lines;
             }
           }
         }
