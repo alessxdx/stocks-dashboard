@@ -1742,13 +1742,20 @@ async function fetchPrices(tickers, opts = {}) {
     const resp = await r.json();
     Object.entries(resp.data || {}).forEach(([ticker, d]) => {
       if (d.price)               priceCache[ticker]    = d.price;
-      if (d.dayChangePct != null) dayChangeCache[ticker] = d.dayChangePct;
+
+      // Sanity check: reject absurd day-change values (real stocks don't move 50%+ in a day).
+      // Protects against bad data from worker fallback paths returning chartPreviousClose etc.
+      const sane = (v, max) => (v == null || Math.abs(v) > max) ? null : v;
+
+      const cleanDay = sane(d.dayChangePct, 50);
+      if (cleanDay != null) dayChangeCache[ticker] = cleanDay;
+
       const newPeriods = {
-        day:         d.dayChangePct        ?? null,
-        week:        d.weekChangePct       ?? null,
-        month:       d.monthChangePct      ?? null,
-        three_month: d.threeMonthChangePct ?? null,
-        ytd:         d.ytdChangePct        ?? null,
+        day:         cleanDay,
+        week:        sane(d.weekChangePct, 60),
+        month:       sane(d.monthChangePct, 200),
+        three_month: sane(d.threeMonthChangePct, 400),
+        ytd:         sane(d.ytdChangePct, 1000),
       };
       // Merge so missing fields don't overwrite cached good data
       periodCache[ticker] = { ...(periodCache[ticker]||{}), ...Object.fromEntries(
