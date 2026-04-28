@@ -3314,7 +3314,12 @@ async function loadWebull() {
   let cRows = '';
   closed.forEach(h => {
     cRows += `<tr style="cursor:pointer" onclick="showStockDetail('${h.ticker}','webull',false,'webull')">
-      <td><span class="ticker-badge webull">${h.ticker}</span></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px">
+          ${miniLogoHTML(h.ticker, false)}
+          <span class="ticker-badge webull">${h.ticker}</span>
+        </div>
+      </td>
       <td class="${h.total_realised_pl != 0 ? plColor(h.total_realised_pl) : ''}" style="${h.total_realised_pl == 0 ? 'color:var(--text)' : ''}">${h.total_realised_pl != 0 ? plStr(h.total_realised_pl) : '—'}</td>
       <td><span class="status-closed">Closed</span></td>
     </tr>`;
@@ -3618,7 +3623,12 @@ async function loadCMC() {
   const closed = getCMCClosed();
   document.getElementById('cmc-closed-count').textContent = closed.length + ' stocks';
   document.getElementById('cmc-closed-body').innerHTML = closed.map(h => `<tr style="cursor:pointer" onclick="showStockDetail('${h.ticker}','cmc',true,'cmc')">
-    <td><span class="ticker-badge cmc">${h.ticker}</span></td>
+    <td>
+      <div style="display:flex;align-items:center;gap:10px">
+        ${miniLogoHTML(h.ticker, true)}
+        <span class="ticker-badge cmc">${h.ticker}</span>
+      </div>
+    </td>
     <td class="${h.realisedPL!==0?plColor(h.realisedPL):''}" style="${h.realisedPL===0?'color:var(--text)':''};font-family:var(--font-num)">${h.realisedPL!==0?plStr(h.realisedPL,'S$'):'—'}</td>
     <td><span class="status-closed">Closed</span></td>
   </tr>`).join('') || '<tr><td colspan="3" class="empty">No closed positions</td></tr>';
@@ -3796,8 +3806,13 @@ function renderWbActiveHoldings() {
     return typeof av === 'string' ? av.localeCompare(bv)*_wbHoldSort.dir : (av-bv)*_wbHoldSort.dir;
   });
 
-  document.getElementById('wb-active-body').innerHTML = sorted.map(h => `<tr>
-    <td><span class="ticker-badge default" style="cursor:pointer" onclick="showWbTradeHistory('${h.ticker}')">${h.ticker}</span></td>
+  document.getElementById('wb-active-body').innerHTML = sorted.map(h => `<tr style="cursor:pointer" onclick="showStockDetail('${h.ticker}','webull',false,'webull')">
+    <td>
+      <div style="display:flex;align-items:center;gap:10px">
+        ${miniLogoHTML(h.ticker, false)}
+        <span class="ticker-badge default">${h.ticker}</span>
+      </div>
+    </td>
     <td style="font-family:var(--font-num)">${fmtShares(h.shares)}</td>
     <td style="font-family:var(--font-num)">${fmtUSD(h.avg_cost)}</td>
     <td style="font-family:var(--font-num)">${h.live_price>0?fmtUSD(h.live_price):'<span style="color:var(--muted)">—</span>'}</td>
@@ -3923,8 +3938,13 @@ function renderCMCActiveHoldings() {
     return typeof av === 'string' ? av.localeCompare(bv)*_cmcHoldSort.dir : (av-bv)*_cmcHoldSort.dir;
   });
 
-  document.getElementById('cmc-active-body').innerHTML = sorted.map(h => `<tr>
-    <td><span class="ticker-badge default" style="cursor:pointer" onclick="showCMCTradeHistory('${h.ticker}')">${h.ticker}</span></td>
+  document.getElementById('cmc-active-body').innerHTML = sorted.map(h => `<tr style="cursor:pointer" onclick="showStockDetail('${h.ticker}','cmc',true,'cmc')">
+    <td>
+      <div style="display:flex;align-items:center;gap:10px">
+        ${miniLogoHTML(h.ticker, true)}
+        <span class="ticker-badge default">${h.ticker}</span>
+      </div>
+    </td>
     <td style="font-family:var(--font-num)">${fmtShares(h.shares)}</td>
     <td style="font-family:var(--font-num)">${fmtSGD(h.avg_cost)}</td>
     <td style="font-family:var(--font-num)">${h.live_price>0?fmtSGD(h.live_price):'<span style="color:var(--muted)">—</span>'}</td>
