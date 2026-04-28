@@ -988,6 +988,49 @@ tr:hover td { background:var(--surface2); }
     <div class="page-subtitle">All dividend income — click any stock to see full history</div>
   </div>
 
+  <!-- ── ANNUAL INCOME PROJECTION ── -->
+  <div class="section" id="div-projection-section" style="background:linear-gradient(135deg, #1a1f2e, #1a2334);border:1px solid #f5b94130;margin-bottom:20px">
+    <div style="padding:20px 22px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px">
+        <div style="min-width:0;flex:1">
+          <div style="font-family:var(--font-mono);font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:#f5b941;font-weight:700;margin-bottom:6px">
+            ✦ Annual Dividend Income — <span id="div-proj-year">—</span>
+          </div>
+          <div style="font-family:var(--font-num);font-size:32px;font-weight:700;color:var(--text);line-height:1.1" id="div-proj-total">—</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:6px" id="div-proj-sub">Calculating...</div>
+        </div>
+        <!-- Breakdown: Received YTD + Forecast remaining -->
+        <div style="display:flex;gap:16px;flex-wrap:wrap">
+          <div style="background:#0f1419;border:1px solid var(--border);border-radius:10px;padding:12px 18px;min-width:160px">
+            <div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Received YTD</div>
+            <div style="font-family:var(--font-num);font-size:20px;font-weight:700;color:#3dd68c" id="div-proj-received">—</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px" id="div-proj-received-sub">—</div>
+          </div>
+          <div style="background:#0f1419;border:1px solid var(--border);border-radius:10px;padding:12px 18px;min-width:160px">
+            <div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Forecast Remaining</div>
+            <div style="font-family:var(--font-num);font-size:20px;font-weight:700;color:#38bdf8" id="div-proj-forecast">—</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px" id="div-proj-forecast-sub">—</div>
+          </div>
+          <div style="background:#0f1419;border:1px solid var(--border);border-radius:10px;padding:12px 18px;min-width:140px">
+            <div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Yield on Cost</div>
+            <div style="font-family:var(--font-num);font-size:20px;font-weight:700;color:#a78bfa" id="div-proj-yoc">—</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px">% of total invested</div>
+          </div>
+        </div>
+      </div>
+      <!-- Progress bar -->
+      <div style="margin-top:16px">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">
+          <span>Year progress</span>
+          <span id="div-proj-pct">—</span>
+        </div>
+        <div style="height:8px;background:#0f1419;border-radius:4px;overflow:hidden;border:1px solid var(--border)">
+          <div id="div-proj-bar" style="height:100%;background:linear-gradient(90deg, #3dd68c, #38bdf8);width:0%;transition:width .8s ease-out;border-radius:4px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 4 summary cards -->
   <div class="stat-grid stat-grid-4">
     <div class="stat-card gold">
@@ -3369,6 +3412,114 @@ async function deleteFX(id) {
   loadFX();
 }
 
+// ── Annual dividend income projection ──
+// Approach:
+// 1. Sum all dividends RECEIVED in the current year (from existing dividend records, by year of payment)
+// 2. Build a per-stock "annual rate" estimate from past 12 months of dividends, scaled to current shares
+// 3. For each stock, prorate the annual rate over remaining months in the year → forecast remaining
+// 4. Total = received YTD + forecast remaining
+async function renderAnnualIncomeProjection(usMap, sgMap, syMap) {
+  const today = new Date();
+  const year = today.getFullYear();
+  const monthIdx = today.getMonth(); // 0-11
+  const remainingMonths = Math.max(0, 12 - (monthIdx + 1)); // months still to come (today's month is in YTD)
+  const ytdProgressPct = ((monthIdx + 1) / 12) * 100;
+
+  document.getElementById('div-proj-year').textContent = year;
+  document.getElementById('div-proj-pct').textContent = ytdProgressPct.toFixed(0) + '% of year elapsed';
+  document.getElementById('div-proj-bar').style.width = ytdProgressPct + '%';
+
+  const fxInfo = await getLiveSgdToUsd();
+  const sgdToUsd = fxInfo.rate;
+
+  // === STEP 1: Sum YTD received per currency ===
+  let ytdUSD = 0, ytdSGD = 0;
+  (_divUS||[]).forEach(d => {
+    if ((d.date||'').startsWith(year+'-')) ytdUSD += d.amount_usd * US_TAX;
+  });
+  (_divSyfe||[]).forEach(d => {
+    if ((d.date||'').startsWith(year+'-')) ytdUSD += d.amount_usd;
+  });
+  (_divSG||[]).forEach(d => {
+    if ((d.date||'').startsWith(year+'-')) ytdSGD += d.total_sgd;
+  });
+
+  // === STEP 2: Build per-stock annual income rate ===
+  // For each holding, sum dividends in the trailing 12 months and scale by current vs historical shares
+  function trailing12mTotal(divs, ticker, amtField) {
+    const cutoff = new Date(today); cutoff.setFullYear(cutoff.getFullYear()-1);
+    return divs
+      .filter(d => d.ticker === ticker && new Date(d.date) >= cutoff)
+      .reduce((s,d) => s + (d[amtField] || 0), 0);
+  }
+
+  // Webull holdings → USD income (apply 30% withholding tax)
+  const wbActive = (_wbHoldings||[]).filter(h => h.status==='active' && h.shares > 0.01);
+  let annualWebullUSD = 0;
+  wbActive.forEach(h => {
+    const trailing = trailing12mTotal(_divUS||[], h.ticker, 'amount_usd');
+    // Already in your records; apply the same 30% tax assumption used in dashboard
+    annualWebullUSD += trailing * US_TAX;
+  });
+
+  // Syfe holdings → USD
+  const syH = _syfeH || [];
+  let annualSyfeUSD = 0;
+  syH.forEach(h => {
+    const trailing = trailing12mTotal(_divSyfe||[], h.ticker, 'amount_usd');
+    annualSyfeUSD += trailing;
+  });
+
+  // CMC holdings → SGD
+  const cmcActive = getCMCActive();
+  let annualCMCSGD = 0;
+  cmcActive.forEach(h => {
+    const trailing = trailing12mTotal(_divSG||[], h.ticker, 'total_sgd');
+    annualCMCSGD += trailing;
+  });
+
+  // === STEP 3: Forecast remaining = annual rate × (remaining months / 12) ===
+  // (Assumes payments are evenly distributed; works well at portfolio level)
+  const forecastUSD = (annualWebullUSD + annualSyfeUSD) * (remainingMonths / 12);
+  const forecastSGD = annualCMCSGD * (remainingMonths / 12);
+
+  // === STEP 4: Totals ===
+  const totalProjUSD = ytdUSD + forecastUSD;
+  const totalProjSGD = ytdSGD + forecastSGD;
+  const totalProjUSDeq = totalProjUSD + (totalProjSGD * sgdToUsd);
+
+  // === STEP 5: Yield on Cost (annual income / total cost basis) ===
+  let costBasisUSD = 0;
+  wbActive.forEach(h => costBasisUSD += (h.total_cost || 0));
+  syH.forEach(h => costBasisUSD += (h.total_invested || 0));
+  let costBasisSGD = 0;
+  cmcActive.forEach(h => costBasisSGD += (h.cost || 0));
+  const totalCostUSDeq = costBasisUSD + (costBasisSGD * sgdToUsd);
+  const yoc = totalCostUSDeq > 0 ? (totalProjUSDeq / totalCostUSDeq * 100) : 0;
+
+  // === Render ===
+  document.getElementById('div-proj-total').innerHTML =
+    `${fmtUSD(totalProjUSD)} <span style="font-size:18px;color:var(--muted)">+</span> ${fmtSGD(totalProjSGD)}`;
+  document.getElementById('div-proj-sub').innerHTML =
+    `Projected full-year total · ≈ ${fmtUSD(totalProjUSDeq)} USD-equivalent @${sgdToUsd.toFixed(4)}`;
+
+  document.getElementById('div-proj-received').innerHTML =
+    ytdUSD > 0 || ytdSGD > 0
+      ? `${fmtUSD(ytdUSD)}${ytdSGD>0?` <span style="font-size:14px;color:var(--muted)">+</span> ${fmtSGD(ytdSGD)}`:''}`
+      : '—';
+  document.getElementById('div-proj-received-sub').textContent = `As of ${today.toLocaleDateString('en-SG',{day:'2-digit',month:'short'})}`;
+
+  document.getElementById('div-proj-forecast').innerHTML =
+    forecastUSD > 0 || forecastSGD > 0
+      ? `${fmtUSD(forecastUSD)}${forecastSGD>0?` <span style="font-size:14px;color:var(--muted)">+</span> ${fmtSGD(forecastSGD)}`:''}`
+      : '—';
+  document.getElementById('div-proj-forecast-sub').textContent =
+    remainingMonths > 0 ? `${remainingMonths} month${remainingMonths===1?'':'s'} remaining` : 'Year complete';
+
+  document.getElementById('div-proj-yoc').textContent = yoc > 0 ? yoc.toFixed(2) + '%' : '—';
+}
+
+
 // ============================================================
 // DIVIDENDS
 // ============================================================
@@ -3411,6 +3562,9 @@ async function loadDividends() {
   const el2 = document.getElementById('div-us-total'); if(el2) el2.textContent = fmtUSD(usTotal);
   const el3 = document.getElementById('div-sg-total'); if(el3) el3.textContent = fmtSGD(sgTotal);
   const el4 = document.getElementById('div-syfe-total-card'); if(el4) el4.textContent = fmtUSD(syTotal);
+
+  // ── ANNUAL INCOME PROJECTION ──
+  await renderAnnualIncomeProjection(usMap, sgMap, syMap);
 
   // Fetch dividend data from worker for next dates
   let divData = {};
