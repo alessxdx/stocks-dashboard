@@ -137,10 +137,14 @@ body { background:var(--bg); color:var(--text); font-family:var(--font-mono); mi
 .holding-row:hover { background:var(--surface2); }
 .holding-row .h-bar {
   position:absolute; left:0; top:0; bottom:0;
-  background:linear-gradient(90deg, rgba(56,189,248,0.22) 0%, rgba(56,189,248,0.10) 60%, rgba(56,189,248,0) 100%);
-  border-left:2px solid var(--accent);
+  background:linear-gradient(90deg, rgba(56,189,248,0.45) 0%, rgba(56,189,248,0.32) 50%, rgba(56,189,248,0.18) 100%);
+  border-left:3px solid var(--accent);
   pointer-events:none;
   z-index:0;
+  border-radius:0 8px 8px 0;
+}
+.holding-row:hover .h-bar {
+  background:linear-gradient(90deg, rgba(56,189,248,0.55) 0%, rgba(56,189,248,0.40) 50%, rgba(56,189,248,0.22) 100%);
 }
 .holding-row > * { position:relative; z-index:1; }
 .h-logo {
@@ -1960,7 +1964,11 @@ async function loadInsights() {
   });
   allHoldings.sort((a,b) => b.value - a.value);
 
-  renderHoldingsList(allHoldings, fmtCcy);
+  // Find the largest position so we can scale bars proportionally to it
+  // (largest = 100% wide, others scaled relative)
+  const maxPct = allHoldings[0]?.pctOfPortfolio || 1;
+
+  renderHoldingsList(allHoldings, fmtCcy, maxPct);
 
   // ── Render charts ──
   Object.values(_insightsCharts).forEach(c => { try { c && c.destroy(); } catch(e){} });
@@ -2028,7 +2036,7 @@ function getLogoFallbackUrl(ticker) {
   return domain ? `https://logo.clearbit.com/${domain}` : null;
 }
 
-function renderHoldingsList(holdings, fmtCcy) {
+function renderHoldingsList(holdings, fmtCcy, maxPct) {
   const el = document.getElementById('ins-holdings-list');
   const countEl = document.getElementById('ins-holdings-count');
   if (!el) return;
@@ -2059,8 +2067,8 @@ function renderHoldingsList(holdings, fmtCcy) {
     const retArrow = h.returnPct >= 0 ? '↑' : '↓';
     const retStr   = `${retArrow} ${(h.returnPct>=0?'+':'')}${h.returnPct.toFixed(2)}%`;
 
-    // Bar width = % of portfolio (amplified for visibility on smaller positions)
-    const barPct = Math.min(h.pctOfPortfolio * 2.5, 100);
+    // Bar width: largest position fills the full row, others scaled proportionally
+    const barPct = maxPct > 0 ? Math.max((h.pctOfPortfolio / maxPct) * 100, 4) : 4;
 
     return `<div class="holding-row">
       <div class="h-bar" style="width:${barPct}%"></div>
