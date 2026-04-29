@@ -1666,7 +1666,7 @@ tr:hover td { background:var(--surface2); }
 // CONFIG
 // ============================================================
 const SUPABASE_URL = 'https://icoexpnpeinzwhbmyxvi.supabase.co';
-const US_TAX = 0.70; // 30% US dividend withholding tax
+const US_TAX = 0.70; // 30% US dividend withholding tax (FYI only — amounts in DB are already net of tax, NO further multiplication applied)
 const WORKER_URL = 'https://stock-prices.alessxdx.workers.dev';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljb2V4cG5wZWluendoYm15eHZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MTY1NzIsImV4cCI6MjA5MjA5MjU3Mn0.iLbaAuK--cT3c-z59kDZRxHJPofDogqKzODd2YxpPis';
 
@@ -2928,7 +2928,7 @@ async function loadStockDetail(ticker, broker, isSG) {
   let divsForCard = [];
   if (detectedBroker === 'webull') {
     divsForCard = (_divUS||[]).filter(d => d.ticker === ticker)
-      .map(d => ({ id:d.id, date:d.date, amount: d.amount_usd * US_TAX, ccy:'USD' }));
+      .map(d => ({ id:d.id, date:d.date, amount: d.amount_usd, ccy:'USD' }));
   } else if (detectedBroker === 'syfe') {
     divsForCard = (_divSyfe||[]).filter(d => d.ticker === ticker)
       .map(d => ({ id:d.id, date:d.date, amount: d.amount_usd, ccy:'USD' }));
@@ -3035,7 +3035,7 @@ async function loadStockDetail(ticker, broker, isSG) {
   let divs = [];
   if (detectedBroker === 'webull') {
     divs = (_divUS||[]).filter(d => d.ticker === ticker)
-      .map(d => ({ id:d.id, date:d.date, amount: d.amount_usd * US_TAX, ccy:'USD' }));
+      .map(d => ({ id:d.id, date:d.date, amount: d.amount_usd, ccy:'USD' }));
   } else if (detectedBroker === 'syfe') {
     divs = (_divSyfe||[]).filter(d => d.ticker === ticker)
       .map(d => ({ id:d.id, date:d.date, amount: d.amount_usd, ccy:'USD' }));
@@ -4289,7 +4289,7 @@ async function renderAnnualIncomeProjection(usMap, sgMap, syMap) {
   // === STEP 1: Sum YTD received per currency ===
   let ytdUSD = 0, ytdSGD = 0;
   (_divUS||[]).forEach(d => {
-    if ((d.date||'').startsWith(year+'-')) ytdUSD += d.amount_usd * US_TAX;
+    if ((d.date||'').startsWith(year+'-')) ytdUSD += d.amount_usd;
   });
   (_divSyfe||[]).forEach(d => {
     if ((d.date||'').startsWith(year+'-')) ytdUSD += d.amount_usd;
@@ -4307,13 +4307,12 @@ async function renderAnnualIncomeProjection(usMap, sgMap, syMap) {
       .reduce((s,d) => s + (d[amtField] || 0), 0);
   }
 
-  // Webull holdings → USD income (apply 30% withholding tax)
+  // Webull holdings → USD income (amount_usd already net of withholding tax in DB)
   const wbActive = (_wbHoldings||[]).filter(h => h.status==='active' && h.shares > 0.01);
   let annualWebullUSD = 0;
   wbActive.forEach(h => {
     const trailing = trailing12mTotal(_divUS||[], h.ticker, 'amount_usd');
-    // Already in your records; apply the same 30% tax assumption used in dashboard
-    annualWebullUSD += trailing * US_TAX;
+    annualWebullUSD += trailing;
   });
 
   // Syfe holdings → USD
@@ -4381,10 +4380,10 @@ async function loadDividends() {
   await loadAllData();
   const prices = {};
 
-  // Group US dividends (Webull) by ticker
+  // Group US dividends (Webull) by ticker — amounts already net of withholding tax in DB
   const usMap = {};
   (_divUS||[]).forEach(d => {
-    const net = Math.round(d.amount_usd * US_TAX * 100) / 100;
+    const net = Math.round(d.amount_usd * 100) / 100;
     if (!usMap[d.ticker]) usMap[d.ticker] = {ticker:d.ticker,broker:'webull',isSG:false,payments:[],total:0};
     usMap[d.ticker].payments.push({id:d.id,date:fmtDate(d.date),rawDate:d.date,amount:fmtUSD(net),rawAmount:net});
     usMap[d.ticker].total += net;
@@ -4450,8 +4449,8 @@ async function loadDividends() {
     allStocks.push(s);
   });
 
-  // Store in global for sorting
-  const taxFactor_fn = (s) => (!s.isSG) ? US_TAX : 1;
+  // Store in global for sorting (next_amount from worker is gross, so apply 0.7 there for forecast only)
+  const taxFactor_fn = (s) => (!s.isSG) ? 0.70 : 1;
   _divStocksData = allStocks.map(s => ({
     ...s,
     payments: s.payments.length,
@@ -4476,7 +4475,7 @@ function showDivHistory(ticker, broker) {
   if (broker === 'webull') {
     payments = (_divUS||[]).filter(d=>d.ticker===ticker)
       .sort((a,b)=>new Date(b.date)-new Date(a.date))
-      .map(d=>({id:d.id,date:fmtDate(d.date),rawDate:d.date,amount:fmtUSD(Math.round(d.amount_usd*US_TAX*100)/100),rawAmount:Math.round(d.amount_usd*US_TAX*100)/100}));
+      .map(d=>({id:d.id,date:fmtDate(d.date),rawDate:d.date,amount:fmtUSD(d.amount_usd),rawAmount:d.amount_usd}));
   } else if (broker === 'cmc') {
     payments = (_divSG||[]).filter(d=>d.ticker===ticker)
       .sort((a,b)=>new Date(b.date)-new Date(a.date))
