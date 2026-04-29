@@ -2549,6 +2549,7 @@ const TICKER_TO_DOMAIN = {
   'MU':'micron.com','IREN':'irisenergy.com','NBIS':'nebius.com','QBTS':'dwavequantum.com',
   'MRVL':'marvell.com','SNDK':'sandisk.com','COHR':'coherent.com','AMKR':'amkor.com',
   'LRCX':'lamresearch.com','CIEN':'ciena.com','DB':'db.com',
+  'AAOI':'ao-inc.com',
   // ETFs (issuers)
   'VOO':'vanguard.com','SCHG':'schwab.com','SPYI':'neosfunds.com','SMH':'vaneck.com','URA':'globalxetfs.com',
 };
@@ -2559,7 +2560,10 @@ function getLogoUrl(ticker, isSG) {
   if (LOGO_OVERRIDES[clean]) return LOGO_OVERRIDES[clean];
   // SGX without override → use ticker badge
   if (isSG) return null;
-  // US default: Financial Modeling Prep CDN
+  // US: Clearbit by company domain (more reliable than FMP)
+  const domain = TICKER_TO_DOMAIN[clean];
+  if (domain) return `https://logo.clearbit.com/${domain}`;
+  // Last resort: Financial Modeling Prep CDN (broader coverage)
   return `https://financialmodelingprep.com/image-stock/${clean}.png`;
 }
 
@@ -2567,8 +2571,11 @@ function getLogoFallbackUrl(ticker) {
   const clean = ticker.toUpperCase();
   // Don't fallback if there's a manual override (it should just work)
   if (LOGO_OVERRIDES[clean]) return null;
+  // If primary was Clearbit (domain known), fallback to FMP
   const domain = TICKER_TO_DOMAIN[clean];
-  return domain ? `https://logo.clearbit.com/${domain}` : null;
+  if (domain) return `https://financialmodelingprep.com/image-stock/${clean}.png`;
+  // No fallback needed otherwise — the badge will show
+  return null;
 }
 
 // Compact logo for inline use in tables (24px circle, fallback gracefully)
