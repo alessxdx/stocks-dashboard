@@ -151,14 +151,14 @@ body {
 .holding-row:hover { background:var(--surface2); }
 .holding-row .h-bar {
   position:absolute; left:0; top:0; bottom:0;
-  background:linear-gradient(90deg, rgba(56,189,248,0.45) 0%, rgba(56,189,248,0.32) 50%, rgba(56,189,248,0.18) 100%);
-  border-left:3px solid var(--accent);
+  background:linear-gradient(90deg, rgba(255,111,60,0.18) 0%, rgba(255,111,60,0.10) 50%, rgba(255,111,60,0.04) 100%);
+  border-left:2px solid var(--accent);
   pointer-events:none;
   z-index:0;
   border-radius:0 8px 8px 0;
 }
 .holding-row:hover .h-bar {
-  background:linear-gradient(90deg, rgba(56,189,248,0.55) 0%, rgba(56,189,248,0.40) 50%, rgba(56,189,248,0.22) 100%);
+  background:linear-gradient(90deg, rgba(255,111,60,0.28) 0%, rgba(255,111,60,0.16) 50%, rgba(255,111,60,0.06) 100%);
 }
 .holding-row > * { position:relative; z-index:1; }
 .h-logo {
@@ -213,11 +213,11 @@ body {
   display:flex; align-items:center; justify-content:flex-end; gap:5px;
 }
 @media (max-width:780px) {
-  .holding-row { grid-template-columns: 44px 1fr 100px 70px 80px; gap:8px; padding:12px 14px; }
-  .h-logo { width:36px; height:36px; }
+  .holding-row { grid-template-columns: 36px 1fr 70px 60px 70px; gap:6px; padding:10px 12px; font-size:11px; }
+  .h-logo { width:32px; height:32px; }
   .h-ticker { font-size:13px; }
-  .h-value { font-size:12px; }
-  .h-pct, .h-return { font-size:12px; }
+  .h-value { font-size:11px; }
+  .h-pct, .h-return { font-size:11px; }
 }
 .section-header {
   padding:18px 24px; border-bottom:1px solid var(--border);
@@ -460,16 +460,16 @@ tr:hover td { background:var(--surface2); }
   }
   #page-stock .page-header > div > div:last-child { text-align:left !important; margin-top:10px; }
 
-  /* Insights holdings list — keep all 5 cells but tighter */
+  /* Insights holdings list — tight 5-col grid for phones */
   .holding-row {
-    grid-template-columns:36px 1fr 80px 60px 80px;
-    gap:8px; padding:10px 12px;
+    grid-template-columns:32px 1fr 70px 55px 70px;
+    gap:6px; padding:9px 10px;
   }
-  .h-logo { width:32px; height:32px; }
-  .h-ticker { font-size:13px; }
+  .h-logo { width:28px; height:28px; }
+  .h-ticker { font-size:12px; }
   .h-value { font-size:11px; }
   .h-pct { font-size:11px; }
-  .h-return { font-size:11px; }
+  .h-return { font-size:11px; gap:2px; }
 
   /* Currency toggles, range buttons — wrap nicely */
   .perf-range-btn { padding:5px 9px; font-size:9px; }
