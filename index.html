@@ -359,14 +359,140 @@ tr:hover td { background:var(--surface2); }
 @media (max-width:1200px) {
   .stat-grid-5 { grid-template-columns:repeat(3,1fr); }
 }
+/* Tablet ── narrower screens */
 @media (max-width:900px) {
   .stat-grid-4 { grid-template-columns:repeat(2,1fr); }
   .stat-grid-5 { grid-template-columns:repeat(2,1fr); }
   .stat-grid-6 { grid-template-columns:repeat(2,1fr); }
-  .sidebar { width:64px; }
-  .sidebar .logo, .sidebar .nav-item span, .sidebar-footer { display:none; }
-  .main { margin-left:64px; padding:20px; }
+  .stat-grid-3 { grid-template-columns:repeat(2,1fr); }
+  .charts-grid { grid-template-columns:1fr; }
 }
+
+/* ── MOBILE ── (≤768px) — phone screens, full responsive treatment */
+@media (max-width:768px) {
+  body { font-size:14px; }
+
+  /* Sidebar: hide completely, slide-in via hamburger */
+  .sidebar {
+    width:260px; transform:translateX(-100%);
+    transition:transform .25s ease-out;
+    box-shadow:0 0 30px rgba(0,0,0,0.6);
+  }
+  .sidebar.open { transform:translateX(0); }
+  .sidebar .logo, .sidebar .nav-item span, .sidebar-footer { display:flex; }
+  .sidebar .nav-item span { display:inline; }
+
+  /* Main content takes full width */
+  .main { margin-left:0; padding:16px 14px; padding-top:60px; }
+
+  /* Hamburger button */
+  .hamburger {
+    display:flex !important;
+    position:fixed; top:14px; left:14px; z-index:200;
+    width:40px; height:40px; align-items:center; justify-content:center;
+    background:var(--surface); border:1px solid var(--border2); border-radius:10px;
+    cursor:pointer; box-shadow:var(--shadow-md);
+    flex-direction:column; gap:4px;
+  }
+  .hamburger span {
+    display:block; width:18px; height:2px; background:var(--text);
+    border-radius:2px; transition:transform .2s;
+  }
+
+  /* Backdrop when sidebar is open */
+  .sidebar-backdrop {
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,.5);
+    z-index:99; backdrop-filter:blur(2px);
+  }
+  .sidebar-backdrop.open { display:block; }
+
+  /* All KPI grids stack to 1 column for max readability */
+  .stat-grid { gap:10px; margin-bottom:16px; }
+  .stat-grid-2,
+  .stat-grid-3,
+  .stat-grid-4,
+  .stat-grid-5,
+  .stat-grid-6 { grid-template-columns:1fr; }
+
+  /* Stat card adjustments */
+  .stat-card { padding:16px 18px; border-radius:12px; }
+  .stat-value { font-size:22px; }
+  .stat-label { font-size:11px; }
+
+  /* Page header tightens */
+  .page-header { margin-bottom:18px; }
+  .page-title { font-size:24px; }
+  .page-subtitle { font-size:12px; }
+
+  /* Section header allows wrapping */
+  .section { margin-bottom:14px; border-radius:12px; }
+  .section-header {
+    flex-wrap:wrap; gap:8px; padding:14px 16px;
+  }
+  .section-title { font-size:15px; }
+
+  /* Table — keep horizontal scroll, add visual cue */
+  .table-wrap {
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    background:linear-gradient(90deg, var(--surface) 30%, transparent),
+               linear-gradient(90deg, transparent, var(--surface) 70%) 100% 0,
+               radial-gradient(farthest-side at 0 50%, rgba(255,255,255,0.08), transparent),
+               radial-gradient(farthest-side at 100% 50%, rgba(255,255,255,0.08), transparent) 100% 0;
+    background-size:60px 100%, 60px 100%, 20px 100%, 20px 100%;
+    background-attachment:local, local, scroll, scroll;
+    background-repeat:no-repeat;
+  }
+  table { font-size:12px; }
+  th, td { padding:10px 12px; }
+
+  /* Modals */
+  .modal {
+    width:96vw; max-width:96vw; padding:20px 18px; border-radius:14px;
+    margin:0 8px;
+  }
+  .modal-title { font-size:17px; }
+  .form-row { grid-template-columns:1fr; gap:10px; }
+
+  /* Stock detail page header — stack hero + price */
+  #page-stock .page-header > div {
+    flex-direction:column; align-items:flex-start !important;
+  }
+  #page-stock .page-header > div > div:last-child { text-align:left !important; margin-top:10px; }
+
+  /* Insights holdings list — keep all 5 cells but tighter */
+  .holding-row {
+    grid-template-columns:36px 1fr 80px 60px 80px;
+    gap:8px; padding:10px 12px;
+  }
+  .h-logo { width:32px; height:32px; }
+  .h-ticker { font-size:13px; }
+  .h-value { font-size:11px; }
+  .h-pct { font-size:11px; }
+  .h-return { font-size:11px; }
+
+  /* Currency toggles, range buttons — wrap nicely */
+  .perf-range-btn { padding:5px 9px; font-size:9px; }
+
+  /* Chart heights — smaller on mobile */
+  .chart-container { height:280px !important; }
+
+  /* Watchlist — compact */
+  .wl-row { padding:8px 10px; }
+}
+
+/* Small phones — extra tight */
+@media (max-width:380px) {
+  .main { padding:14px 10px; padding-top:58px; }
+  .holding-row { grid-template-columns:28px 1fr 70px 80px; gap:6px; padding:9px 10px; }
+  .holding-row .h-pct { display:none; }
+  .h-logo { width:26px; height:26px; }
+  .stat-value { font-size:20px; }
+}
+
+/* Hamburger is hidden on desktop by default */
+.hamburger { display:none; }
+.sidebar-backdrop { display:none; }
 
 
 /* BROKER FILTER TABS */
@@ -415,6 +541,13 @@ tr:hover td { background:var(--surface2); }
 </style>
 </head>
 <body>
+
+<!-- Mobile hamburger toggle (hidden on desktop) -->
+<button class="hamburger" onclick="toggleSidebar()" aria-label="Open menu">
+  <span></span><span></span><span></span>
+</button>
+<div class="sidebar-backdrop" onclick="toggleSidebar()"></div>
+
 <div class="app">
 
 <!-- SIDEBAR -->
@@ -1952,6 +2085,16 @@ function toggleYearGroup(rowId) {
 // ============================================================
 // NAVIGATION
 // ============================================================
+
+// Mobile sidebar toggle
+function toggleSidebar() {
+  const sb = document.querySelector('.sidebar');
+  const bd = document.querySelector('.sidebar-backdrop');
+  if (!sb) return;
+  const isOpen = sb.classList.toggle('open');
+  if (bd) bd.classList.toggle('open', isOpen);
+}
+
 function showPage(id, el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -1962,6 +2105,16 @@ function showPage(id, el) {
     const navEl = document.querySelector(`.nav-item[onclick*="'${id}'"]`);
     if (navEl) navEl.classList.add('active');
   }
+  // Auto-close mobile sidebar after navigation
+  const sb = document.querySelector('.sidebar');
+  const bd = document.querySelector('.sidebar-backdrop');
+  if (sb && sb.classList.contains('open')) {
+    sb.classList.remove('open');
+    if (bd) bd.classList.remove('open');
+  }
+  // Scroll to top on mobile when switching pages
+  window.scrollTo({ top: 0, behavior: 'instant' });
+
   // Update URL hash so refresh works
   // Mark internal so the hashchange listener doesn't double-trigger
   if (window.location.hash !== '#'+id) {
