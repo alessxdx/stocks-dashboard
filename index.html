@@ -2556,25 +2556,24 @@ const TICKER_TO_DOMAIN = {
 
 function getLogoUrl(ticker, isSG) {
   const clean = ticker.toUpperCase();
-  // Manual override always wins
+  // Manual override always wins (high quality)
   if (LOGO_OVERRIDES[clean]) return LOGO_OVERRIDES[clean];
   // SGX without override → use ticker badge
   if (isSG) return null;
-  // US: Clearbit by company domain (more reliable than FMP)
+  // US: Google favicon by company domain (super reliable, hosted on Google infra)
   const domain = TICKER_TO_DOMAIN[clean];
-  if (domain) return `https://logo.clearbit.com/${domain}`;
-  // Last resort: Financial Modeling Prep CDN (broader coverage)
+  if (domain) return `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+  // Last resort: Financial Modeling Prep CDN (broader coverage but unreliable)
   return `https://financialmodelingprep.com/image-stock/${clean}.png`;
 }
 
 function getLogoFallbackUrl(ticker) {
   const clean = ticker.toUpperCase();
-  // Don't fallback if there's a manual override (it should just work)
+  // Don't fallback if there's a manual override
   if (LOGO_OVERRIDES[clean]) return null;
-  // If primary was Clearbit (domain known), fallback to FMP
+  // If primary was Google favicon, fallback to Clearbit then FMP
   const domain = TICKER_TO_DOMAIN[clean];
-  if (domain) return `https://financialmodelingprep.com/image-stock/${clean}.png`;
-  // No fallback needed otherwise — the badge will show
+  if (domain) return `https://logo.clearbit.com/${domain}`;
   return null;
 }
 
