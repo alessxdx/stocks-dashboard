@@ -748,6 +748,7 @@ tr:hover td { background:var(--surface2); }
           <th onclick="sortWbHoldings('ticker')" class="sort-asc">Ticker</th>
           <th onclick="sortWbHoldings('shares')">Shares</th>
           <th onclick="sortWbHoldings('avg_cost')">Avg Cost</th>
+          <th onclick="sortWbHoldings('total_cost')">Total Cost</th>
           <th onclick="sortWbHoldings('live_price')">Live Price</th>
           <th onclick="sortWbHoldings('market_value')">Market Value</th>
           <th onclick="sortWbHoldings('unrealised_pl')">Unrealised P&L</th>
@@ -755,7 +756,7 @@ tr:hover td { background:var(--surface2); }
           <th onclick="sortWbHoldings('realised_pl')">Realised P&L</th>
         </tr></thead>
         <tbody id="wb-active-body">
-          <tr><td colspan="8" class="loading"><div class="spinner"></div></td></tr>
+          <tr><td colspan="9" class="loading"><div class="spinner"></div></td></tr>
         </tbody>
       </table>
     </div>
@@ -1036,6 +1037,7 @@ tr:hover td { background:var(--surface2); }
           <th onclick="sortCMCHoldings('ticker')" style="cursor:pointer" class="sort-asc">Ticker</th>
           <th onclick="sortCMCHoldings('shares')" style="cursor:pointer">Shares</th>
           <th onclick="sortCMCHoldings('avg_cost')" style="cursor:pointer">Avg Cost (SGD)</th>
+          <th onclick="sortCMCHoldings('total_cost')" style="cursor:pointer">Total Cost</th>
           <th onclick="sortCMCHoldings('live_price')" style="cursor:pointer">Live Price</th>
           <th onclick="sortCMCHoldings('market_value')" style="cursor:pointer">Market Value</th>
           <th onclick="sortCMCHoldings('unrealised_pl')" style="cursor:pointer">Unrealised P&L</th>
@@ -1043,7 +1045,7 @@ tr:hover td { background:var(--surface2); }
           <th onclick="sortCMCHoldings('realised_pl')" style="cursor:pointer">Realised P&L</th>
         </tr></thead>
         <tbody id="cmc-active-body">
-          <tr><td colspan="7" class="loading"><div class="spinner"></div></td></tr>
+          <tr><td colspan="9" class="loading"><div class="spinner"></div></td></tr>
         </tbody>
       </table>
     </div>
@@ -3240,13 +3242,17 @@ function miniLogoBigHTML(ticker, isSG) {
 // Quick-action shortcuts
 function openStockAddTrade() {
   const s = _stockCurrent; if (!s) return;
+  if (s.broker === 'syfe') {
+    // Syfe has its own opener that pre-populates ticker correctly
+    openSyfeAddTrade(s.ticker);
+    return;
+  }
   if (s.broker === 'webull') openModal('add-trade-modal','webull');
-  else if (s.broker === 'syfe') openModal('syfe-add-trade-modal','syfe');
   else if (s.broker === 'cmc') openModal('add-sg-trade-modal','cmc');
   else openModal('add-trade-modal','webull');
-  // Pre-fill ticker if the field exists
+  // Pre-fill ticker if the field exists (Webull / CMC)
   setTimeout(() => {
-    ['trade-ticker','syfe-ticker','sg-trade-ticker'].forEach(id => {
+    ['trade-ticker','sg-trade-ticker'].forEach(id => {
       const el = document.getElementById(id);
       if (el && !el.value) el.value = s.ticker;
     });
@@ -3801,7 +3807,7 @@ async function loadCMC() {
   _cmcActiveData = active.map(h => {
     const p = price(h.ticker+'.SI'); const val = h.shares*p;
     const pl = val - h.cost; const pct = h.cost>0?pl/h.cost*100:0;
-    return { ticker:h.ticker, shares:h.shares, avg_cost:h.avgPrice, live_price:p,
+    return { ticker:h.ticker, shares:h.shares, avg_cost:h.avgPrice, total_cost:h.cost, live_price:p,
              market_value:val, unrealised_pl:pl, return_pct:pct, realised_pl:h.realisedPL||0 };
   });
   _cmcHoldSort = { key:'ticker', dir:1 };
@@ -4040,12 +4046,13 @@ function renderWbActiveHoldings() {
     </td>
     <td style="font-family:var(--font-num)">${fmtShares(h.shares)}</td>
     <td style="font-family:var(--font-num)">${fmtUSD(h.avg_cost)}</td>
+    <td style="font-family:var(--font-num)">${fmtUSD(h.total_cost || (h.shares * h.avg_cost))}</td>
     <td style="font-family:var(--font-num)">${h.live_price>0?fmtUSD(h.live_price):'<span style="color:var(--muted)">—</span>'}</td>
     <td style="font-family:var(--font-num);font-weight:600">${h.market_value>0?fmtUSD(h.market_value):'<span style="color:var(--muted)">—</span>'}</td>
     <td class="${plColor(h.unrealised_pl)}" style="font-family:var(--font-num);font-weight:600">${h.market_value>0?plStr(h.unrealised_pl):'—'}</td>
     <td class="${plColor(h.return_pct)}" style="font-family:var(--font-num);font-weight:600">${h.market_value>0?fmtPct(h.return_pct):'—'}</td>
     <td class="${h.realised_pl!==0?plColor(h.realised_pl):''}" style="${h.realised_pl===0?'color:var(--text)':''};font-family:var(--font-num)">${h.realised_pl!==0?plStr(h.realised_pl):'—'}</td>
-  </tr>`).join('') || '<tr><td colspan="8" class="empty">No active holdings</td></tr>';
+  </tr>`).join('') || '<tr><td colspan="9" class="empty">No active holdings</td></tr>';
 }
 
 
@@ -4214,12 +4221,13 @@ function renderCMCActiveHoldings() {
     </td>
     <td style="font-family:var(--font-num)">${fmtShares(h.shares)}</td>
     <td style="font-family:var(--font-num)">${fmtSGD(h.avg_cost)}</td>
+    <td style="font-family:var(--font-num)">${fmtSGD(h.total_cost || (h.shares * h.avg_cost))}</td>
     <td style="font-family:var(--font-num)">${h.live_price>0?fmtSGD(h.live_price):'<span style="color:var(--muted)">—</span>'}</td>
     <td style="font-family:var(--font-num);font-weight:600">${h.market_value>0?fmtSGD(h.market_value):'<span style="color:var(--muted)">—</span>'}</td>
     <td class="${plColor(h.unrealised_pl)}" style="font-family:var(--font-num);font-weight:600">${h.market_value>0?plStr(h.unrealised_pl,'S$'):'—'}</td>
     <td class="${plColor(h.return_pct)}" style="font-family:var(--font-num)">${h.market_value>0?fmtPct(h.return_pct):'—'}</td>
     <td class="${h.realised_pl!==0?plColor(h.realised_pl):''}" style="${h.realised_pl===0?'color:var(--text)':''}font-family:var(--font-num)">${h.realised_pl!==0?plStr(h.realised_pl,'S$'):'—'}</td>
-  </tr>`).join('') || '<tr><td colspan="8" class="empty">No active holdings</td></tr>';
+  </tr>`).join('') || '<tr><td colspan="9" class="empty">No active holdings</td></tr>';
 }
 
 // ── CMC SG Dividend History Modal ──
