@@ -542,6 +542,34 @@ tr:hover td { background:var(--surface2); }
 </head>
 <body>
 
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- LOGIN OVERLAY — shown when no valid session exists                       -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div id="login-overlay" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:none;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:36px 32px;width:100%;max-width:380px;box-shadow:var(--shadow-lg)">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+      <div style="width:32px;height:32px;background:linear-gradient(135deg, var(--accent), var(--accent2));border-radius:8px"></div>
+      <div style="font-family:var(--font-head);font-size:18px;font-weight:700;letter-spacing:-0.02em">Portfolio</div>
+    </div>
+    <div style="font-family:var(--font-head);font-size:24px;font-weight:700;letter-spacing:-0.02em;margin-top:18px">Sign in</div>
+    <div style="font-size:13px;color:var(--muted);margin-top:6px;margin-bottom:24px">Access your private dashboard</div>
+    <form id="login-form" onsubmit="return doLogin(event)">
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" type="email" id="login-email" placeholder="you@example.com" required autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input class="form-input" type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
+      </div>
+      <div id="login-error" style="display:none;margin-top:10px;padding:10px 12px;background:rgba(242,95,76,0.1);border:1px solid rgba(242,95,76,0.3);border-radius:8px;color:var(--red);font-size:12px"></div>
+      <button type="submit" class="btn btn-submit" id="login-button" style="width:100%;margin-top:18px;padding:11px;font-size:14px">
+        Sign in
+      </button>
+    </form>
+  </div>
+</div>
+
 <!-- Mobile hamburger toggle (hidden on desktop) -->
 <button class="hamburger" onclick="toggleSidebar()" aria-label="Open menu">
   <span></span><span></span><span></span>
@@ -595,6 +623,12 @@ tr:hover td { background:var(--surface2); }
   </div>
   <div class="sidebar-footer">
     <div class="price-indicator"><div class="price-dot"></div><span>Live prices</span></div>
+    <div id="sb-user-row" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)">
+      <div id="sb-user-email" style="word-break:break-all;margin-bottom:6px;font-family:var(--font-mono);font-size:10px"></div>
+      <button onclick="doSignOut()" style="background:transparent;border:1px solid var(--border2);color:var(--muted);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;width:100%;font-family:var(--font-head);transition:all .15s" onmouseover="this.style.background='var(--surface2)';this.style.color='var(--text)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'">
+        Sign out
+      </button>
+    </div>
   </div>
 </aside>
 
@@ -1808,25 +1842,178 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 
 // ============================================================
-// SUPABASE HELPERS
+// SUPABASE HELPERS — AUTH-AWARE
 // ============================================================
+//
+// We support two modes for the Authorization header:
+//   1. Logged-in user → use their JWT (real RLS-bound identity)
+//   2. Pre-login boot only → fallback to anon key (used by login itself
+//      to call the GoTrue auth endpoint)
+//
+// All table access goes through sb() which always uses the user's JWT.
+// If the JWT expires, we auto-refresh via the refresh_token, and on hard
+// failure we redirect to the login screen.
+// ============================================================
+
+let _authSession = null; // { access_token, refresh_token, user, expires_at }
+
+function loadSession() {
+  try {
+    const raw = localStorage.getItem('sb_session');
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s || !s.access_token || !s.user) return null;
+    return s;
+  } catch { return null; }
+}
+
+function saveSession(s) {
+  if (s) localStorage.setItem('sb_session', JSON.stringify(s));
+  else   localStorage.removeItem('sb_session');
+  _authSession = s;
+}
+
+function isSessionExpiringSoon() {
+  if (!_authSession || !_authSession.expires_at) return false;
+  // Refresh if less than 5 min remaining
+  return (_authSession.expires_at * 1000) - Date.now() < 5 * 60 * 1000;
+}
+
+async function refreshSessionIfNeeded() {
+  if (!_authSession || !isSessionExpiringSoon()) return;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: _authSession.refresh_token }),
+    });
+    if (!r.ok) throw new Error('Refresh failed');
+    const data = await r.json();
+    saveSession({
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      user: data.user,
+      expires_at: data.expires_at,
+    });
+  } catch (e) {
+    console.warn('Session refresh failed — forcing re-login:', e.message);
+    saveSession(null);
+    showLogin();
+  }
+}
+
 async function sb(table, method='GET', body=null, query='') {
+  await refreshSessionIfNeeded();
+  const token = _authSession ? _authSession.access_token : SUPABASE_KEY;
+
   const url = `${SUPABASE_URL}/rest/v1/${table}${query}`;
   const opts = {
     method, headers: {
       'apikey': SUPABASE_KEY,
-      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
       'Prefer': method==='POST' ? 'return=representation' : ''
     }
   };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(url, opts);
+  if (r.status === 401) {
+    // JWT invalid/expired — clear and force login
+    console.warn('Supabase 401 — session expired, redirecting to login');
+    saveSession(null);
+    showLogin();
+    return null;
+  }
   if (!r.ok) { console.error('Supabase error:', await r.text()); return null; }
   if (method==='DELETE' || method==='PATCH') return null;
   const text = await r.text();
   if (!text || text.trim() === '') return null;
   return JSON.parse(text);
+}
+
+// ── Auth UI helpers ──
+function showLogin() {
+  document.getElementById('login-overlay').style.display = 'flex';
+  document.getElementById('sb-user-row').style.display = 'none';
+  setTimeout(() => document.getElementById('login-email')?.focus(), 50);
+}
+
+function hideLogin() {
+  document.getElementById('login-overlay').style.display = 'none';
+  if (_authSession && _authSession.user) {
+    document.getElementById('sb-user-row').style.display = 'block';
+    document.getElementById('sb-user-email').textContent = _authSession.user.email || '—';
+  }
+}
+
+async function doLogin(event) {
+  if (event) event.preventDefault();
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  const btn = document.getElementById('login-button');
+  errEl.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Signing in…';
+
+  try {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      errEl.textContent = data.error_description || data.msg || data.error || 'Sign in failed';
+      errEl.style.display = 'block';
+      return false;
+    }
+    saveSession({
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      user: data.user,
+      expires_at: data.expires_at,
+    });
+    hideLogin();
+    document.getElementById('login-password').value = '';
+    // Boot the dashboard after login
+    bootDashboard();
+  } catch (e) {
+    errEl.textContent = 'Network error. Please try again.';
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Sign in';
+  }
+  return false;
+}
+
+function doSignOut() {
+  if (!confirm('Sign out of your dashboard?')) return;
+  // Best-effort GoTrue logout (revokes the refresh_token server-side)
+  if (_authSession) {
+    fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${_authSession.access_token}`,
+      }
+    }).catch(()=>{});
+  }
+  saveSession(null);
+  // Wipe in-memory caches so nothing leaks across users
+  priceCache = {}; dayChangeCache = {}; periodCache = {};
+  _wbHoldings = _wbTrades = _syfeH = _syfeTrades = _cmcTrades = null;
+  _deps = _wds = _fx = _divUS = _divSG = _divSyfe = null;
+  _dataLoaded = false;
+  showLogin();
+}
+
+// Initial boot: load session, decide whether to show login or run the app
+function bootDashboard() {
+  // Run normal init (was previously top-level loadOverview() etc.)
+  restorePageFromHash();
+  loadWatchlist();
 }
 
 // ============================================================
@@ -4385,9 +4572,6 @@ async function deleteCMCTrade(id, ticker) {
 // ============================================================
 let _internalHashChange = false;
 
-// Honour the URL hash on first load (so direct links + reload work)
-restorePageFromHash();
-
 // Listen for browser back/forward navigation
 // Without this, the SPA wouldn't know when to swap pages on hash change
 window.addEventListener('hashchange', () => {
@@ -4396,16 +4580,26 @@ window.addEventListener('hashchange', () => {
     _internalHashChange = false;
     return;
   }
-  // User pressed browser back/forward — re-render the page that the URL now points to
-  restorePageFromHash();
+  // Only respond if user is logged in — otherwise login screen handles it
+  if (_authSession) restorePageFromHash();
 });
 
-// ============================================================
-// WATCHLIST
-// ============================================================
-// Auto-refresh sidebar watchlist every 60 seconds
-loadWatchlist();
-setInterval(loadWatchlist, 60000);
+// ── Auth-gated boot ──
+// 1. Try to load session from localStorage
+// 2. If valid → boot dashboard immediately
+// 3. If missing/invalid → show login screen
+_authSession = loadSession();
+if (_authSession) {
+  hideLogin();
+  bootDashboard();
+  // Periodic refresh check every 4 minutes (refreshes if <5 min remaining)
+  setInterval(() => { refreshSessionIfNeeded(); }, 4 * 60 * 1000);
+  // Auto-refresh sidebar watchlist every 60 seconds (only when logged in)
+  setInterval(loadWatchlist, 60000);
+} else {
+  showLogin();
+}
+
 let _fxFilter = 'all';
 
 async function loadFX() {
