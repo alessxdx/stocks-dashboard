@@ -5344,7 +5344,7 @@ async function submitDivEntry() {
   if(broker==='cmc') {
     const perShare=parseFloat(document.getElementById('div-add-per-share').value)||0;
     const shares=parseFloat(document.getElementById('div-add-shares').value)||0;
-    const body={ticker,brokerage:'cmc',date,per_share:perShare,shares,total_sgd:amount};
+    const body={ticker,date,per_share:perShare,shares,total_sgd:amount};
     if(editId) await sb('dividends_sg','PATCH',body,`?id=eq.${editId}`); else await sb('dividends_sg','POST',body);
   } else if(broker==='syfe') {
     const body={ticker,brokerage:'syfe',date,amount_usd:amount};
