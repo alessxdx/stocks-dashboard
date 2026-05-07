@@ -1530,160 +1530,184 @@ tr:hover td { background:var(--surface2); }
 <div id="page-other" class="page">
   <div class="page-header">
     <div class="page-title" style="color:var(--gold)">Other Investments</div>
-    <div class="page-subtitle">Historical & alternative — T-Bills · Chocolate Finance · Stashaway</div>
+    <div class="page-subtitle">Historical & alternative — T-Bills · Stashaway · Chocolate Finance</div>
   </div>
 
-  <!-- ── T-Bills (archive) ── -->
-  <div class="section" style="margin-bottom:20px">
-    <div class="section-header">
-      <div>
-        <div class="section-title">Singapore T-Bills</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px">Closed — all matured</div>
+  <!-- ── T-Bills (collapsible, archived) ── -->
+  <div class="section" id="other-tb-section" style="margin-bottom:14px">
+    <div class="section-header" onclick="toggleOtherSection('tb')" style="cursor:pointer">
+      <div style="display:flex;align-items:center;gap:12px;flex:1">
+        <span id="tb-chevron" style="font-family:var(--font-mono);color:var(--muted);font-size:14px;width:14px;display:inline-block">▶</span>
+        <div>
+          <div class="section-title">Singapore T-Bills</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px" id="tb-summary">—</div>
+        </div>
       </div>
       <span class="section-badge">Archive</span>
     </div>
-    <div class="stat-grid stat-grid-3" style="padding:16px;margin:0">
-      <div class="stat-card">
-        <div class="stat-label">Total Spent</div>
-        <div class="stat-value" id="tb-spent">—</div>
-        <div class="stat-sub">7 issues · Sep 2022 – Jul 2024</div>
+    <div id="tb-detail" style="display:none">
+      <div class="stat-grid stat-grid-3" style="padding:16px;margin:0">
+        <div class="stat-card">
+          <div class="stat-label">Total Spent</div>
+          <div class="stat-value" id="tb-spent">—</div>
+          <div class="stat-sub">7 issues · Sep 2022 – Jul 2024</div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-label">Total Interest Earned</div>
+          <div class="stat-value" id="tb-interest">—</div>
+          <div class="stat-sub" id="tb-interest-sub">—</div>
+        </div>
+        <div class="stat-card gold">
+          <div class="stat-label">Avg Yield (p.a.)</div>
+          <div class="stat-value" id="tb-yield">—</div>
+          <div class="stat-sub">Weighted by amount</div>
+        </div>
       </div>
-      <div class="stat-card green">
-        <div class="stat-label">Total Interest Earned</div>
-        <div class="stat-value" id="tb-interest">—</div>
-        <div class="stat-sub" id="tb-interest-sub">—</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Bill</th><th>Auction</th><th>Maturity</th><th>% p.a.</th>
+            <th>Amount</th><th>Interest</th>
+          </tr></thead>
+          <tbody id="tb-body"></tbody>
+        </table>
       </div>
-      <div class="stat-card gold">
-        <div class="stat-label">Avg Yield (p.a.)</div>
-        <div class="stat-value" id="tb-yield">—</div>
-        <div class="stat-sub">Weighted by amount</div>
-      </div>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr>
-          <th>Bill</th><th>Auction</th><th>Maturity</th><th>% p.a.</th>
-          <th>Amount</th><th>Interest</th>
-        </tr></thead>
-        <tbody id="tb-body"></tbody>
-      </table>
     </div>
   </div>
 
-  <!-- ── Stashaway (archive) ── -->
-  <div class="section" style="margin-bottom:20px">
-    <div class="section-header">
-      <div>
-        <div class="section-title">Stashaway Portfolios</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px">Closed — both fully withdrawn</div>
+  <!-- ── Stashaway (collapsible, archived) ── -->
+  <div class="section" id="other-sa-section" style="margin-bottom:14px">
+    <div class="section-header" onclick="toggleOtherSection('sa')" style="cursor:pointer">
+      <div style="display:flex;align-items:center;gap:12px;flex:1">
+        <span id="sa-chevron" style="font-family:var(--font-mono);color:var(--muted);font-size:14px;width:14px;display:inline-block">▶</span>
+        <div>
+          <div class="section-title">Stashaway Portfolios</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px" id="sa-summary">—</div>
+        </div>
       </div>
       <span class="section-badge">Archive</span>
     </div>
-    <div class="stat-grid stat-grid-2" style="padding:16px;margin:0;gap:14px">
-      <!-- Simple Plus card -->
-      <div class="stat-card" style="padding:18px 20px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <div style="font-family:var(--font-head);font-weight:700;font-size:15px">Simple Plus Portfolio</div>
-          <span class="section-badge" style="background:var(--surface);color:var(--muted);font-size:10px">CLOSED</span>
+    <div id="sa-detail" style="display:none">
+      <!-- Combined totals (across both portfolios) -->
+      <div class="stat-grid stat-grid-3" style="padding:16px 16px 0;margin:0">
+        <div class="stat-card">
+          <div class="stat-label">Combined Deposit</div>
+          <div class="stat-value">S$29,350.00</div>
+          <div class="stat-sub">Both portfolios</div>
         </div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:14px;font-family:var(--font-mono);letter-spacing:.3px">May 2023 – Oct 2025 · 2.4 yrs</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-family:var(--font-num)">
-          <div>
-            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Total Deposit</div>
-            <div style="font-weight:600;font-size:15px">S$14,350.00</div>
-          </div>
-          <div>
-            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Total Withdraw</div>
-            <div style="font-weight:600;font-size:15px">S$15,184.31</div>
-          </div>
-          <div>
-            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Net P&L</div>
-            <div class="pos" style="font-weight:700;font-size:18px">+S$834.31</div>
-            <div class="pos" style="font-size:11px">+5.81%</div>
-          </div>
-          <div>
-            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">XIRR (annualised)</div>
-            <div class="pos" style="font-weight:700;font-size:18px">+4.54%</div>
-            <div style="font-size:10px;color:var(--muted)">money-weighted</div>
-          </div>
+        <div class="stat-card">
+          <div class="stat-label">Combined Withdraw</div>
+          <div class="stat-value">S$31,101.14</div>
+          <div class="stat-sub">Both portfolios</div>
+        </div>
+        <div class="stat-card gold">
+          <div class="stat-label">Combined Net P&L</div>
+          <div class="stat-value pos">+S$1,751.14</div>
+          <div class="stat-sub">+5.97% absolute</div>
         </div>
       </div>
-
-      <!-- Income Investing card -->
-      <div class="stat-card" style="padding:18px 20px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <div style="font-family:var(--font-head);font-weight:700;font-size:15px">Income Investing</div>
-          <span class="section-badge" style="background:var(--surface);color:var(--muted);font-size:10px">CLOSED</span>
+      <div class="stat-grid stat-grid-2" style="padding:16px;margin:0;gap:14px">
+        <!-- Simple Plus card -->
+        <div class="stat-card" style="padding:18px 20px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <div style="font-family:var(--font-head);font-weight:700;font-size:15px">Simple Plus Portfolio</div>
+            <span class="section-badge" style="background:var(--surface);color:var(--muted);font-size:10px">CLOSED</span>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:14px;font-family:var(--font-mono);letter-spacing:.3px">May 2023 – Oct 2025 · 2.4 yrs</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-family:var(--font-num)">
+            <div>
+              <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Total Deposit</div>
+              <div style="font-weight:600;font-size:15px">S$14,350.00</div>
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Total Withdraw</div>
+              <div style="font-weight:600;font-size:15px">S$15,184.31</div>
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Net P&L</div>
+              <div class="pos" style="font-weight:700;font-size:18px">+S$834.31</div>
+              <div class="pos" style="font-size:11px">+5.81%</div>
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">XIRR (annualised)</div>
+              <div class="pos" style="font-weight:700;font-size:18px">+4.54%</div>
+              <div style="font-size:10px;color:var(--muted)">money-weighted</div>
+            </div>
+          </div>
         </div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:14px;font-family:var(--font-mono);letter-spacing:.3px">Jan 2025 – Jan 2026 · 1 yr</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-family:var(--font-num)">
-          <div>
-            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Total Deposit</div>
-            <div style="font-weight:600;font-size:15px">S$15,000.00</div>
+
+        <!-- Income Investing card -->
+        <div class="stat-card" style="padding:18px 20px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <div style="font-family:var(--font-head);font-weight:700;font-size:15px">Income Investing</div>
+            <span class="section-badge" style="background:var(--surface);color:var(--muted);font-size:10px">CLOSED</span>
           </div>
-          <div>
-            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Total Withdraw</div>
-            <div style="font-weight:600;font-size:15px">S$15,916.83</div>
-          </div>
-          <div>
-            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Net P&L</div>
-            <div class="pos" style="font-weight:700;font-size:18px">+S$916.83</div>
-            <div class="pos" style="font-size:11px">+6.11%</div>
-          </div>
-          <div>
-            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">XIRR (annualised)</div>
-            <div class="pos" style="font-weight:700;font-size:18px">+6.03%</div>
-            <div style="font-size:10px;color:var(--muted)">single lump sum</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:14px;font-family:var(--font-mono);letter-spacing:.3px">Jan 2025 – Jan 2026 · 1 yr</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-family:var(--font-num)">
+            <div>
+              <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Total Deposit</div>
+              <div style="font-weight:600;font-size:15px">S$15,000.00</div>
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Total Withdraw</div>
+              <div style="font-weight:600;font-size:15px">S$15,916.83</div>
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Net P&L</div>
+              <div class="pos" style="font-weight:700;font-size:18px">+S$916.83</div>
+              <div class="pos" style="font-size:11px">+6.11%</div>
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">XIRR (annualised)</div>
+              <div class="pos" style="font-weight:700;font-size:18px">+6.03%</div>
+              <div style="font-size:10px;color:var(--muted)">single lump sum</div>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ── Chocolate Finance (active) ── -->
-  <div class="section">
-    <div class="section-header">
-      <div>
-        <div class="section-title">Chocolate Finance</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px">Active — used for transport spending</div>
+  <!-- ── Chocolate Finance (collapsible, active) ── -->
+  <div class="section" id="other-ch-section">
+    <div class="section-header" style="cursor:pointer" onclick="toggleOtherSection('ch')">
+      <div style="display:flex;align-items:center;gap:12px;flex:1">
+        <span id="ch-chevron" style="font-family:var(--font-mono);color:var(--muted);font-size:14px;width:14px;display:inline-block">▶</span>
+        <div>
+          <div class="section-title">Chocolate Finance</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px" id="ch-summary">—</div>
+        </div>
       </div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px" onclick="event.stopPropagation()">
         <button class="btn btn-sm" onclick="openChocoModal('deposit')">+ Deposit</button>
         <button class="btn btn-sm" onclick="openChocoModal('withdrawal')">+ Withdraw</button>
       </div>
     </div>
-    <div class="stat-grid stat-grid-3" style="padding:16px;margin:0">
-      <div class="stat-card">
-        <div class="stat-label">Total Deposited</div>
-        <div class="stat-value" id="ch-dep">—</div>
-        <div class="stat-sub" id="ch-dep-count">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Total Withdrawn</div>
-        <div class="stat-value" id="ch-wd">—</div>
-        <div class="stat-sub" id="ch-wd-count">—</div>
-      </div>
-      <div class="stat-card gold">
-        <div class="stat-label">Net Position</div>
-        <div class="stat-value" id="ch-net">—</div>
-        <div class="stat-sub">Withdraw − Deposit</div>
-      </div>
-    </div>
-    <!-- Collapsible txn log -->
-    <div style="padding:0 16px 16px">
-      <div onclick="toggleChocoLog()" id="ch-log-toggle" style="cursor:pointer;padding:10px 14px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--muted);font-family:var(--font-mono);letter-spacing:.3px;display:flex;align-items:center;justify-content:space-between">
-        <span>▶ Show transaction log</span>
-        <span id="ch-log-count" style="font-family:var(--font-num);color:var(--text)">—</span>
-      </div>
-      <div id="ch-log-wrap" style="display:none;margin-top:10px">
-        <div class="table-wrap">
-          <table>
-            <thead><tr>
-              <th>Date</th><th>Type</th><th>Currency</th><th>Amount</th><th>Note</th><th></th>
-            </tr></thead>
-            <tbody id="ch-body"></tbody>
-          </table>
+    <div id="ch-detail" style="display:none">
+      <div class="stat-grid stat-grid-3" style="padding:16px;margin:0">
+        <div class="stat-card">
+          <div class="stat-label">Total Deposited</div>
+          <div class="stat-value" id="ch-dep">—</div>
+          <div class="stat-sub" id="ch-dep-count">—</div>
         </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Withdrawn</div>
+          <div class="stat-value" id="ch-wd">—</div>
+          <div class="stat-sub" id="ch-wd-count">—</div>
+        </div>
+        <div class="stat-card gold">
+          <div class="stat-label">Net Position</div>
+          <div class="stat-value" id="ch-net">—</div>
+          <div class="stat-sub">Withdraw − Deposit</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Date</th><th>Type</th><th>Currency</th><th>Amount</th><th>Note</th><th></th>
+          </tr></thead>
+          <tbody id="ch-body"></tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -5836,7 +5860,16 @@ const TBILLS = [
 ];
 
 let _chocoRows = null;
-let _chocoLogOpen = false;
+
+// Generic collapsible toggle for the three Other-page sections
+function toggleOtherSection(key) {
+  const detail  = document.getElementById(`${key}-detail`);
+  const chevron = document.getElementById(`${key}-chevron`);
+  if (!detail || !chevron) return;
+  const isOpen = detail.style.display !== 'none';
+  detail.style.display  = isOpen ? 'none' : 'block';
+  chevron.textContent   = isOpen ? '▶' : '▼';
+}
 
 async function loadOther() {
   // ── T-Bills (static) ──
@@ -5850,6 +5883,8 @@ async function loadOther() {
   document.getElementById('tb-interest-sub').textContent =
     `+${(tbInterest / tbSpent * 100).toFixed(3)}% total return`;
   document.getElementById('tb-yield').textContent    = tbAvgYield.toFixed(2) + '%';
+  document.getElementById('tb-summary').textContent  =
+    `${fmtSGD(tbInterest)} earned · ${tbAvgYield.toFixed(2)}% avg p.a. · 7 issues`;
 
   // T-Bills table — sort newest first
   document.getElementById('tb-body').innerHTML = TBILLS
@@ -5863,6 +5898,10 @@ async function loadOther() {
       <td style="font-family:var(--font-num)">${fmtSGD(b.amount)}</td>
       <td class="pos" style="font-family:var(--font-num);font-weight:600">+${fmtSGD(b.interest)}</td>
     </tr>`).join('');
+
+  // ── Stashaway summary (combined) ──
+  document.getElementById('sa-summary').textContent =
+    '+S$1,751.14 net · 2 closed portfolios · May 2023 – Jan 2026';
 
   // ── Chocolate Finance (live) ──
   await loadChocoFinance();
@@ -5892,7 +5931,11 @@ async function loadChocoFinance() {
   netEl.textContent = (net >= 0 ? '+' : '−') + fmtSGD(Math.abs(net));
   netEl.className = 'stat-value ' + (net >= 0 ? 'pos' : 'neg');
 
-  document.getElementById('ch-log-count').textContent = `${rows.length} transaction${rows.length===1?'':'s'}`;
+  // Header summary line
+  const summary = rows.length === 0
+    ? 'Active — no transactions yet'
+    : `Active · ${rows.length} txn · Net ${(net>=0?'+':'−')+fmtSGD(Math.abs(net))}`;
+  document.getElementById('ch-summary').textContent = summary;
 
   // Body rows
   document.getElementById('ch-body').innerHTML = rows.map(r => {
@@ -5900,11 +5943,12 @@ async function loadChocoFinance() {
     const cls   = isDep ? 'neg' : 'pos'; // deposits = money out (red), withdrawals = money back (green)
     const sign  = isDep ? '−' : '+';
     const noteEsc = (r.note || '').replace(/'/g, "\\'");
+    const amtStr = (r.currency === 'USD' ? fmtUSD(Number(r.amount)) : fmtSGD(Number(r.amount)));
     return `<tr>
       <td>${fmtDate(r.date)}</td>
       <td><span class="pill" style="background:${isDep?'rgba(242,95,76,.12)':'rgba(76,183,130,.12)'};color:${isDep?'var(--red)':'var(--green)'};border:1px solid ${isDep?'rgba(242,95,76,.3)':'rgba(76,183,130,.3)'}">${isDep?'Deposit':'Withdraw'}</span></td>
       <td>${r.currency || 'SGD'}</td>
-      <td class="${cls}" style="font-family:var(--font-num);font-weight:600">${sign}${fmtSGD(Number(r.amount))}</td>
+      <td class="${cls}" style="font-family:var(--font-num);font-weight:600">${sign}${amtStr}</td>
       <td style="color:var(--muted);font-size:12px">${r.note || ''}</td>
       <td>
         <div style="display:flex;gap:6px">
@@ -5916,15 +5960,6 @@ async function loadChocoFinance() {
       </td>
     </tr>`;
   }).join('') || '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--muted)">No transactions yet — click + Deposit or + Withdraw to add one</td></tr>';
-}
-
-function toggleChocoLog() {
-  _chocoLogOpen = !_chocoLogOpen;
-  const wrap   = document.getElementById('ch-log-wrap');
-  const toggle = document.getElementById('ch-log-toggle');
-  wrap.style.display = _chocoLogOpen ? 'block' : 'none';
-  toggle.firstElementChild.textContent = (_chocoLogOpen ? '▼' : '▶') + ' ' +
-    (_chocoLogOpen ? 'Hide' : 'Show') + ' transaction log';
 }
 
 function openChocoModal(type) {
