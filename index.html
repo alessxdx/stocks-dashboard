@@ -1249,28 +1249,28 @@ tr:hover td { background:var(--surface2); }
   <div class="section" id="div-projection-section" style="background:linear-gradient(135deg, #1a1f2e, #1a2334);border:1px solid #f5b94130;margin-bottom:20px">
     <div style="padding:20px 22px">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px">
-        <div style="min-width:0;flex:1">
-          <div style="font-family:var(--font-mono);font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:#f5b941;font-weight:700;margin-bottom:6px">
+        <div style="flex:1 1 320px;min-width:0">
+          <div style="font-family:var(--font-mono);font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:#f5b941;font-weight:700;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
             ✦ Annual Dividend Income — <span id="div-proj-year">—</span>
           </div>
-          <div style="font-family:var(--font-num);font-size:32px;font-weight:700;color:var(--text);line-height:1.1" id="div-proj-total">—</div>
+          <div style="font-family:var(--font-num);font-size:clamp(22px, 0.5vw + 19px, 32px);font-weight:700;color:var(--text);line-height:1.15;word-break:break-word" id="div-proj-total">—</div>
           <div style="font-size:12px;color:var(--muted);margin-top:6px" id="div-proj-sub">Calculating...</div>
         </div>
-        <!-- Breakdown: Received YTD + Forecast remaining -->
-        <div style="display:flex;gap:16px;flex-wrap:wrap">
-          <div style="background:#0f1419;border:1px solid var(--border);border-radius:10px;padding:12px 18px;min-width:160px">
+        <!-- Breakdown: Received YTD + Forecast remaining + Yield on Cost -->
+        <div style="display:flex;gap:12px;flex-wrap:wrap;flex:1 1 auto">
+          <div style="background:#0f1419;border:1px solid var(--border);border-radius:10px;padding:12px 18px;flex:1 1 150px;min-width:140px">
             <div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Received YTD</div>
-            <div style="font-family:var(--font-num);font-size:20px;font-weight:700;color:#3dd68c" id="div-proj-received">—</div>
+            <div style="font-family:var(--font-num);font-size:clamp(15px, 0.4vw + 13px, 20px);font-weight:700;color:#3dd68c;word-break:break-word" id="div-proj-received">—</div>
             <div style="font-size:10px;color:var(--muted);margin-top:2px" id="div-proj-received-sub">—</div>
           </div>
-          <div style="background:#0f1419;border:1px solid var(--border);border-radius:10px;padding:12px 18px;min-width:160px">
+          <div style="background:#0f1419;border:1px solid var(--border);border-radius:10px;padding:12px 18px;flex:1 1 150px;min-width:140px">
             <div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Forecast Remaining</div>
-            <div style="font-family:var(--font-num);font-size:20px;font-weight:700;color:#38bdf8" id="div-proj-forecast">—</div>
+            <div style="font-family:var(--font-num);font-size:clamp(15px, 0.4vw + 13px, 20px);font-weight:700;color:#38bdf8;word-break:break-word" id="div-proj-forecast">—</div>
             <div style="font-size:10px;color:var(--muted);margin-top:2px" id="div-proj-forecast-sub">—</div>
           </div>
-          <div style="background:#0f1419;border:1px solid var(--border);border-radius:10px;padding:12px 18px;min-width:140px">
+          <div style="background:#0f1419;border:1px solid var(--border);border-radius:10px;padding:12px 18px;flex:1 1 130px;min-width:120px">
             <div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Yield on Cost</div>
-            <div style="font-family:var(--font-num);font-size:20px;font-weight:700;color:#a78bfa" id="div-proj-yoc">—</div>
+            <div style="font-family:var(--font-num);font-size:clamp(15px, 0.4vw + 13px, 20px);font-weight:700;color:#a78bfa" id="div-proj-yoc">—</div>
             <div style="font-size:10px;color:var(--muted);margin-top:2px">% of total invested</div>
           </div>
         </div>
