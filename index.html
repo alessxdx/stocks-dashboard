@@ -24,6 +24,11 @@
   --webull: #5e9eef;
   --syfe: #b399ff;
   --cmc: #4cb782;
+  --insights: #5cd4be;
+  --fx: #56b6e0;
+  --dividends: #fbd24a;
+  --watchlist: #ec7c8e;
+  --other: #d4a5c4;
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04);
   --shadow-md: 0 4px 12px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04);
   --shadow-lg: 0 8px 20px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06);
@@ -70,6 +75,12 @@ body {
 .nav-dot-webull { background:var(--webull) !important; }
 .nav-dot-syfe { background:var(--syfe) !important; }
 .nav-dot-cmc { background:var(--cmc) !important; }
+.nav-dot-overview { background:var(--accent) !important; }
+.nav-dot-insights { background:var(--insights) !important; }
+.nav-dot-fx { background:var(--fx) !important; }
+.nav-dot-dividends { background:var(--dividends) !important; }
+.nav-dot-watchlist { background:var(--watchlist) !important; }
+.nav-dot-other { background:var(--other) !important; }
 .sidebar-footer { padding:16px 20px; border-top:1px solid var(--border); font-size:11px; color:var(--muted); }
 .price-indicator { display:flex; align-items:center; gap:6px; }
 .price-dot { width:6px; height:6px; border-radius:50%; background:var(--green); animation:pulse 2s infinite; }
@@ -82,6 +93,16 @@ body {
 /* HEADER */
 .page-header { margin-bottom:28px; }
 .page-title { font-family:var(--font-head); font-size:32px; font-weight:700; letter-spacing:-0.025em; line-height:1.1; }
+/* Per-page title colors matching sidebar dot colors */
+#page-overview  .page-title { color:var(--accent); }
+#page-insights  .page-title { color:var(--insights); }
+#page-syfe      .page-title { color:var(--syfe); }
+#page-webull    .page-title { color:var(--webull); }
+#page-cmc       .page-title { color:var(--cmc); }
+#page-fx        .page-title { color:var(--fx); }
+#page-dividends .page-title { color:var(--dividends); }
+#page-watchlist .page-title { color:var(--watchlist); }
+#page-other     .page-title { color:var(--other); }
 .page-subtitle { color:var(--muted); font-size:13px; margin-top:6px; font-weight:500; }
 .last-updated { font-size:11px; color:var(--muted); margin-top:6px; }
 
@@ -606,10 +627,10 @@ tr:hover td { background:var(--surface2); }
   <div class="logo">PORT<span>FOLIO</span></div>
   <nav class="nav">
     <div class="nav-item active" onclick="showPage('overview',this)">
-      <div class="dot"></div><span>Overview</span>
+      <div class="dot nav-dot-overview"></div><span>Overview</span>
     </div>
     <div class="nav-item" onclick="showPage('insights',this)">
-      <div class="dot" style="background:#a78bfa"></div><span>Insights</span>
+      <div class="dot nav-dot-insights"></div><span>Insights</span>
     </div>
     <div class="nav-item" onclick="showPage('syfe',this)">
       <div class="dot nav-dot-syfe"></div><span>Syfe</span>
@@ -621,16 +642,16 @@ tr:hover td { background:var(--surface2); }
       <div class="dot nav-dot-cmc"></div><span>CMC Invest</span>
     </div>
     <div class="nav-item" onclick="showPage('fx',this)">
-      <div class="dot"></div><span>FX Tracker</span>
+      <div class="dot nav-dot-fx"></div><span>FX Tracker</span>
     </div>
     <div class="nav-item" onclick="showPage('dividends',this)">
-      <div class="dot"></div><span>Dividends</span>
+      <div class="dot nav-dot-dividends"></div><span>Dividends</span>
     </div>
     <div class="nav-item" onclick="showPage('watchlist',this)">
-      <div class="dot"></div><span>Watchlist</span>
+      <div class="dot nav-dot-watchlist"></div><span>Watchlist</span>
     </div>
     <div class="nav-item" onclick="showPage('other',this)">
-      <div class="dot" style="background:#fbd24a"></div><span>Other</span>
+      <div class="dot nav-dot-other"></div><span>Other</span>
     </div>
   </nav>
   <div class="watchlist" id="watchlist">
