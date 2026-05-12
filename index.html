@@ -382,6 +382,14 @@ tr:hover td { background:var(--surface2); }
   .stat-value { font-size:24px; }
   .stat-card { padding:18px 20px; }
   .main { padding:24px; }
+
+  /* Overview positions table — compact to avoid horizontal scroll on small laptops */
+  #page-overview th, #page-overview td { padding:10px 10px; font-size:12px; }
+  #page-overview .ticker-badge { padding:3px 7px; font-size:11px; }
+  #page-overview .pill { padding:3px 7px; font-size:10px; }
+  /* Hide Broker column — ticker badge is already broker-colored */
+  #page-overview thead th:nth-child(2),
+  #page-overview tbody td:nth-child(2) { display:none; }
 }
 
 /* Stat grid responsive — smoother progression for phone/laptop/27"/34" monitors
