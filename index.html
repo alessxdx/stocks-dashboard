@@ -3661,16 +3661,28 @@ function openStockAddTrade() {
     openSyfeAddTrade(s.ticker);
     return;
   }
-  if (s.broker === 'webull') openModal('add-trade-modal','webull');
-  else if (s.broker === 'cmc') openModal('add-sg-trade-modal','cmc');
-  else openModal('add-trade-modal','webull');
-  // Pre-fill ticker if the field exists (Webull / CMC)
-  setTimeout(() => {
-    ['trade-ticker','sg-trade-ticker'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el && !el.value) el.value = s.ticker;
-    });
-  }, 50);
+  // CMC tickers may carry a .SI suffix on the stock-detail page; strip it for the SGX input
+  const cleanTicker = (s.ticker || '').replace(/\.SI$/i, '');
+
+  if (s.broker === 'cmc') {
+    openModal('add-sg-trade-modal','cmc');
+    const tEl = document.getElementById('sg-ticker');
+    const qEl = document.getElementById('sg-qty');
+    const pEl = document.getElementById('sg-price');
+    if (tEl) tEl.value = cleanTicker;
+    if (qEl) qEl.value = '';
+    if (pEl) pEl.value = '';
+    setTimeout(() => { qEl && qEl.focus(); }, 60);
+  } else {
+    openModal('add-trade-modal','webull');
+    const tEl = document.getElementById('trade-ticker');
+    const qEl = document.getElementById('trade-qty');
+    const pEl = document.getElementById('trade-price');
+    if (tEl) tEl.value = s.ticker;
+    if (qEl) qEl.value = '';
+    if (pEl) pEl.value = '';
+    setTimeout(() => { qEl && qEl.focus(); }, 60);
+  }
 }
 function openStockAddDividend() {
   const s = _stockCurrent; if (!s) return;
@@ -5382,6 +5394,21 @@ function openModal(id, broker) {
 }
 function closeModal(id) { const o=document.getElementById(id); if(o) o.classList.remove('open'); }
 
+// ── Enter-to-submit for any open modal ──
+// Press Enter inside a modal input to click that modal's primary submit button.
+// Skips textareas (newlines) and selects (native keyboard handling).
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  const t = e.target;
+  if (!t || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT') return;
+  const modal = t.closest && t.closest('.modal-overlay.open');
+  if (!modal) return;
+  const submitBtn = modal.querySelector('.btn-submit');
+  if (!submitBtn) return;
+  e.preventDefault();
+  submitBtn.click();
+});
+
 // ── Submit helpers ──
 async function submitDeposit() {
   const editId = document.getElementById('dep-edit-id').value;
@@ -5446,7 +5473,11 @@ async function submitTrade() {
   if (editId) {
     await sb('webull_trades','PATCH',body,`?id=eq.${editId}`);
     document.getElementById('trade-edit-id').value=''; document.getElementById('trade-modal-title').textContent='Add Trade — Webull';
-    invalidateCache(); closeModal('add-trade-modal'); loadWebull(); return;
+    invalidateCache(); closeModal('add-trade-modal'); loadWebull();
+    if (_stockCurrent && document.getElementById('page-stock').classList.contains('active')) {
+      loadStockDetail(_stockCurrent.ticker, _stockCurrent.broker, _stockCurrent.isSG);
+    }
+    return;
   }
   await sb('webull_trades','POST',body);
   const holdings2 = await sb('webull_holdings','GET',null,`?ticker=eq.${ticker}&brokerage=eq.webull`);
@@ -5459,6 +5490,9 @@ async function submitTrade() {
     await sb('webull_holdings','POST',{ticker,brokerage:'webull',shares:qty,avg_cost:price_val,total_cost:amount,total_realised_pl:0,status:'active'});
   }
   invalidateCache(); closeModal('add-trade-modal'); loadWebull();
+  if (_stockCurrent && document.getElementById('page-stock').classList.contains('active')) {
+    loadStockDetail(_stockCurrent.ticker, _stockCurrent.broker, _stockCurrent.isSG);
+  }
 }
 
 // ── Trade submit (CMC) ──
@@ -5474,6 +5508,9 @@ async function submitSGTrade() {
   if (editId) { await sb('cmc_trades','PATCH',body,`?id=eq.${editId}`); document.getElementById('sg-edit-id').value=''; document.getElementById('cmc-trade-modal-title').textContent='Add Trade — CMC Invest'; }
   else { await sb('cmc_trades','POST',body); }
   invalidateCache(); closeModal('add-sg-trade-modal'); loadCMC();
+  if (_stockCurrent && document.getElementById('page-stock').classList.contains('active')) {
+    loadStockDetail(_stockCurrent.ticker, _stockCurrent.broker, _stockCurrent.isSG);
+  }
 }
 
 // ── FX ──
@@ -5656,7 +5693,12 @@ async function submitSyfeTrade() {
   if(editId) await sb('syfe_trades','PATCH',body,`?id=eq.${editId}`); else await sb('syfe_trades','POST',body);
   invalidateCache(); closeModal('syfe-add-trade-modal');
   _syfeTrades=await sb('syfe_trades','GET',null,'?order=date.desc');
-  showSyfeTradeHistory(ticker);
+  // If user came from the stock detail page, refresh that instead of re-opening trade history
+  if (_stockCurrent && document.getElementById('page-stock').classList.contains('active')) {
+    loadStockDetail(_stockCurrent.ticker, _stockCurrent.broker, _stockCurrent.isSG);
+  } else {
+    showSyfeTradeHistory(ticker);
+  }
 }
 
 async function deleteSyfeTrade(id,ticker) {
