@@ -664,7 +664,7 @@ tr:hover td { background:var(--surface2); }
   </nav>
   <div class="watchlist" id="watchlist">
     <div class="watchlist-header">
-      <span>Watchlist</span>
+      <span>Top Movers</span>
       <div style="display:flex;align-items:center;gap:6px">
         <button data-refresh-btn onclick="refreshPrices()" title="Refresh all prices"
           style="background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:10px;padding:3px 7px;border-radius:6px;font-family:var(--font-mono)">↻</button>
@@ -676,14 +676,9 @@ tr:hover td { background:var(--surface2); }
     </div>
     <div data-last-updated style="font-size:9px;color:var(--muted);padding:6px 20px 4px;letter-spacing:.4px;text-transform:uppercase;font-family:var(--font-mono)">—</div>
   </div>
-  <div class="sidebar-footer">
-    <div class="price-indicator"><div class="price-dot"></div><span>Live prices</span></div>
-    <div id="sb-user-row" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)">
-      <div id="sb-user-email" style="word-break:break-all;margin-bottom:6px;font-family:var(--font-mono);font-size:10px"></div>
-      <button onclick="doSignOut()" style="background:transparent;border:1px solid var(--border2);color:var(--muted);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;width:100%;font-family:var(--font-head);transition:all .15s" onmouseover="this.style.background='var(--surface2)';this.style.color='var(--text)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'">
-        Sign out
-      </button>
-    </div>
+  <!-- Hidden stubs kept so auth helpers (showLogin/hideLogin) don't error -->
+  <div id="sb-user-row" style="display:none">
+    <div id="sb-user-email" style="display:none"></div>
   </div>
 </aside>
 
@@ -5396,24 +5391,42 @@ async function loadWatchlist() {
   const syfe      = _syfeH || [];
   const cmcActive = getCMCActive();
 
-  const usTickers = [...wbActive.map(h=>h.ticker), ...syfe.map(h=>h.ticker)];
-  const sgTickers = cmcActive.map(h => h.ticker+'.SI');
-  const allTickers = [...new Set([...usTickers,...sgTickers])].sort();
+  // Pool holdings + watchlist table
+  const holdingsUS = [...wbActive.map(h=>h.ticker), ...syfe.map(h=>h.ticker)];
+  const holdingsSG = cmcActive.map(h => h.ticker+'.SI');
 
+  // Watchlist table (may not be loaded yet — fetch lazily, ignore failures)
+  let wlRows = [];
+  try { wlRows = (await sb('watchlist','GET',null,'?select=ticker,exchange')) || []; } catch(_) {}
+  const wlUS = wlRows.filter(r => r.exchange !== 'SGX').map(r => r.ticker);
+  const wlSG = wlRows.filter(r => r.exchange === 'SGX').map(r => r.ticker+'.SI');
+
+  const allTickers = [...new Set([...holdingsUS, ...holdingsSG, ...wlUS, ...wlSG])];
   await fetchPrices(allTickers);
 
   const container = document.getElementById('watchlist-items');
   if (!allTickers.length) { container.innerHTML = '<div class="wl-loading">No holdings</div>'; return; }
 
-  container.innerHTML = allTickers.map(ticker => {
+  // Rank by absolute day-change %, biggest movers first
+  const ranked = allTickers
+    .map(t => ({ ticker: t, day: dayChangeCache[t] }))
+    .filter(x => x.day != null && !isNaN(x.day))
+    .sort((a, b) => Math.abs(b.day) - Math.abs(a.day))
+    .slice(0, 8);
+
+  if (!ranked.length) {
+    container.innerHTML = '<div class="wl-loading">Waiting for price data...</div>';
+    return;
+  }
+
+  container.innerHTML = ranked.map(({ ticker, day }) => {
     const p = priceCache[ticker] || 0;
     const isSG = ticker.endsWith('.SI');
     const displayTicker = ticker.replace('.SI','');
-    const dayChg = dayChangeCache[ticker];
-    const diffColor = dayChg == null ? 'var(--muted)' : dayChg >= 0 ? 'var(--green)' : 'var(--red)';
-    const diffStr   = dayChg == null ? '—' : (dayChg >= 0 ? '+' : '') + dayChg.toFixed(2) + '%';
+    const diffColor = day >= 0 ? 'var(--green)' : 'var(--red)';
+    const diffStr   = (day >= 0 ? '+' : '') + day.toFixed(2) + '%';
     const priceStr  = isSG ? 'S$' + p.toFixed(3) : '$' + p.toFixed(2);
-    return `<div class="wl-item" onclick="showPage('${isSG?'cmc':'webull'}'); event.stopPropagation()">
+    return `<div class="wl-item" onclick="showStockDetail('${displayTicker}',${isSG?"'cmc'":"null"},${isSG}); event.stopPropagation()">
       <span class="wl-ticker">${displayTicker}</span>
       <div class="wl-right">
         <div class="wl-price">${p > 0 ? priceStr : '—'}</div>
