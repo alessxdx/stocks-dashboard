@@ -46,7 +46,7 @@ body {
   border-right:1px solid var(--border); position:fixed; left:0; top:0;
   display:flex; flex-direction:column; padding:20px 12px; z-index:100;
 }
-.main { margin-left:240px; flex:1; padding:32px; }
+.main { margin-left:240px; flex:1; padding:32px; min-width:0; overflow-x:hidden; }
 
 /* SIDEBAR */
 .logo {
@@ -353,17 +353,40 @@ tr:hover td { background:var(--surface2); }
 .btn-submit { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
 .btn-submit:hover { background:#e85a28; border-color:#e85a28; }
 
-@media (max-width:1400px) {
+/* Mid-range scaling for small laptops — sits between desktop and mobile */
+@media (max-width:1250px) {
+  .page-title { font-size:26px; }
+  .page-subtitle { font-size:12px; }
+  .page-header { margin-bottom:20px; }
+  .stat-value { font-size:24px; }
+  .stat-card { padding:18px 20px; }
+  .main { padding:24px; }
+}
+
+/* Stat grid responsive — smoother progression for phone/laptop/27"/34" monitors
+   Defaults (no media query): 6/5/4/3/2 cols at full width — for ultrawide & 34" monitors
+   Reference: stat-grid-N defined above means N columns at the widest screens */
+
+/* Large desktop ~27" monitor at native or scaled */
+@media (max-width:1700px) {
+  .stat-grid-6 { grid-template-columns:repeat(5,1fr); }
+}
+/* Standard desktop / 24" monitor */
+@media (max-width:1450px) {
+  .stat-grid-6 { grid-template-columns:repeat(4,1fr); }
+  .stat-grid-5 { grid-template-columns:repeat(4,1fr); }
+}
+/* Small laptop / 13"-14" at 100% (~1280-1366px effective) */
+@media (max-width:1250px) {
   .stat-grid-6 { grid-template-columns:repeat(3,1fr); }
-}
-@media (max-width:1200px) {
   .stat-grid-5 { grid-template-columns:repeat(3,1fr); }
+  .stat-grid-4 { grid-template-columns:repeat(3,1fr); }
 }
-/* Tablet ── narrower screens */
-@media (max-width:900px) {
-  .stat-grid-4 { grid-template-columns:repeat(2,1fr); }
-  .stat-grid-5 { grid-template-columns:repeat(2,1fr); }
+/* Tablet landscape / very narrow laptop */
+@media (max-width:1024px) {
   .stat-grid-6 { grid-template-columns:repeat(2,1fr); }
+  .stat-grid-5 { grid-template-columns:repeat(2,1fr); }
+  .stat-grid-4 { grid-template-columns:repeat(2,1fr); }
   .stat-grid-3 { grid-template-columns:repeat(2,1fr); }
   .charts-grid { grid-template-columns:1fr; }
 }
@@ -3147,7 +3170,7 @@ let _perfChart = null;
 async function captureDailySnapshot(snap) {
   // snap = { totalUSD, webullUSD, syfeUSD, cmcUSD, cmcSGD, sgdToUsd }
   if (!snap.totalUSD || snap.totalUSD <= 0) return;
-  const today = new Date().toISOString().slice(0,10); // YYYY-MM-DD
+  const today = todayLocal(); // YYYY-MM-DD in local timezone
 
   try {
     // Upsert: if today's row exists, update it (so latest value of the day wins)
@@ -5379,6 +5402,15 @@ async function loadWatchlist() {
 
 // ── Modal helpers ──
 let _currentBroker = '';
+// Local-date helper (avoids the UTC off-by-one that toISOString() causes for SGT/CET users)
+function todayLocal() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 function openModal(id, broker) {
   _currentBroker = broker;
   const overlay = document.getElementById(id);
@@ -5386,7 +5418,7 @@ function openModal(id, broker) {
   overlay.classList.add('open');
   const brokerInput = overlay.querySelector('[id$="-broker"]');
   if (brokerInput) brokerInput.value = broker;
-  overlay.querySelectorAll('input[type=date]').forEach(el => { el.value = new Date().toISOString().split('T')[0]; });
+  overlay.querySelectorAll('input[type=date]').forEach(el => { el.value = todayLocal(); });
   const brokerLabel = broker==='cmc'?'CMC Invest':broker==='syfe'?'Syfe':'Webull';
   if (id==='add-deposit-modal') { document.getElementById('dep-modal-title').textContent=`Add Deposit — ${brokerLabel}`; document.getElementById('dep-edit-id').value=''; }
   if (id==='add-withdrawal-modal') { document.getElementById('wd-modal-add-title').textContent=`Add Withdrawal — ${brokerLabel}`; }
@@ -5567,7 +5599,7 @@ function openDivModal(ticker='', broker='webull') {
   const sel=document.getElementById('div-add-broker-select'); if(sel) sel.value=broker;
   document.getElementById('div-add-ticker').value=ticker;
   const cmcT=document.getElementById('div-add-ticker-cmc'); if(cmcT) cmcT.value=ticker;
-  document.getElementById('div-add-date').value=new Date().toISOString().split('T')[0];
+  document.getElementById('div-add-date').value=todayLocal();
   document.getElementById('div-add-amount').value='';
   document.getElementById('div-add-per-share').value='';
   document.getElementById('div-add-shares').value='';
@@ -5663,7 +5695,7 @@ function openSyfeAddTrade(ticker) {
   document.getElementById('syfe-add-trade-title').textContent='Add Trade — '+(ticker||_currentSyfeTicker);
   document.getElementById('syfe-trade-edit-id').value='';
   document.getElementById('syfe-trade-ticker').value=ticker||_currentSyfeTicker;
-  document.getElementById('syfe-trade-date').value=new Date().toISOString().split('T')[0];
+  document.getElementById('syfe-trade-date').value=todayLocal();
   document.getElementById('syfe-trade-shares').value='';
   document.getElementById('syfe-trade-price').value='';
   document.getElementById('syfe-trade-amount').value='';
@@ -6009,7 +6041,7 @@ function openChocoModal(type) {
   document.getElementById('ch-type').value    = type;
   document.getElementById('ch-modal-title').textContent =
     `Add ${type === 'deposit' ? 'Deposit' : 'Withdrawal'} — Chocolate Finance`;
-  document.getElementById('ch-date').value     = new Date().toISOString().slice(0,10);
+  document.getElementById('ch-date').value     = todayLocal();
   document.getElementById('ch-currency').value = 'SGD';
   document.getElementById('ch-amount').value   = '';
   document.getElementById('ch-note').value     = '';
