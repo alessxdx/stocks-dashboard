@@ -6662,43 +6662,46 @@ function toggleOtherSection(key) {
 }
 
 async function loadOther() {
-  // ── T-Bills (static) ──
-  const tbSpent    = TBILLS.reduce((a,b) => a + b.amount, 0);
-  const tbInterest = TBILLS.reduce((a,b) => a + b.interest, 0);
-  // Weighted avg yield = sum(amount * rate) / sum(amount)
-  const tbAvgYield = TBILLS.reduce((a,b) => a + b.amount * b.rate, 0) / tbSpent;
+  try {
+    // ── T-Bills (static) ──
+    const tbSpent    = TBILLS.reduce((a,b) => a + b.amount, 0);
+    const tbInterest = TBILLS.reduce((a,b) => a + b.interest, 0);
+    // Weighted avg yield = sum(amount * rate) / sum(amount)
+    const tbAvgYield = TBILLS.reduce((a,b) => a + b.amount * b.rate, 0) / tbSpent;
 
-  document.getElementById('tb-spent').textContent    = fmtSGD(tbSpent);
-  document.getElementById('tb-interest').textContent = fmtSGD(tbInterest);
-  document.getElementById('tb-interest-sub').textContent =
-    `+${(tbInterest / tbSpent * 100).toFixed(3)}% total return`;
-  document.getElementById('tb-yield').textContent    = tbAvgYield.toFixed(2) + '%';
-  document.getElementById('tb-summary').textContent  =
-    `${fmtSGD(tbInterest)} earned · ${tbAvgYield.toFixed(2)}% avg p.a. · 7 issues`;
+    const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    const setHtml = (id, val) => { const el = document.getElementById(id); if (el) el.innerHTML = val; };
 
-  // T-Bills table — sort newest first
-  document.getElementById('tb-body').innerHTML = TBILLS
-    .slice()
-    .sort((a,b) => new Date(b.auction) - new Date(a.auction))
-    .map(b => `<tr>
-      <td style="font-family:var(--font-mono);font-weight:600">${b.id}</td>
-      <td>${fmtDate(b.auction)}</td>
-      <td>${fmtDate(b.maturity)}</td>
-      <td style="font-family:var(--font-num)">${b.rate.toFixed(2)}%</td>
-      <td style="font-family:var(--font-num)">${fmtSGD(b.amount)}</td>
-      <td class="pos" style="font-family:var(--font-num);font-weight:600">+${fmtSGD(b.interest)}</td>
-    </tr>`).join('');
+    setText('tb-spent',        fmtSGD(tbSpent));
+    setText('tb-interest',     fmtSGD(tbInterest));
+    setText('tb-interest-sub', `+${(tbInterest / tbSpent * 100).toFixed(3)}% total return`);
+    setText('tb-yield',        tbAvgYield.toFixed(2) + '%');
+    setText('tb-summary',      `${fmtSGD(tbInterest)} earned · ${tbAvgYield.toFixed(2)}% avg p.a. · 7 issues`);
 
-  // ── Moomoo summary (static, archived) ──
-  document.getElementById('mm-summary').textContent =
-    '+S$5,302.65 net · Jul 2021 – May 2026';
+    // T-Bills table — sort newest first
+    setHtml('tb-body', TBILLS
+      .slice()
+      .sort((a,b) => new Date(b.auction) - new Date(a.auction))
+      .map(b => `<tr>
+        <td style="font-family:var(--font-mono);font-weight:600">${b.id}</td>
+        <td>${fmtDate(b.auction)}</td>
+        <td>${fmtDate(b.maturity)}</td>
+        <td style="font-family:var(--font-num)">${b.rate.toFixed(2)}%</td>
+        <td style="font-family:var(--font-num)">${fmtSGD(b.amount)}</td>
+        <td class="pos" style="font-family:var(--font-num);font-weight:600">+${fmtSGD(b.interest)}</td>
+      </tr>`).join(''));
 
-  // ── Stashaway summary (combined) ──
-  document.getElementById('sa-summary').textContent =
-    '+S$1,751.14 net · 2 closed portfolios · May 2023 – Jan 2026';
+    // ── Moomoo summary (static, archived) ──
+    setText('mm-summary', '+S$5,302.65 net · Jul 2021 – May 2026');
 
-  // ── Chocolate Finance (live) ──
-  await loadChocoFinance();
+    // ── Stashaway summary (combined) ──
+    setText('sa-summary', '+S$1,751.14 net · 2 closed portfolios · May 2023 – Jan 2026');
+
+    // ── Chocolate Finance (live) ──
+    await loadChocoFinance();
+  } catch (err) {
+    console.error('[loadOther] failed:', err);
+  }
 }
 
 async function loadChocoFinance() {
