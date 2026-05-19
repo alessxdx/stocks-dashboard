@@ -1926,7 +1926,7 @@ tr:hover td { background:var(--surface2); }
 
   <!-- ── Tiger Brokers (collapsible, active) ── -->
   <div class="section" id="other-tg-section" style="margin-bottom:14px">
-    <div class="section-header" onclick="toggleOtherSection('tg')" style="cursor:pointer">
+    <div class="section-header" style="cursor:pointer" onclick="toggleOtherSection('tg')">
       <div style="display:flex;align-items:center;gap:12px;flex:1">
         <span id="tg-chevron" style="font-family:var(--font-mono);color:var(--muted);font-size:14px;width:14px;display:inline-block">▶</span>
         <div>
@@ -1934,84 +1934,41 @@ tr:hover td { background:var(--surface2); }
           <div style="font-size:11px;color:var(--muted);margin-top:2px" id="tg-summary">—</div>
         </div>
       </div>
+      <div style="display:flex;gap:8px" onclick="event.stopPropagation()">
+        <button class="btn btn-sm" onclick="openTigerModal('deposit')">+ Deposit</button>
+        <button class="btn btn-sm" onclick="openTigerModal('withdrawal')">+ Withdraw</button>
+      </div>
     </div>
     <div id="tg-detail" style="display:none">
-      <!-- Totals (split by currency) -->
       <div class="stat-grid stat-grid-3" style="padding:16px;margin:0">
         <div class="stat-card">
           <div class="stat-label">Total Deposit</div>
-          <div class="stat-value">S$48,500.00</div>
-          <div class="stat-sub">13 deposits · Jan 2021 – Mar 2025</div>
+          <div class="stat-value" id="tg-dep">—</div>
+          <div class="stat-sub" id="tg-dep-count">—</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Total Withdraw (SGD)</div>
-          <div class="stat-value">S$18,318.82</div>
-          <div class="stat-sub">5 withdrawals · Nov 2023 – May 2026</div>
+          <div class="stat-value" id="tg-wd-sgd">—</div>
+          <div class="stat-sub" id="tg-wd-sgd-count">—</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Total Withdraw (USD)</div>
-          <div class="stat-value">$10,489.85</div>
-          <div class="stat-sub">4 withdrawals · Oct – Dec 2023</div>
+          <div class="stat-value" id="tg-wd-usd">—</div>
+          <div class="stat-sub" id="tg-wd-usd-count">—</div>
         </div>
       </div>
-
-      <!-- Deposits & Withdrawals tables -->
-      <div class="stat-grid stat-grid-2" style="padding:0 16px 16px;margin:0;gap:14px">
-        <div class="section" style="margin:0">
-          <div class="section-header">
-            <div class="section-title">Deposits</div>
-            <span class="section-badge">13</span>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Date</th><th>Currency</th><th>Amount</th></tr></thead>
-              <tbody>
-                <tr><td>27-Mar-2025</td><td>SGD</td><td style="font-family:var(--font-num)">S$2,500.00</td></tr>
-                <tr><td>04-Jan-2024</td><td>SGD</td><td style="font-family:var(--font-num)">S$15,000.00</td></tr>
-                <tr><td>21-Dec-2022</td><td>SGD</td><td style="font-family:var(--font-num)">S$6,000.00</td></tr>
-                <tr><td>14-Dec-2021</td><td>SGD</td><td style="font-family:var(--font-num)">S$2,500.00</td></tr>
-                <tr><td>04-Oct-2021</td><td>SGD</td><td style="font-family:var(--font-num)">S$2,500.00</td></tr>
-                <tr><td>28-Jul-2021</td><td>SGD</td><td style="font-family:var(--font-num)">S$5,000.00</td></tr>
-                <tr><td>25-Jun-2021</td><td>SGD</td><td style="font-family:var(--font-num)">S$2,500.00</td></tr>
-                <tr><td>15-Apr-2021</td><td>SGD</td><td style="font-family:var(--font-num)">S$2,000.00</td></tr>
-                <tr><td>25-Mar-2021</td><td>SGD</td><td style="font-family:var(--font-num)">S$1,500.00</td></tr>
-                <tr><td>07-Mar-2021</td><td>SGD</td><td style="font-family:var(--font-num)">S$2,000.00</td></tr>
-                <tr><td>10-Feb-2021</td><td>SGD</td><td style="font-family:var(--font-num)">S$2,000.00</td></tr>
-                <tr><td>25-Jan-2021</td><td>SGD</td><td style="font-family:var(--font-num)">S$4,000.00</td></tr>
-                <tr><td>22-Jan-2021</td><td>SGD</td><td style="font-family:var(--font-num)">S$1,000.00</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div class="section" style="margin:0">
-          <div class="section-header">
-            <div class="section-title">Withdrawals</div>
-            <span class="section-badge">9</span>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Date</th><th>Currency</th><th>Amount</th></tr></thead>
-              <tbody>
-                <tr><td>12-May-2026</td><td>SGD</td><td style="font-family:var(--font-num)">S$3,793.68</td></tr>
-                <tr><td>07-May-2026</td><td>SGD</td><td style="font-family:var(--font-num)">S$3,600.77</td></tr>
-                <tr><td>04-Aug-2025</td><td>SGD</td><td style="font-family:var(--font-num)">S$10,523.40</td></tr>
-                <tr><td>27-Dec-2023</td><td>USD</td><td style="font-family:var(--font-num)">$737.47</td></tr>
-                <tr><td>14-Dec-2023</td><td>SGD</td><td style="font-family:var(--font-num)">S$320.32</td></tr>
-                <tr><td>17-Nov-2023</td><td>SGD</td><td style="font-family:var(--font-num)">S$80.65</td></tr>
-                <tr><td>11-Oct-2023</td><td>USD</td><td style="font-family:var(--font-num)">$8,000.00</td></tr>
-                <tr><td>09-Oct-2023</td><td>USD</td><td style="font-family:var(--font-num)">$1,742.38</td></tr>
-                <tr><td>06-Oct-2023</td><td>USD</td><td style="font-family:var(--font-num)">$10.00</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+      <div class="table-wrap" style="padding:0 16px 16px">
+        <table>
+          <thead><tr><th>Date</th><th>Type</th><th>Currency</th><th>Amount</th><th>Note</th><th></th></tr></thead>
+          <tbody id="tg-body"></tbody>
+        </table>
       </div>
     </div>
   </div>
 
   <!-- ── Longbridge (collapsible, active) ── -->
   <div class="section" id="other-lb-section" style="margin-bottom:14px">
-    <div class="section-header" onclick="toggleOtherSection('lb')" style="cursor:pointer">
+    <div class="section-header" style="cursor:pointer" onclick="toggleOtherSection('lb')">
       <div style="display:flex;align-items:center;gap:12px;flex:1">
         <span id="lb-chevron" style="font-family:var(--font-mono);color:var(--muted);font-size:14px;width:14px;display:inline-block">▶</span>
         <div>
@@ -2019,57 +1976,34 @@ tr:hover td { background:var(--surface2); }
           <div style="font-size:11px;color:var(--muted);margin-top:2px" id="lb-summary">—</div>
         </div>
       </div>
+      <div style="display:flex;gap:8px" onclick="event.stopPropagation()">
+        <button class="btn btn-sm" onclick="openLongbridgeModal('deposit')">+ Deposit</button>
+        <button class="btn btn-sm" onclick="openLongbridgeModal('withdrawal')">+ Withdraw</button>
+      </div>
     </div>
     <div id="lb-detail" style="display:none">
-      <!-- Totals -->
       <div class="stat-grid stat-grid-3" style="padding:16px;margin:0">
         <div class="stat-card">
           <div class="stat-label">Total Deposit</div>
-          <div class="stat-value">S$10,100.00</div>
-          <div class="stat-sub">1 deposit · Apr 2025</div>
+          <div class="stat-value" id="lb-dep">—</div>
+          <div class="stat-sub" id="lb-dep-count">—</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Total Withdraw</div>
-          <div class="stat-value">S$82.00</div>
-          <div class="stat-sub">1 withdrawal · Oct 2025</div>
+          <div class="stat-value" id="lb-wd">—</div>
+          <div class="stat-sub" id="lb-wd-count">—</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Net Position</div>
-          <div class="stat-value">S$10,018.00</div>
+          <div class="stat-value" id="lb-net">—</div>
           <div class="stat-sub">Deposit − Withdraw</div>
         </div>
       </div>
-
-      <!-- Deposits & Withdrawals tables -->
-      <div class="stat-grid stat-grid-2" style="padding:0 16px 16px;margin:0;gap:14px">
-        <div class="section" style="margin:0">
-          <div class="section-header">
-            <div class="section-title">Deposits</div>
-            <span class="section-badge">1</span>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Date</th><th>Currency</th><th>Amount</th></tr></thead>
-              <tbody>
-                <tr><td>10-Apr-2025</td><td>SGD</td><td style="font-family:var(--font-num)">S$10,100.00</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div class="section" style="margin:0">
-          <div class="section-header">
-            <div class="section-title">Withdrawals</div>
-            <span class="section-badge">1</span>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Date</th><th>Currency</th><th>Amount</th></tr></thead>
-              <tbody>
-                <tr><td>16-Oct-2025</td><td>SGD</td><td style="font-family:var(--font-num)">S$82.00</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+      <div class="table-wrap" style="padding:0 16px 16px">
+        <table>
+          <thead><tr><th>Date</th><th>Type</th><th>Currency</th><th>Amount</th><th>Note</th><th></th></tr></thead>
+          <tbody id="lb-body"></tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -2423,6 +2357,76 @@ tr:hover td { background:var(--surface2); }
     <div class="modal-actions">
       <button class="btn btn-cancel" onclick="closeModal('add-choco-modal')">Cancel</button>
       <button class="btn btn-submit" onclick="submitChoco()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== TIGER BROKERS MODAL ===================== -->
+<div class="modal-overlay" id="add-tiger-modal">
+  <div class="modal">
+    <div class="modal-title" id="tg-modal-title">Add Deposit — Tiger Brokers</div>
+    <input type="hidden" id="tg-edit-id">
+    <input type="hidden" id="tg-type" value="deposit">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input class="form-input" type="date" id="tg-date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Currency</label>
+        <select class="form-input" id="tg-currency">
+          <option>SGD</option><option>USD</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Amount</label>
+        <input class="form-input" type="number" id="tg-amount" placeholder="0.00" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note (optional)</label>
+        <input class="form-input" id="tg-note" placeholder="optional note">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="closeModal('add-tiger-modal')">Cancel</button>
+      <button class="btn btn-submit" onclick="submitTiger()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== LONGBRIDGE MODAL ===================== -->
+<div class="modal-overlay" id="add-longbridge-modal">
+  <div class="modal">
+    <div class="modal-title" id="lb-modal-title">Add Deposit — Longbridge</div>
+    <input type="hidden" id="lb-edit-id">
+    <input type="hidden" id="lb-type" value="deposit">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input class="form-input" type="date" id="lb-date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Currency</label>
+        <select class="form-input" id="lb-currency">
+          <option>SGD</option><option>USD</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Amount</label>
+        <input class="form-input" type="number" id="lb-amount" placeholder="0.00" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note (optional)</label>
+        <input class="form-input" id="lb-note" placeholder="optional note">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="closeModal('add-longbridge-modal')">Cancel</button>
+      <button class="btn btn-submit" onclick="submitLongbridge()">Save</button>
     </div>
   </div>
 </div>
@@ -6847,11 +6851,11 @@ async function loadOther() {
     // ── Stashaway summary (combined) ──
     setText('sa-summary', '+S$1,751.14 net · 2 closed portfolios · May 2023 – Jan 2026');
 
-    // ── Tiger Brokers summary (static, active) ──
-    setText('tg-summary', 'Active · S$48,500 dep · S$18,318.82 + $10,489.85 wd · 22 txn');
+    // ── Tiger Brokers (live) ──
+    await loadTiger();
 
-    // ── Longbridge summary (static, active) ──
-    setText('lb-summary', 'Active · S$10,100 dep · S$82 wd · 2 txn');
+    // ── Longbridge (live) ──
+    await loadLongbridge();
 
     // ── Chocolate Finance (live) ──
     await loadChocoFinance();
@@ -6960,6 +6964,217 @@ async function deleteChoco(id) {
   if (!confirm('Delete this transaction?')) return;
   await sb('chocolate_finance', 'DELETE', null, `?id=eq.${id}`);
   await loadChocoFinance();
+}
+
+// ============================================================
+// TIGER BROKERS — DB-backed (tiger_finance table)
+// ============================================================
+let _tigerRows = null;
+
+async function loadTiger() {
+  let rows = [];
+  try {
+    rows = await sb('tiger_finance', 'GET', null, '?order=date.desc') || [];
+  } catch(e) {
+    console.warn('Tiger fetch failed:', e.message);
+  }
+  _tigerRows = rows;
+
+  const deps    = rows.filter(r => r.type === 'deposit');
+  const wdsSGD  = rows.filter(r => r.type === 'withdrawal' && (r.currency || 'SGD') === 'SGD');
+  const wdsUSD  = rows.filter(r => r.type === 'withdrawal' && r.currency === 'USD');
+  // Deposits we treat in SGD (matches original screenshot — all were SGD)
+  const totalDep    = deps.reduce((a,b) => a + Number(b.amount), 0);
+  const totalWdSGD  = wdsSGD.reduce((a,b) => a + Number(b.amount), 0);
+  const totalWdUSD  = wdsUSD.reduce((a,b) => a + Number(b.amount), 0);
+
+  const setT = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  setT('tg-dep',        fmtSGD(totalDep));
+  setT('tg-dep-count',  `${deps.length} deposit${deps.length===1?'':'s'}`);
+  setT('tg-wd-sgd',     fmtSGD(totalWdSGD));
+  setT('tg-wd-sgd-count', `${wdsSGD.length} withdrawal${wdsSGD.length===1?'':'s'}`);
+  setT('tg-wd-usd',     fmtUSD(totalWdUSD));
+  setT('tg-wd-usd-count', `${wdsUSD.length} withdrawal${wdsUSD.length===1?'':'s'}`);
+
+  const summary = rows.length === 0
+    ? 'Active — no transactions yet'
+    : `Active · ${rows.length} txn · S$${totalDep.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} in`;
+  setT('tg-summary', summary);
+
+  const tbody = document.getElementById('tg-body');
+  if (tbody) tbody.innerHTML = rows.map(r => {
+    const isDep = r.type === 'deposit';
+    const cls   = isDep ? 'neg' : 'pos';
+    const sign  = isDep ? '−' : '+';
+    const noteEsc = (r.note || '').replace(/'/g, "\\'");
+    const amtStr = (r.currency === 'USD' ? fmtUSD(Number(r.amount)) : fmtSGD(Number(r.amount)));
+    return `<tr>
+      <td>${fmtDate(r.date)}</td>
+      <td><span class="pill" style="background:${isDep?'rgba(242,95,76,.12)':'rgba(76,183,130,.12)'};color:${isDep?'var(--red)':'var(--green)'};border:1px solid ${isDep?'rgba(242,95,76,.3)':'rgba(76,183,130,.3)'}">${isDep?'Deposit':'Withdraw'}</span></td>
+      <td>${r.currency || 'SGD'}</td>
+      <td class="${cls}" style="font-family:var(--font-num);font-weight:600">${sign}${amtStr}</td>
+      <td style="color:var(--muted);font-size:12px">${r.note || ''}</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm" style="font-size:10px"
+            onclick="openTigerEdit(${r.id},'${r.type}','${r.date}','${r.currency||'SGD'}',${r.amount},'${noteEsc}')">Edit</button>
+          <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:rgba(242,95,76,.3)"
+            onclick="deleteTiger(${r.id})">Del</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--muted)">No transactions yet — click + Deposit or + Withdraw to add one</td></tr>';
+}
+
+function openTigerModal(type) {
+  document.getElementById('tg-edit-id').value = '';
+  document.getElementById('tg-type').value    = type;
+  document.getElementById('tg-modal-title').textContent =
+    `Add ${type === 'deposit' ? 'Deposit' : 'Withdrawal'} — Tiger Brokers`;
+  document.getElementById('tg-date').value     = todayLocal();
+  document.getElementById('tg-currency').value = 'SGD';
+  document.getElementById('tg-amount').value   = '';
+  document.getElementById('tg-note').value     = '';
+  document.getElementById('add-tiger-modal').classList.add('open');
+}
+
+function openTigerEdit(id, type, date, currency, amount, note) {
+  document.getElementById('tg-edit-id').value  = id;
+  document.getElementById('tg-type').value     = type;
+  document.getElementById('tg-modal-title').textContent =
+    `Edit ${type === 'deposit' ? 'Deposit' : 'Withdrawal'} — Tiger Brokers`;
+  document.getElementById('tg-date').value     = date;
+  document.getElementById('tg-currency').value = currency || 'SGD';
+  document.getElementById('tg-amount').value   = amount;
+  document.getElementById('tg-note').value     = note || '';
+  document.getElementById('add-tiger-modal').classList.add('open');
+}
+
+async function submitTiger() {
+  const editId   = document.getElementById('tg-edit-id').value;
+  const type     = document.getElementById('tg-type').value;
+  const date     = document.getElementById('tg-date').value;
+  const currency = document.getElementById('tg-currency').value;
+  const amount   = parseFloat(document.getElementById('tg-amount').value);
+  const note     = document.getElementById('tg-note').value.trim();
+  if (!date || isNaN(amount) || amount <= 0) return alert('Please fill date and a valid amount');
+
+  const body = { date, type, currency, amount, note: note || null };
+  if (editId) await sb('tiger_finance', 'PATCH', body, `?id=eq.${editId}`);
+  else        await sb('tiger_finance', 'POST',  body);
+
+  closeModal('add-tiger-modal');
+  await loadTiger();
+}
+
+async function deleteTiger(id) {
+  if (!confirm('Delete this transaction?')) return;
+  await sb('tiger_finance', 'DELETE', null, `?id=eq.${id}`);
+  await loadTiger();
+}
+
+// ============================================================
+// LONGBRIDGE — DB-backed (longbridge_finance table)
+// ============================================================
+let _longbridgeRows = null;
+
+async function loadLongbridge() {
+  let rows = [];
+  try {
+    rows = await sb('longbridge_finance', 'GET', null, '?order=date.desc') || [];
+  } catch(e) {
+    console.warn('Longbridge fetch failed:', e.message);
+  }
+  _longbridgeRows = rows;
+
+  const deps = rows.filter(r => r.type === 'deposit');
+  const wds  = rows.filter(r => r.type === 'withdrawal');
+  const totalDep = deps.reduce((a,b) => a + Number(b.amount), 0);
+  const totalWd  = wds.reduce((a,b) => a + Number(b.amount), 0);
+  const net      = totalDep - totalWd;
+
+  const setT = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  setT('lb-dep',        fmtSGD(totalDep));
+  setT('lb-dep-count',  `${deps.length} deposit${deps.length===1?'':'s'}`);
+  setT('lb-wd',         fmtSGD(totalWd));
+  setT('lb-wd-count',   `${wds.length} withdrawal${wds.length===1?'':'s'}`);
+  setT('lb-net',        fmtSGD(net));
+
+  const summary = rows.length === 0
+    ? 'Active — no transactions yet'
+    : `Active · ${rows.length} txn · Net ${fmtSGD(net)}`;
+  setT('lb-summary', summary);
+
+  const tbody = document.getElementById('lb-body');
+  if (tbody) tbody.innerHTML = rows.map(r => {
+    const isDep = r.type === 'deposit';
+    const cls   = isDep ? 'neg' : 'pos';
+    const sign  = isDep ? '−' : '+';
+    const noteEsc = (r.note || '').replace(/'/g, "\\'");
+    const amtStr = (r.currency === 'USD' ? fmtUSD(Number(r.amount)) : fmtSGD(Number(r.amount)));
+    return `<tr>
+      <td>${fmtDate(r.date)}</td>
+      <td><span class="pill" style="background:${isDep?'rgba(242,95,76,.12)':'rgba(76,183,130,.12)'};color:${isDep?'var(--red)':'var(--green)'};border:1px solid ${isDep?'rgba(242,95,76,.3)':'rgba(76,183,130,.3)'}">${isDep?'Deposit':'Withdraw'}</span></td>
+      <td>${r.currency || 'SGD'}</td>
+      <td class="${cls}" style="font-family:var(--font-num);font-weight:600">${sign}${amtStr}</td>
+      <td style="color:var(--muted);font-size:12px">${r.note || ''}</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm" style="font-size:10px"
+            onclick="openLongbridgeEdit(${r.id},'${r.type}','${r.date}','${r.currency||'SGD'}',${r.amount},'${noteEsc}')">Edit</button>
+          <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:rgba(242,95,76,.3)"
+            onclick="deleteLongbridge(${r.id})">Del</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--muted)">No transactions yet — click + Deposit or + Withdraw to add one</td></tr>';
+}
+
+function openLongbridgeModal(type) {
+  document.getElementById('lb-edit-id').value = '';
+  document.getElementById('lb-type').value    = type;
+  document.getElementById('lb-modal-title').textContent =
+    `Add ${type === 'deposit' ? 'Deposit' : 'Withdrawal'} — Longbridge`;
+  document.getElementById('lb-date').value     = todayLocal();
+  document.getElementById('lb-currency').value = 'SGD';
+  document.getElementById('lb-amount').value   = '';
+  document.getElementById('lb-note').value     = '';
+  document.getElementById('add-longbridge-modal').classList.add('open');
+}
+
+function openLongbridgeEdit(id, type, date, currency, amount, note) {
+  document.getElementById('lb-edit-id').value  = id;
+  document.getElementById('lb-type').value     = type;
+  document.getElementById('lb-modal-title').textContent =
+    `Edit ${type === 'deposit' ? 'Deposit' : 'Withdrawal'} — Longbridge`;
+  document.getElementById('lb-date').value     = date;
+  document.getElementById('lb-currency').value = currency || 'SGD';
+  document.getElementById('lb-amount').value   = amount;
+  document.getElementById('lb-note').value     = note || '';
+  document.getElementById('add-longbridge-modal').classList.add('open');
+}
+
+async function submitLongbridge() {
+  const editId   = document.getElementById('lb-edit-id').value;
+  const type     = document.getElementById('lb-type').value;
+  const date     = document.getElementById('lb-date').value;
+  const currency = document.getElementById('lb-currency').value;
+  const amount   = parseFloat(document.getElementById('lb-amount').value);
+  const note     = document.getElementById('lb-note').value.trim();
+  if (!date || isNaN(amount) || amount <= 0) return alert('Please fill date and a valid amount');
+
+  const body = { date, type, currency, amount, note: note || null };
+  if (editId) await sb('longbridge_finance', 'PATCH', body, `?id=eq.${editId}`);
+  else        await sb('longbridge_finance', 'POST',  body);
+
+  closeModal('add-longbridge-modal');
+  await loadLongbridge();
+}
+
+async function deleteLongbridge(id) {
+  if (!confirm('Delete this transaction?')) return;
+  await sb('longbridge_finance', 'DELETE', null, `?id=eq.${id}`);
+  await loadLongbridge();
 }
 
 </script>
