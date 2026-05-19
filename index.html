@@ -712,7 +712,7 @@ tr:hover td { background:var(--surface2); }
     <div class="stat-card">
       <div class="stat-label">Total Invested (SGD)</div>
       <div class="stat-value" id="ov-total-invested-sgd">—</div>
-      <div class="stat-sub">CMC Invest</div>
+      <div class="stat-sub">CMC + IG (HKD→SGD)</div>
     </div>
     <div class="stat-card gold">
       <div class="stat-label">Total Dividends Received</div>
@@ -720,7 +720,7 @@ tr:hover td { background:var(--surface2); }
       <div class="stat-sub">US + SG + Syfe</div>
     </div>
   </div>
-  <div class="stat-grid stat-grid-3">
+  <div class="stat-grid stat-grid-4">
     <div class="stat-card webull">
       <div class="stat-label">Webull (US Stocks)</div>
       <div class="stat-value" id="ov-webull-value">—</div>
@@ -738,6 +738,12 @@ tr:hover td { background:var(--surface2); }
       <div class="stat-value" id="ov-cmc-value">—</div>
       <div class="stat-change" id="ov-cmc-pl">—</div>
       <div class="stat-sub" id="ov-cmc-cost">—</div><div class="stat-sub" style="color:var(--cmc);font-size:10px">SGD</div>
+    </div>
+    <div class="stat-card ig">
+      <div class="stat-label">IG Markets (HK Stocks)</div>
+      <div class="stat-value" id="ov-ig-value">—</div>
+      <div class="stat-change" id="ov-ig-pl">—</div>
+      <div class="stat-sub" id="ov-ig-cost">—</div><div class="stat-sub" style="color:var(--ig);font-size:10px">SGD eq. (HKD-native)</div>
     </div>
   </div>
 
@@ -4231,12 +4237,25 @@ async function loadOverview() {
   let cmcValue=0, cmcCost=0;
   cmcActive.forEach(h => { cmcValue += h.shares * price(h.ticker+'.SI'); cmcCost += h.cost; });
 
+  // IG — HKD-native, convert to SGD
+  let igValueSGD=0, igCostSGD=0;
+  let hkdToSgd = 0;
+  if (igActive.length) {
+    const hkInfo = await getLiveHkdToSgd();
+    hkdToSgd = hkInfo.rate;
+    igActive.forEach(h => {
+      const p = price(h.ticker+'.HK');                  // HKD per share
+      igValueSGD += (h.shares * p) * hkdToSgd;
+      igCostSGD  += h.cost * hkdToSgd;
+    });
+  }
+
   const divUS = (_divUS||[]).reduce((s,d) => s+d.amount_usd, 0);
   const divSyfe = (_divSyfe||[]).reduce((s,d) => s+d.amount_usd, 0);
 
-  document.getElementById('ov-total-value').textContent = fmtUSD(wbValue+syValue) + ' + ' + fmtSGD(cmcValue);
+  document.getElementById('ov-total-value').textContent = fmtUSD(wbValue+syValue) + ' + ' + fmtSGD(cmcValue+igValueSGD);
   document.getElementById('ov-total-invested-usd').textContent = fmtUSD(wbCost+syCost);
-  document.getElementById('ov-total-invested-sgd').textContent = fmtSGD(cmcCost);
+  document.getElementById('ov-total-invested-sgd').textContent = fmtSGD(cmcCost+igCostSGD);
   document.getElementById('ov-total-divs').textContent = fmtUSD(divUS+divSyfe) + ' USD';
 
   const wbPL = wbValue - wbCost;
@@ -4253,6 +4272,14 @@ async function loadOverview() {
   document.getElementById('ov-cmc-value').textContent = fmtSGD(cmcValue);
   document.getElementById('ov-cmc-pl').innerHTML = `<span class="${plColor(cmcPL)}">${plStr(cmcPL,'S$')} unrealised</span>`;
   document.getElementById('ov-cmc-cost').textContent = `Invested: ${fmtSGD(cmcCost)}`;
+
+  const igPL = igValueSGD - igCostSGD;
+  const igValEl  = document.getElementById('ov-ig-value');
+  const igPlEl   = document.getElementById('ov-ig-pl');
+  const igCostEl = document.getElementById('ov-ig-cost');
+  if (igValEl)  igValEl.textContent  = igActive.length ? fmtSGD(igValueSGD) : '—';
+  if (igPlEl)   igPlEl.innerHTML     = igActive.length ? `<span class="${plColor(igPL)}">${plStr(igPL,'S$')} unrealised</span>` : '—';
+  if (igCostEl) igCostEl.textContent = igActive.length ? `Invested: ${fmtSGD(igCostSGD)}` : '—';
 
   document.getElementById('overview-updated').textContent = 'Live prices as of ' + new Date().toLocaleTimeString('en-SG');
 
@@ -4275,8 +4302,6 @@ async function loadOverview() {
   });
   // IG positions are HKD-native — convert to SGD for the unified All Positions table
   if (igActive.length) {
-    const hkInfo = await getLiveHkdToSgd();
-    const hkdToSgd = hkInfo.rate;
     igActive.forEach(h => {
       const p = price(h.ticker+'.HK');                 // HKD per share
       const valHKD = h.shares * p;
