@@ -1971,7 +1971,7 @@ tr:hover td { background:var(--surface2); }
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr>
+        <thead id="stock-trades-head"><tr>
           <th>Date</th><th>Action</th><th>Qty</th><th>Price</th><th>Amount</th><th>Realised P&L</th>
         </tr></thead>
         <tbody id="stock-trades-body"></tbody>
@@ -3807,6 +3807,13 @@ async function loadStockDetail(ticker, broker, isSG) {
     document.getElementById('stock-real-sub').textContent = `${numSells} sell${numSells===1?'':'s'} · realised gain/loss`;
   }
 
+  // Swap header columns based on broker — IG gets extra Cost (SGD) + Eff. FX cols
+  const isIG = detectedBroker === 'ig';
+  document.getElementById('stock-trades-head').innerHTML = isIG
+    ? `<tr><th>Date</th><th>Action</th><th>Qty</th><th>Price</th><th>Amount</th><th>Cost (SGD)</th><th>Eff. FX</th><th>Realised P&L</th></tr>`
+    : `<tr><th>Date</th><th>Action</th><th>Qty</th><th>Price</th><th>Amount</th><th>Realised P&L</th></tr>`;
+  const emptyColspan = isIG ? 8 : 6;
+
   // Render newest first
   document.getElementById('stock-trades-body').innerHTML = tradeRows.reverse().map(t => {
     const isBuy = /buy/i.test(t.action || '');
@@ -3817,15 +3824,28 @@ async function loadStockDetail(ticker, broker, isSG) {
     const qty = parseFloat(t.qty) || 0;
     const amt = parseFloat(t.amount) || 0;
     const pricePerShare = qty > 0 ? amt / qty : 0;
+    // IG-only: Cost (SGD) = total_sgd; Eff. FX = total_sgd / (amount + fee_hkd)
+    let igExtraCells = '';
+    if (isIG) {
+      const fee    = parseFloat(t.fee_hkd || 0);
+      const totSgd = parseFloat(t.total_sgd || 0);
+      const grossHkd = amt + fee;
+      const effFX  = (totSgd > 0 && grossHkd > 0) ? totSgd/grossHkd : 0;
+      const costSgdStr = totSgd > 0 ? fmtSGD(totSgd) : '<span style="color:var(--muted)">—</span>';
+      const effFXStr   = effFX > 0 ? effFX.toFixed(5) : '<span style="color:var(--muted)">—</span>';
+      igExtraCells = `
+        <td style="font-family:var(--font-num)">${costSgdStr}</td>
+        <td style="font-family:var(--font-num);color:var(--muted)">${effFXStr}</td>`;
+    }
     return `<tr>
       <td>${fmtDate(t.date)}</td>
       <td><strong class="${actClass}">${t.action || '—'}</strong></td>
       <td style="font-family:var(--font-num)">${fmtShares(qty)}</td>
       <td style="font-family:var(--font-num)">${fmtCcy(pricePerShare)}</td>
-      <td style="font-family:var(--font-num)">${fmtCcy(amt)}</td>
+      <td style="font-family:var(--font-num)">${fmtCcy(amt)}</td>${igExtraCells}
       <td style="font-family:var(--font-num);font-weight:600">${realStr}</td>
     </tr>`;
-  }).join('') || '<tr><td colspan="6" class="empty">No trades for this stock</td></tr>';
+  }).join('') || `<tr><td colspan="${emptyColspan}" class="empty">No trades for this stock</td></tr>`;
 
   // ── Dividends ──
   let divs = [];
