@@ -3604,6 +3604,7 @@ async function loadStockDetail(ticker, broker, isSG) {
   // Auto-detect broker if not given (look up where the ticker exists in active OR closed)
   let detectedBroker = broker;
   let detectedIsSG = !!isSG;
+  let detectedIsHK = false;
   if (!detectedBroker) {
     // Webull: any holding (active or closed)
     const wb = (_wbHoldings||[]).find(h => h.ticker === ticker);
@@ -3612,18 +3613,25 @@ async function loadStockDetail(ticker, broker, isSG) {
     const cmcA = getCMCActive().find(h => h.ticker === ticker);
     const cmcC = (typeof getCMCClosed === 'function' ? getCMCClosed() : []).find(h => h.ticker === ticker);
     const cmcAnyTrade = (_cmcTrades||[]).find(t => t.ticker === ticker && t.brokerage === 'cmc');
+    // IG: same — check active, closed, or any historical trade
+    const igA = (typeof getIGActive === 'function' ? getIGActive() : []).find(h => h.ticker === ticker);
+    const igC = (typeof getIGClosed === 'function' ? getIGClosed() : []).find(h => h.ticker === ticker);
+    const igAnyTrade = (_igTrades||[]).find(t => t.ticker === ticker && t.brokerage === 'ig');
     if (wb) detectedBroker = 'webull';
     else if (sy) detectedBroker = 'syfe';
     else if (cmcA || cmcC || cmcAnyTrade) { detectedBroker = 'cmc'; detectedIsSG = true; }
+    else if (igA || igC || igAnyTrade)    { detectedBroker = 'ig';  detectedIsHK = true; }
+  } else if (detectedBroker === 'ig') {
+    detectedIsHK = true;
   }
   _stockCurrent = { ticker, broker: detectedBroker, isSG: detectedIsSG };
 
-  const pricedTicker = detectedIsSG ? ticker + '.SI' : ticker;
+  const pricedTicker = detectedIsHK ? ticker + '.HK' : detectedIsSG ? ticker + '.SI' : ticker;
   await fetchPrices([pricedTicker]);
   const livePrice = price(pricedTicker) || 0;
   const dayChg = dayChangeCache[pricedTicker];
   const periods = periodCache[pricedTicker] || {};
-  const fmtCcy  = detectedIsSG ? fmtSGD : fmtUSD;
+  const fmtCcy  = detectedIsHK ? fmtHKD : detectedIsSG ? fmtSGD : fmtUSD;
 
   // ── Hero section ──
   document.getElementById('stock-hero-logo').innerHTML = `<div style="width:64px;height:64px;border-radius:50%;background:#fff;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden">
@@ -3631,8 +3639,8 @@ async function loadStockDetail(ticker, broker, isSG) {
   </div>`;
   document.getElementById('stock-ticker').textContent = ticker;
   const sectorName = getSector(ticker, detectedIsSG);
-  const geoName = getGeography(detectedIsSG);
-  const brokerLabel = detectedBroker === 'cmc' ? 'CMC Invest' : detectedBroker === 'syfe' ? 'Syfe' : detectedBroker === 'webull' ? 'Webull' : 'Watchlist';
+  const geoName = detectedIsHK ? 'Hong Kong' : getGeography(detectedIsSG);
+  const brokerLabel = detectedBroker === 'cmc' ? 'CMC Invest' : detectedBroker === 'syfe' ? 'Syfe' : detectedBroker === 'webull' ? 'Webull' : detectedBroker === 'ig' ? 'IG Markets' : 'Watchlist';
   // (broker badge is set in the KPI section below to combine with the optional CLOSED badge)
   document.getElementById('stock-subtitle').textContent = `${sectorName} · ${geoName}`;
   document.getElementById('stock-price').textContent = livePrice > 0 ? fmtCcy(livePrice) : '—';
@@ -3665,6 +3673,16 @@ async function loadStockDetail(ticker, broker, isSG) {
     if (h) {
       shares = h.shares || 0;
       avgCost = h.avgPrice||0;
+      totalCost = h.cost || (shares*avgCost);
+      isClosedPosition = !hA && !!hC;
+    }
+  } else if (detectedBroker === 'ig') {
+    const hA = (typeof getIGActive === 'function' ? getIGActive() : []).find(x => x.ticker === ticker);
+    const hC = (typeof getIGClosed === 'function' ? getIGClosed() : []).find(x => x.ticker === ticker);
+    const h = hA || hC;
+    if (h) {
+      shares = h.shares || 0;
+      avgCost = h.avgPrice || 0;
       totalCost = h.cost || (shares*avgCost);
       isClosedPosition = !hA && !!hC;
     }
@@ -3748,6 +3766,8 @@ async function loadStockDetail(ticker, broker, isSG) {
     }));
   } else if (detectedBroker === 'cmc') {
     trades = (_cmcTrades||[]).filter(t => t.brokerage==='cmc' && t.ticker === ticker);
+  } else if (detectedBroker === 'ig') {
+    trades = (_igTrades||[]).filter(t => t.brokerage==='ig' && t.ticker === ticker);
   }
   // Sort oldest first to compute running FIFO P&L
   const sortedAsc = [...trades].sort((a,b) => new Date(a.date) - new Date(b.date));
