@@ -4246,7 +4246,7 @@ async function loadOverview() {
     igActive.forEach(h => {
       const p = price(h.ticker+'.HK');                  // HKD per share
       igValueSGD += (h.shares * p) * hkdToSgd;
-      igCostSGD  += h.cost * hkdToSgd;
+      igCostSGD  += h.costSGD;                          // actual SGD outlay incl fees (pro-rated for held shares)
     });
   }
 
@@ -4300,19 +4300,22 @@ async function loadOverview() {
     const pl = val - h.cost, pct = h.cost > 0 ? pl/h.cost*100 : 0;
     _allPositionsData.push({ ticker:h.ticker, broker:'cmc', shares:h.shares, avg_cost:h.avgPrice, live_price:p, market_value:val, unrealised_pl:pl, return_pct:pct, isSG:true });
   });
-  // IG positions are HKD-native — convert to SGD for the unified All Positions table
+  // IG positions — display in HKD natively in All Positions table
+  // Avg cost is total HKD outlay incl fees / shares (derived via costSGD ÷ effFX since IG holding tracks SGD-with-fees and effFX = SGD/HKD)
   if (igActive.length) {
     igActive.forEach(h => {
-      const p = price(h.ticker+'.HK');                 // HKD per share
-      const valHKD = h.shares * p;
-      const valSGD = valHKD * hkdToSgd;                // for display in SGD column
-      const costSGD = h.cost * hkdToSgd;
-      const pl = valSGD - costSGD;
-      const pct = costSGD > 0 ? pl/costSGD*100 : 0;
+      const livePxHKD = price(h.ticker+'.HK');
+      const valHKD    = h.shares * livePxHKD;
+      // Cost-with-fees in HKD. effFX = buySGD/buyHKD (fee-inclusive HKD). costSGD already pro-rated for held shares.
+      const costHKD   = h.effFX > 0 ? (h.costSGD / h.effFX) : (h.cost || 0);
+      const avgHKD    = h.shares > 0 ? costHKD / h.shares : 0;
+      const pl        = valHKD - costHKD;
+      const pct       = costHKD > 0 ? pl/costHKD*100 : 0;
       _allPositionsData.push({
         ticker:h.ticker, broker:'ig', shares:h.shares,
-        avg_cost: h.avgPrice * hkdToSgd, live_price: p * hkdToSgd,
-        market_value: valSGD, unrealised_pl: pl, return_pct: pct, isSG:true,
+        avg_cost: avgHKD, live_price: livePxHKD,
+        market_value: valHKD, unrealised_pl: pl, return_pct: pct,
+        isSG:false, isHK:true,
       });
     });
   }
@@ -4379,10 +4382,14 @@ function renderPositions() {
     return typeof av === 'string' ? av.localeCompare(bv)*dir : (av-bv)*dir;
   });
 
+  const fmtCcy = (v, h) => h.isHK ? ('HK$' + Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}))
+                                  : (h.isSG ? fmtSGD(v) : fmtUSD(v));
+  const plPrefix = h => h.isHK ? 'HK$' : (h.isSG ? 'S$' : '$');
+
   const rows = data.map(h => {
-    const priceStr = h.live_price > 0 ? (h.isSG ? fmtSGD(h.live_price) : fmtUSD(h.live_price)) : '<span style="color:var(--muted)">—</span>';
-    const valStr = h.market_value > 0 ? (h.isSG ? fmtSGD(h.market_value) : fmtUSD(h.market_value)) : '<span style="color:var(--muted)">—</span>';
-    const avgStr = h.isSG ? fmtSGD(h.avg_cost) : fmtUSD(h.avg_cost);
+    const priceStr = h.live_price > 0 ? fmtCcy(h.live_price, h) : '<span style="color:var(--muted)">—</span>';
+    const valStr   = h.market_value > 0 ? fmtCcy(h.market_value, h) : '<span style="color:var(--muted)">—</span>';
+    const avgStr   = fmtCcy(h.avg_cost, h);
     return `<tr style="cursor:pointer" onclick="showStockDetail('${h.ticker}','${h.broker}',${h.isSG},'overview')">
       <td>
         <div style="display:flex;align-items:center;gap:10px">
@@ -4395,7 +4402,7 @@ function renderPositions() {
       <td>${avgStr}</td>
       <td>${priceStr}</td>
       <td>${valStr}</td>
-      <td class="${plColor(h.unrealised_pl)}" style="font-family:var(--font-num);font-weight:600">${h.market_value>0?(h.isSG?plStr(h.unrealised_pl,'S$'):plStr(h.unrealised_pl)):'—'}</td>
+      <td class="${plColor(h.unrealised_pl)}" style="font-family:var(--font-num);font-weight:600">${h.market_value>0?plStr(h.unrealised_pl, plPrefix(h)):'—'}</td>
       <td class="${plColor(h.return_pct)}" style="font-family:var(--font-num);font-weight:600">${h.market_value>0?fmtPct(h.return_pct):'—'}</td>
     </tr>`;
   }).join('');
