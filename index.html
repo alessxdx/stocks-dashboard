@@ -3873,6 +3873,7 @@ async function loadStockDetail(ticker, broker, isSG) {
   const dayChg = dayChangeCache[pricedTicker];
   const periods = periodCache[pricedTicker] || {};
   const fmtCcy  = detectedIsHK ? fmtHKD : detectedIsSG ? fmtSGD : fmtUSD;
+  const ccyPrefix = detectedIsHK ? 'HK$' : detectedIsSG ? 'S$' : '$';
 
   // ── Hero section ──
   document.getElementById('stock-hero-logo').innerHTML = `<div style="width:64px;height:64px;border-radius:50%;background:#fff;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden">
@@ -3952,7 +3953,7 @@ async function loadStockDetail(ticker, broker, isSG) {
     document.getElementById('stock-unreal-pct').textContent = 'Position closed';
   } else if (mktValue > 0 && totalCost > 0) {
     const cls = unreal >= 0 ? 'pos' : 'neg';
-    document.getElementById('stock-unreal-pl').innerHTML = `<span class="${cls}">${plStr(unreal, detectedIsSG?'S$':'$')}</span>`;
+    document.getElementById('stock-unreal-pl').innerHTML = `<span class="${cls}">${plStr(unreal, ccyPrefix)}</span>`;
     document.getElementById('stock-unreal-pct').innerHTML = `<span class="${cls}">${(unrealPct>=0?'+':'')}${unrealPct.toFixed(2)}%</span>`;
   } else {
     document.getElementById('stock-unreal-pl').textContent = '—';
@@ -4035,16 +4036,16 @@ async function loadStockDetail(ticker, broker, isSG) {
   const totalRealised = tradeRows.reduce((s,t) => s + (t.realised || 0), 0);
 
   document.getElementById('stock-trades-sub').textContent =
-    `${trades.length} trades · Bought ${fmtCcy(totalBought)}${totalSold>0?` · Sold ${fmtCcy(totalSold)}`:''}${totalRealised!==0?` · Realised ${plStr(totalRealised, detectedIsSG?'S$':'$')}`:''}`;
+    `${trades.length} trades · Bought ${fmtCcy(totalBought)}${totalSold>0?` · Sold ${fmtCcy(totalSold)}`:''}${totalRealised!==0?` · Realised ${plStr(totalRealised, ccyPrefix)}`:''}`;
 
   // ── Realised P&L card ──
   const numSells = sortedAsc.filter(t => /sell/i.test(t.action || '')).length;
   if (numSells === 0) {
-    document.getElementById('stock-real-pl').innerHTML = '<span style="color:var(--muted)">$0.00</span>';
+    document.getElementById('stock-real-pl').innerHTML = `<span style="color:var(--muted)">${ccyPrefix}0.00</span>`;
     document.getElementById('stock-real-sub').textContent = 'No sells yet';
   } else {
     const realCls = totalRealised >= 0 ? 'pos' : 'neg';
-    document.getElementById('stock-real-pl').innerHTML = `<span class="${realCls}">${plStr(totalRealised, detectedIsSG?'S$':'$')}</span>`;
+    document.getElementById('stock-real-pl').innerHTML = `<span class="${realCls}">${plStr(totalRealised, ccyPrefix)}</span>`;
     document.getElementById('stock-real-sub').textContent = `${numSells} sell${numSells===1?'':'s'} · realised gain/loss`;
   }
 
@@ -4060,7 +4061,7 @@ async function loadStockDetail(ticker, broker, isSG) {
     const isBuy = /buy/i.test(t.action || '');
     const actClass = isBuy ? 'pos' : 'neg';
     const realStr = t.realised != null
-      ? `<span class="${t.realised>=0?'pos':'neg'}">${plStr(t.realised, detectedIsSG?'S$':'$')}</span>`
+      ? `<span class="${t.realised>=0?'pos':'neg'}">${plStr(t.realised, ccyPrefix)}</span>`
       : '<span style="color:var(--muted)">—</span>';
     const qty = parseFloat(t.qty) || 0;
     const amt = parseFloat(t.amount) || 0;
