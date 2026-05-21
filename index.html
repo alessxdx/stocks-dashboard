@@ -2704,13 +2704,18 @@ let _lastPriceFetch = 0;
   } catch(e) { console.warn('Cache hydrate failed:', e.message); }
 })();
 
-function persistPriceCache() {
+function persistPriceCache(freshlyFetched = null) {
   try {
+    // Preserve existing per-ticker timestamps; only bump ts for tickers we just fetched.
+    let existing = {};
+    try { existing = JSON.parse(localStorage.getItem('priceCache_v2') || '{}'); } catch {}
     const out = {};
-    const ts = Date.now();
+    const now = Date.now();
     Object.keys(priceCache).forEach(t => {
+      const wasJustFetched = freshlyFetched ? freshlyFetched.has(t) : true;
+      const prevTs = existing[t] && typeof existing[t].ts === 'number' ? existing[t].ts : now;
       out[t] = {
-        ts,
+        ts:      wasJustFetched ? now : prevTs,
         price:   priceCache[t],
         day:     dayChangeCache[t],
         periods: periodCache[t] || {},
@@ -2767,7 +2772,7 @@ async function fetchPrices(tickers, opts = {}) {
       if (p && !priceCache[ticker]) priceCache[ticker] = p;
     });
     _lastPriceFetch = Date.now();
-    persistPriceCache();
+    persistPriceCache(new Set(needFresh));
     // Update any "Last updated" indicators on the page
     updateAllLastUpdatedLabels();
     console.log(`Prices loaded: ${Object.keys(priceCache).length} cached / ${needFresh.length} fetched`);
