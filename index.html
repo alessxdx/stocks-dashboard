@@ -2,8 +2,19 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Investment Dashboard</title>
+
+<!-- PWA / iOS Add-to-Home-Screen -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1a1a1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Stocks">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@400;500;600;700;800&family=Syne:wght@400;600;700;800&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -429,6 +440,12 @@ tr:hover td { background:var(--surface2); }
 @media (max-width:768px) {
   body { font-size:14px; }
 
+  /* Hard guard: never let anything push the page wider than the screen */
+  html, body { overflow-x:hidden; max-width:100%; }
+  .app, .main { max-width:100%; overflow-x:hidden; }
+  img, canvas, svg { max-width:100%; }
+  .broker-tabs { flex-wrap:wrap; }
+
   /* Sidebar: hide completely, slide-in via hamburger */
   .sidebar {
     width:260px; transform:translateX(-100%);
@@ -488,20 +505,20 @@ tr:hover td { background:var(--surface2); }
   }
   .section-title { font-size:15px; }
 
-  /* Table — keep horizontal scroll, add visual cue */
-  .table-wrap {
-    overflow-x:auto;
-    -webkit-overflow-scrolling:touch;
-    background:linear-gradient(90deg, var(--surface) 30%, transparent),
-               linear-gradient(90deg, transparent, var(--surface) 70%) 100% 0,
-               radial-gradient(farthest-side at 0 50%, rgba(255,255,255,0.08), transparent),
-               radial-gradient(farthest-side at 100% 50%, rgba(255,255,255,0.08), transparent) 100% 0;
-    background-size:60px 100%, 60px 100%, 20px 100%, 20px 100%;
-    background-attachment:local, local, scroll, scroll;
-    background-repeat:no-repeat;
+  /* Tables: wrap cell text instead of clipping or side-scrolling,
+     so no row or value is ever cut off on a phone */
+  .table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  table { font-size:12px; table-layout:auto; width:100%; }
+  th, td {
+    padding:9px 8px;
+    white-space:normal;        /* allow wrapping to the next line */
+    overflow-wrap:anywhere;    /* break very long tokens */
+    word-break:break-word;
+    vertical-align:top;
   }
-  table { font-size:12px; }
-  th, td { padding:10px 12px; }
+  th { line-height:1.25; }
+  /* keep short tags/numbers on a single line */
+  td .ticker-badge, td .pill, td .mini-logo { white-space:nowrap; }
 
   /* Modals */
   .modal {
