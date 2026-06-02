@@ -6096,7 +6096,8 @@ async function loadDividends() {
   // Get holdings shares for payout estimate
   const wbSharesMap = {};
   (_wbHoldings||[]).forEach(h => { wbSharesMap[h.ticker] = h.shares; });
-  const sySharesMap = { VOO: 52.1778, SCHG: 607.9309, SPYI: 235 }; // from syfe_holdings
+  const sySharesMap = {};
+  (_syfeH||[]).forEach(h => { sySharesMap[h.ticker] = h.shares; }); // derived, stays in sync with trades
 
   [...Object.values(usMap), ...Object.values(sgMap), ...Object.values(syMap)].forEach(s => {
     const d = divData[s.ticker] || {};
@@ -6803,6 +6804,24 @@ function openSyfeEditTrade(id,ticker,date,shares,price,amount) {
   document.getElementById('syfe-add-trade-modal').classList.add('open');
 }
 
+// Recompute the syfe_holdings aggregate from all trades for a ticker so it never
+// drifts from syfe_trades. Syfe is buy-only, so avg = total invested / total shares.
+async function syncSyfeHolding(ticker) {
+  const all = (await sb('syfe_trades','GET',null,`?ticker=eq.${ticker}`)) || [];
+  const shares = all.reduce((s,t)=>s+(parseFloat(t.shares)||0),0);
+  const total_invested = all.reduce((s,t)=>s+(parseFloat(t.amount_usd)||0),0);
+  const avg_cost = shares>0 ? total_invested/shares : 0;
+  const existing = (_syfeH||[]).find(x=>x.ticker===ticker);
+  if (shares>0) {
+    const body={ticker,shares,total_invested,avg_cost};
+    if (existing) await sb('syfe_holdings','PATCH',body,`?ticker=eq.${ticker}`);
+    else await sb('syfe_holdings','POST',body);
+  } else if (existing) {
+    await sb('syfe_holdings','DELETE',null,`?ticker=eq.${ticker}`);
+  }
+  _syfeH = await sb('syfe_holdings','GET',null,'?order=ticker.asc');
+}
+
 async function submitSyfeTrade() {
   const editId=document.getElementById('syfe-trade-edit-id').value;
   const ticker=document.getElementById('syfe-trade-ticker').value;
@@ -6813,6 +6832,7 @@ async function submitSyfeTrade() {
   if(!ticker||!date||isNaN(shares)||isNaN(price_usd)||isNaN(amount_usd)) return alert('Please fill all fields');
   const body={ticker,date,shares,price_usd,amount_usd};
   if(editId) await sb('syfe_trades','PATCH',body,`?id=eq.${editId}`); else await sb('syfe_trades','POST',body);
+  await syncSyfeHolding(ticker);
   invalidateCache(); closeModal('syfe-add-trade-modal');
   _syfeTrades=await sb('syfe_trades','GET',null,'?order=date.desc');
   // If user came from the stock detail page, refresh that instead of re-opening trade history
@@ -6826,6 +6846,7 @@ async function submitSyfeTrade() {
 async function deleteSyfeTrade(id,ticker) {
   if(!confirm('Delete this trade?')) return;
   await sb('syfe_trades','DELETE',null,`?id=eq.${id}`);
+  await syncSyfeHolding(ticker);
   invalidateCache(); _syfeTrades=await sb('syfe_trades','GET',null,'?order=date.desc'); showSyfeTradeHistory(ticker);
 }
 
