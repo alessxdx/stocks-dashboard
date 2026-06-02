@@ -4406,6 +4406,8 @@ async function reconcileSyfeHoldings() {
     byTicker[k].shares += parseFloat(t.shares)||0;
     byTicker[k].total  += parseFloat(t.amount_usd)||0;
   });
+  console.log('[syfe-reconcile] computed from trades:', byTicker,
+              'stored:', (_syfeH||[]).map(h=>({t:h.ticker,s:h.shares})));
   let changed = false;
   for (const ticker of Object.keys(byTicker)) {
     const {shares, total} = byTicker[ticker];
@@ -4416,11 +4418,17 @@ async function reconcileSyfeHoldings() {
       || Math.abs((h.total_invested||0) - total) > 0.005;
     if (!drift) continue;
     const body = {ticker, shares, total_invested:total, avg_cost};
+    console.log('[syfe-reconcile] DRIFT', ticker, 'stored', h?h.shares:'(none)', '→ writing', shares);
     if (h) await sb('syfe_holdings','PATCH',body,`?ticker=eq.${ticker}`);
     else   await sb('syfe_holdings','POST',body);
     changed = true;
   }
-  if (changed) _syfeH = await sb('syfe_holdings','GET',null,'?order=ticker.asc');
+  if (changed) {
+    _syfeH = await sb('syfe_holdings','GET',null,'?order=ticker.asc');
+    console.log('[syfe-reconcile] reloaded holdings:', (_syfeH||[]).map(h=>({t:h.ticker,s:h.shares})));
+  } else {
+    console.log('[syfe-reconcile] no drift, nothing written');
+  }
 }
 
 function invalidateCache() {
