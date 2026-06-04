@@ -4703,10 +4703,10 @@ async function loadWebull() {
   sel.innerHTML = months.map(m => {
     const [yr, mo] = m.split('-');
     const label = new Date(yr, mo-1).toLocaleString('en-SG',{month:'short',year:'numeric'});
-    return `<option value="${m}" ${m===currentMonthKey?'selected':''}>${label}</option>`;
+    return `<option value="${m}">${label}</option>`;
   }).join('');
-  // Add "All" option at top
-  sel.innerHTML = `<option value="all">All Trades</option>` + sel.innerHTML;
+  // Blank default (shows nothing) + All option at top
+  sel.innerHTML = `<option value="" selected>Filter by month…</option><option value="all">All Trades</option>` + sel.innerHTML;
 
   _wbAllTrades = wbTrades;
   filterWbTrades();
@@ -6934,6 +6934,11 @@ let _wbAllTrades=[];
 function filterWbTrades() {
   const sel=document.getElementById('wb-trades-month-filter'); if(!sel) return;
   const filter=sel.value;
+  if(!filter){
+    document.getElementById('wb-trades-count').textContent=`${_wbAllTrades.length} trades`;
+    document.getElementById('wb-trades-body').innerHTML='<tr><td colspan="8" class="empty">Select a month (or “All Trades”) to view history</td></tr>';
+    return;
+  }
   const trades=filter==='all'?_wbAllTrades:_wbAllTrades.filter(t=>t.date.startsWith(filter));
   document.getElementById('wb-trades-count').textContent=filter==='all'?`${_wbAllTrades.length} trades`:`${trades.length} trades`;
   document.getElementById('wb-trades-body').innerHTML=trades.map(t=>{
