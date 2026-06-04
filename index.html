@@ -4082,7 +4082,7 @@ async function loadStockDetail(ticker, broker, isSG) {
   document.getElementById('stock-ticker').textContent = ticker;
   const sectorName = getSector(ticker, detectedIsSG);
   const geoName = detectedIsHK ? 'Hong Kong' : getGeography(detectedIsSG);
-  const brokerLabel = detectedBroker === 'cmc' ? 'CMC Invest' : detectedBroker === 'syfe' ? 'Syfe' : detectedBroker === 'webull' ? 'Webull' : detectedBroker === 'ig' ? 'IG Markets' : 'Watchlist';
+  const brokerLabel = detectedBroker === 'cmc' ? 'CMC Invest' : detectedBroker === 'syfe' ? 'Syfe' : detectedBroker === 'webull' ? 'Webull' : detectedBroker === 'ig' ? 'IG Markets' : detectedBroker === 'combined' ? 'Combined' : 'Watchlist';
   // (broker badge is set in the KPI section below to combine with the optional CLOSED badge)
   document.getElementById('stock-subtitle').textContent = `${sectorName} · ${geoName}`;
   document.getElementById('stock-price').textContent = livePrice > 0 ? fmtCcy(livePrice) : '—';
@@ -4128,6 +4128,16 @@ async function loadStockDetail(ticker, broker, isSG) {
       totalCost = h.cost || (shares*avgCost);
       isClosedPosition = !hA && !!hC;
     }
+  } else if (detectedBroker === 'combined') {
+    // Sum the same ticker across every account that holds it (single currency — SGD for SGX combos).
+    // Cost basis matches each broker page: CMC uses `cost`, IG-SGX uses SGD outlay `costSGD`.
+    let s = 0, c = 0;
+    const cmcA = getCMCActive().find(x => x.ticker === ticker);
+    if (cmcA) { s += cmcA.shares || 0; c += (cmcA.cost || (cmcA.shares * (cmcA.avgPrice||0))); }
+    const igA = (typeof getIGActive === 'function' ? getIGActive() : []).find(x => x.ticker === ticker);
+    if (igA) { s += igA.shares || 0; c += (igA.costSGD || igA.cost || 0); }
+    shares = s; totalCost = c; avgCost = s > 0 ? c / s : 0;
+    isClosedPosition = s <= 0.01;
   }
 
   const mktValue = isClosedPosition ? 0 : shares * livePrice;
@@ -4138,9 +4148,18 @@ async function loadStockDetail(ticker, broker, isSG) {
   const closedBadge = isClosedPosition
     ? `<span style="margin-left:8px;padding:3px 9px;background:#1f2937;border:1px solid #4b5563;border-radius:8px;font-family:var(--font-mono);font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:#9ca3af">CLOSED</span>`
     : '';
-  document.getElementById('stock-broker-badge').innerHTML = (detectedBroker
-    ? `<span class="pill pill-${detectedBroker}">${brokerLabel}</span>`
-    : `<span class="pill" style="background:#1a2030;color:var(--muted);border:1px solid var(--border)">Watchlist only</span>`) + closedBadge;
+  let brokerBadgeInner;
+  if (detectedBroker === 'combined') {
+    const bks = [];
+    if (getCMCActive().find(x => x.ticker === ticker)) bks.push('cmc');
+    if ((typeof getIGActive === 'function' ? getIGActive() : []).find(x => x.ticker === ticker)) bks.push('ig');
+    brokerBadgeInner = (bks.length ? bks : ['cmc']).map(b => `<span class="pill pill-${b}">${b==='cmc'?'CMC':b==='ig'?'IG':b}</span>`).join(' ');
+  } else if (detectedBroker) {
+    brokerBadgeInner = `<span class="pill pill-${detectedBroker}">${brokerLabel}</span>`;
+  } else {
+    brokerBadgeInner = `<span class="pill" style="background:#1a2030;color:var(--muted);border:1px solid var(--border)">Watchlist only</span>`;
+  }
+  document.getElementById('stock-broker-badge').innerHTML = brokerBadgeInner + closedBadge;
 
   document.getElementById('stock-shares').textContent = shares > 0 ? fmtShares(shares) : '0';
   document.getElementById('stock-shares-sub').textContent = isClosedPosition ? 'Position closed' : (shares > 0 ? brokerLabel : 'No active position');
@@ -4168,7 +4187,7 @@ async function loadStockDetail(ticker, broker, isSG) {
   } else if (detectedBroker === 'syfe') {
     divsForCard = (_divSyfe||[]).filter(d => d.ticker === ticker)
       .map(d => ({ id:d.id, date:d.date, amount: d.amount_usd, ccy:'USD' }));
-  } else if (detectedBroker === 'cmc') {
+  } else if (detectedBroker === 'cmc' || detectedBroker === 'combined') {
     divsForCard = (_divSG||[]).filter(d => d.ticker === ticker)
       .map(d => ({ id:d.id, date:d.date, amount: d.total_sgd, ccy:'SGD' }));
   }
@@ -4210,6 +4229,10 @@ async function loadStockDetail(ticker, broker, isSG) {
     trades = (_cmcTrades||[]).filter(t => t.brokerage==='cmc' && t.ticker === ticker);
   } else if (detectedBroker === 'ig') {
     trades = (_igTrades||[]).filter(t => t.brokerage==='ig' && t.ticker === ticker);
+  } else if (detectedBroker === 'combined') {
+    const cmcT = (_cmcTrades||[]).filter(t => t.brokerage==='cmc' && t.ticker === ticker).map(t => ({ ...t, _bk:'cmc' }));
+    const igT  = (_igTrades||[]).filter(t => t.brokerage==='ig'  && t.ticker === ticker).map(t => ({ ...t, _bk:'ig'  }));
+    trades = [...cmcT, ...igT];
   }
   // Sort oldest first to compute running FIFO P&L
   const sortedAsc = [...trades].sort((a,b) => new Date(a.date) - new Date(b.date));
@@ -4280,7 +4303,7 @@ async function loadStockDetail(ticker, broker, isSG) {
         <td style="font-family:var(--font-num);color:var(--muted)">${effFXStr}</td>`;
     }
     return `<tr>
-      <td>${fmtDate(t.date)}</td>
+      <td>${fmtDate(t.date)}${t._bk?` <span class="pill pill-${t._bk}" style="font-size:8px;padding:1px 5px;margin-left:4px;vertical-align:middle">${t._bk==='cmc'?'CMC':'IG'}</span>`:''}</td>
       <td><strong class="${actClass}">${t.action || '—'}</strong></td>
       <td style="font-family:var(--font-num)">${fmtShares(qty)}</td>
       <td style="font-family:var(--font-num)">${fmtCcy(pricePerShare)}</td>
@@ -4297,7 +4320,7 @@ async function loadStockDetail(ticker, broker, isSG) {
   } else if (detectedBroker === 'syfe') {
     divs = (_divSyfe||[]).filter(d => d.ticker === ticker)
       .map(d => ({ id:d.id, date:d.date, amount: d.amount_usd, ccy:'USD' }));
-  } else if (detectedBroker === 'cmc') {
+  } else if (detectedBroker === 'cmc' || detectedBroker === 'combined') {
     divs = (_divSG||[]).filter(d => d.ticker === ticker)
       .map(d => ({ id:d.id, date:d.date, amount: d.total_sgd, ccy:'SGD' }));
   }
@@ -4339,7 +4362,7 @@ function openStockAddTrade() {
   // CMC tickers may carry a .SI suffix on the stock-detail page; strip it for the SGX input
   const cleanTicker = (s.ticker || '').replace(/\.SI$/i, '');
 
-  if (s.broker === 'cmc') {
+  if (s.broker === 'cmc' || s.broker === 'combined') {
     openModal('add-sg-trade-modal','cmc');
     const tEl = document.getElementById('sg-ticker');
     const qEl = document.getElementById('sg-qty');
@@ -4613,6 +4636,31 @@ function sortPositions(key) {
 
 function renderPositions() {
   let data = _posFilters.has('all') ? [..._allPositionsData] : _allPositionsData.filter(p => _posFilters.has(p.broker));
+
+  // ── Merge the same ticker held across multiple brokers into one combined row ──
+  // Grouped by ticker + native currency (never mixes e.g. SGD with USD).
+  // Combining happens after filtering, so a single-broker filter splits it back out.
+  const _grp = {};
+  data.forEach(p => {
+    const ccy = p.isHK ? 'HK' : p.isSG ? 'SG' : 'US';
+    const gk = p.ticker + '|' + ccy;
+    (_grp[gk] = _grp[gk] || []).push(p);
+  });
+  data = Object.values(_grp).map(g => {
+    if (g.length === 1) return g[0];
+    const shares = g.reduce((s,p)=>s+(p.shares||0),0);
+    const cost   = g.reduce((s,p)=>s+((p.avg_cost||0)*(p.shares||0)),0);
+    const mv     = g.reduce((s,p)=>s+(p.market_value||0),0);
+    const pl     = g.reduce((s,p)=>s+(p.unrealised_pl||0),0);
+    const b = g[0];
+    return {
+      ticker: b.ticker, broker: 'combined', brokers: g.map(p=>p.broker),
+      shares, avg_cost: shares>0 ? cost/shares : 0, live_price: b.live_price,
+      market_value: mv, unrealised_pl: pl, return_pct: cost>0 ? pl/cost*100 : 0,
+      isSG: b.isSG, isHK: b.isHK,
+    };
+  });
+
   const key = _posSort.key, dir = _posSort.dir;
   data.sort((a,b) => {
     const av = typeof a[key] === 'string' ? a[key] : (a[key]||0);
@@ -4628,14 +4676,18 @@ function renderPositions() {
     const priceStr = h.live_price > 0 ? fmtCcy(h.live_price, h) : '<span style="color:var(--muted)">—</span>';
     const valStr   = h.market_value > 0 ? fmtCcy(h.market_value, h) : '<span style="color:var(--muted)">—</span>';
     const avgStr   = fmtCcy(h.avg_cost, h);
+    const pillLabel = b => b === 'cmc' ? 'CMC' : b === 'ig' ? 'IG' : b.charAt(0).toUpperCase()+b.slice(1);
+    const brokerCell = h.broker === 'combined'
+      ? (h.brokers||[]).map(b => `<span class="pill pill-${b}">${pillLabel(b)}</span>`).join(' ')
+      : `<span class="pill pill-${h.broker}">${pillLabel(h.broker)}</span>`;
     return `<tr style="cursor:pointer" onclick="showStockDetail('${h.ticker}','${h.broker}',${h.isSG},'overview')">
       <td>
         <div style="display:flex;align-items:center;gap:10px">
           ${miniLogoHTML(h.ticker, h.isSG)}
-          <span class="ticker-badge ${h.broker || 'default'}">${h.ticker}</span>
+          <span class="ticker-badge ${h.broker === 'combined' ? 'default' : (h.broker || 'default')}">${h.ticker}</span>
         </div>
       </td>
-      <td><span class="pill pill-${h.broker}">${h.broker === 'cmc' ? 'CMC' : h.broker === 'ig' ? 'IG' : h.broker.charAt(0).toUpperCase()+h.broker.slice(1)}</span></td>
+      <td><div style="display:flex;gap:4px;flex-wrap:wrap">${brokerCell}</div></td>
       <td>${fmtShares(h.shares)}</td>
       <td>${avgStr}</td>
       <td>${priceStr}</td>
