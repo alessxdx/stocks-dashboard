@@ -5605,7 +5605,7 @@ async function loadIG() {
   document.getElementById('ig-deposits-body').innerHTML = renderYearGroupedRows(
     igDeps.map(d => ({ ...d, currency: d.currency || 'SGD' })),
     d => `<tr>
-      <td>${fmtDate(d.date)}</td>
+      <td>${fmtDate(d.date)}${d.source_note ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${String(d.source_note).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>` : ''}</td>
       <td style="font-family:var(--font-num)">${fmtSGD(d.amount)}</td>
       <td><div style="display:flex;gap:6px">
         <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40" onclick="openEditDepositModal(${d.id},'ig','${d.date}','${d.currency||'SGD'}',${d.amount},'${(d.source_note||'').replace(/'/g,"\\'")}')">Edit</button>
@@ -6500,9 +6500,16 @@ function openModal(id, broker) {
   const overlay = document.getElementById(id);
   if (!overlay) return;
   overlay.classList.add('open');
+  // Reset every field so a fresh "Add" never inherits the previous entry's values.
+  // Edit modals bypass openModal() and set their own values, so they're unaffected.
+  overlay.querySelectorAll('input').forEach(el => {
+    if (el.type === 'hidden') return;
+    el.value = (el.type === 'date') ? todayLocal() : '';
+  });
+  overlay.querySelectorAll('select').forEach(el => { el.selectedIndex = 0; });
+  overlay.querySelectorAll('textarea').forEach(el => { el.value = ''; });
   const brokerInput = overlay.querySelector('[id$="-broker"]');
   if (brokerInput) brokerInput.value = broker;
-  overlay.querySelectorAll('input[type=date]').forEach(el => { el.value = todayLocal(); });
   const brokerLabel = broker==='cmc'?'CMC Invest':broker==='syfe'?'Syfe':broker==='ig'?'IG Markets':'Webull';
   if (id==='add-deposit-modal') { document.getElementById('dep-modal-title').textContent=`Add Deposit — ${brokerLabel}`; document.getElementById('dep-edit-id').value=''; }
   if (id==='add-withdrawal-modal') { document.getElementById('wd-modal-add-title').textContent=`Add Withdrawal — ${brokerLabel}`; }
