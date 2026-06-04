@@ -563,8 +563,9 @@ tr:hover td { background:var(--surface2); }
   #all-positions-body td:nth-child(4)::before{content:"Avg Cost"}
   #all-positions-body td:nth-child(5)::before{content:"Live Price"}
   #all-positions-body td:nth-child(6)::before{content:"Market Value"}
-  #all-positions-body td:nth-child(7)::before{content:"Unrealised P&L"}
-  #all-positions-body td:nth-child(8)::before{content:"Return %"}
+  #all-positions-body td:nth-child(7)::before{content:"Value (SGD)"}
+  #all-positions-body td:nth-child(8)::before{content:"Unrealised P&L"}
+  #all-positions-body td:nth-child(9)::before{content:"Return %"}
   #wb-active-body td:nth-child(2)::before{content:"Shares"}
   #wb-active-body td:nth-child(3)::before{content:"Avg Cost"}
   #wb-active-body td:nth-child(4)::before{content:"Total Cost"}
@@ -949,11 +950,12 @@ tr:hover td { background:var(--surface2); }
           <th onclick="sortPositions('avg_cost')">Avg Cost</th>
           <th onclick="sortPositions('live_price')">Live Price</th>
           <th onclick="sortPositions('market_value')">Market Value</th>
+          <th onclick="sortPositions('value_sgd')">Value (SGD)</th>
           <th onclick="sortPositions('unrealised_pl')">Unrealised P&L</th>
           <th onclick="sortPositions('return_pct')">Return %</th>
         </tr></thead>
         <tbody id="all-positions-body">
-          <tr><td colspan="8" class="loading"><div class="spinner"></div>Loading positions...</td></tr>
+          <tr><td colspan="9" class="loading"><div class="spinner"></div>Loading positions...</td></tr>
         </tbody>
       </table>
     </div>
@@ -4544,21 +4546,26 @@ async function loadOverview() {
   document.getElementById('overview-updated').textContent = 'Live prices as of ' + new Date().toLocaleTimeString('en-SG');
 
   // Build all positions data
+  // Live USD→SGD for the SGD-comparison column (HKD→SGD already fetched above as hkdToSgd)
+  const _sgInfo = await getLiveSgdToUsd();
+  const usdToSgd = (_sgInfo && _sgInfo.rate > 0) ? 1/_sgInfo.rate : 0;
+  _ovUsdToSgd = usdToSgd;
+  _ovHkdToSgd = hkdToSgd;
   _allPositionsData = [];
   active.forEach(h => {
     const p = price(h.ticker), val = h.shares * p;
     const pl = val - h.total_cost, pct = h.total_cost > 0 ? pl/h.total_cost*100 : 0;
-    _allPositionsData.push({ ticker:h.ticker, broker:'webull', shares:h.shares, avg_cost:h.avg_cost, live_price:p, market_value:val, unrealised_pl:pl, return_pct:pct, isSG:false });
+    _allPositionsData.push({ ticker:h.ticker, broker:'webull', shares:h.shares, avg_cost:h.avg_cost, live_price:p, market_value:val, value_sgd: val*usdToSgd, unrealised_pl:pl, return_pct:pct, isSG:false });
   });
   (_syfeH||[]).forEach(h => {
     const p = price(h.ticker), val = h.shares * p;
     const pl = val - h.total_invested, pct = h.total_invested > 0 ? pl/h.total_invested*100 : 0;
-    _allPositionsData.push({ ticker:h.ticker, broker:'syfe', shares:h.shares, avg_cost:h.avg_cost, live_price:p, market_value:val, unrealised_pl:pl, return_pct:pct, isSG:false });
+    _allPositionsData.push({ ticker:h.ticker, broker:'syfe', shares:h.shares, avg_cost:h.avg_cost, live_price:p, market_value:val, value_sgd: val*usdToSgd, unrealised_pl:pl, return_pct:pct, isSG:false });
   });
   cmcActive.forEach(h => {
     const p = price(h.ticker+'.SI'), val = h.shares * p;
     const pl = val - h.cost, pct = h.cost > 0 ? pl/h.cost*100 : 0;
-    _allPositionsData.push({ ticker:h.ticker, broker:'cmc', shares:h.shares, avg_cost:h.avgPrice, live_price:p, market_value:val, unrealised_pl:pl, return_pct:pct, isSG:true });
+    _allPositionsData.push({ ticker:h.ticker, broker:'cmc', shares:h.shares, avg_cost:h.avgPrice, live_price:p, market_value:val, value_sgd: val, unrealised_pl:pl, return_pct:pct, isSG:true });
   });
   // IG positions — display in HKD natively in All Positions table
   // Avg cost is total HKD outlay incl fees / shares (derived via costSGD ÷ effFX since IG holding tracks SGD-with-fees and effFX = SGD/HKD)
@@ -4575,7 +4582,8 @@ async function loadOverview() {
       _allPositionsData.push({
         ticker:h.ticker, broker:'ig', shares:h.shares,
         avg_cost: avgNative, live_price: livePx,
-        market_value: val, unrealised_pl: pl, return_pct: pct,
+        market_value: val, value_sgd: isHK ? val*hkdToSgd : val,
+        unrealised_pl: pl, return_pct: pct,
         isSG: !isHK, isHK: isHK,
       });
     });
@@ -4586,6 +4594,8 @@ async function loadOverview() {
 }
 
 let _allPositionsData = [];
+let _ovUsdToSgd = 0;
+let _ovHkdToSgd = 0;
 let _posFilter = 'all';
 let _posSort = { key: 'unrealised_pl', dir: -1 };
 
@@ -4651,12 +4661,13 @@ function renderPositions() {
     const shares = g.reduce((s,p)=>s+(p.shares||0),0);
     const cost   = g.reduce((s,p)=>s+((p.avg_cost||0)*(p.shares||0)),0);
     const mv     = g.reduce((s,p)=>s+(p.market_value||0),0);
+    const mvSgd  = g.reduce((s,p)=>s+(p.value_sgd||0),0);
     const pl     = g.reduce((s,p)=>s+(p.unrealised_pl||0),0);
     const b = g[0];
     return {
       ticker: b.ticker, broker: 'combined', brokers: g.map(p=>p.broker),
       shares, avg_cost: shares>0 ? cost/shares : 0, live_price: b.live_price,
-      market_value: mv, unrealised_pl: pl, return_pct: cost>0 ? pl/cost*100 : 0,
+      market_value: mv, value_sgd: mvSgd, unrealised_pl: pl, return_pct: cost>0 ? pl/cost*100 : 0,
       isSG: b.isSG, isHK: b.isHK,
     };
   });
@@ -4675,6 +4686,7 @@ function renderPositions() {
   const rows = data.map(h => {
     const priceStr = h.live_price > 0 ? fmtCcy(h.live_price, h) : '<span style="color:var(--muted)">—</span>';
     const valStr   = h.market_value > 0 ? fmtCcy(h.market_value, h) : '<span style="color:var(--muted)">—</span>';
+    const valSgdStr = h.value_sgd > 0 ? fmtSGD(h.value_sgd) : '<span style="color:var(--muted)">—</span>';
     const avgStr   = fmtCcy(h.avg_cost, h);
     const pillLabel = b => b === 'cmc' ? 'CMC' : b === 'ig' ? 'IG' : b.charAt(0).toUpperCase()+b.slice(1);
     const brokerCell = h.broker === 'combined'
@@ -4692,13 +4704,17 @@ function renderPositions() {
       <td>${avgStr}</td>
       <td>${priceStr}</td>
       <td>${valStr}</td>
+      <td style="font-family:var(--font-num)">${valSgdStr}</td>
       <td class="${plColor(h.unrealised_pl)}" style="font-family:var(--font-num);font-weight:600">${h.market_value>0?plStr(h.unrealised_pl, plPrefix(h)):'—'}</td>
       <td class="${plColor(h.return_pct)}" style="font-family:var(--font-num);font-weight:600">${h.market_value>0?fmtPct(h.return_pct):'—'}</td>
     </tr>`;
   }).join('');
 
-  document.getElementById('all-positions-body').innerHTML = rows || '<tr><td colspan="8" class="empty">No positions found</td></tr>';
-  document.getElementById('all-pos-count').textContent = data.length + ' positions';
+  document.getElementById('all-positions-body').innerHTML = rows || '<tr><td colspan="9" class="empty">No positions found</td></tr>';
+  const _rateNote = (_ovUsdToSgd>0 || _ovHkdToSgd>0)
+    ? ` · ${_ovUsdToSgd>0?`1 USD = S$${_ovUsdToSgd.toFixed(3)}`:''}${(_ovUsdToSgd>0&&_ovHkdToSgd>0)?' · ':''}${_ovHkdToSgd>0?`1 HKD = S$${_ovHkdToSgd.toFixed(3)}`:''}`
+    : '';
+  document.getElementById('all-pos-count').textContent = data.length + ' positions' + _rateNote;
 }
 
 // ============================================================
