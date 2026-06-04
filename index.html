@@ -587,8 +587,7 @@ tr:hover td { background:var(--surface2); }
   #wb-withdrawals-body td:nth-child(3)::before{content:"Amount"}
   #sy-deposits-body td:nth-child(2)::before{content:"Currency"}
   #sy-deposits-body td:nth-child(3)::before{content:"Amount"}
-  #sy-deposits-body td:nth-child(4)::before{content:"Source"}
-  #sy-deposits-body td:nth-child(5)::before{content:""}
+  #sy-deposits-body td:nth-child(4)::before{content:""}
   #sy-withdrawals-body td:nth-child(2)::before{content:"Currency"}
   #sy-withdrawals-body td:nth-child(3)::before{content:"Amount"}
   #sy-withdrawals-body td:nth-child(4)::before{content:"Note"}
@@ -1217,7 +1216,7 @@ tr:hover td { background:var(--surface2); }
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Date</th><th>Currency</th><th>Amount</th><th>Source</th><th></th></tr></thead>
+          <thead><tr><th>Date</th><th>Currency</th><th>Amount</th><th></th></tr></thead>
           <tbody id="sy-deposits-body"></tbody>
         </table>
       </div>
@@ -4719,7 +4718,7 @@ async function loadWebull() {
   document.getElementById('wb-deposits-body').innerHTML = renderYearGroupedRows(
     wbDeps,
     d => `<tr>
-      <td>${fmtDate(d.date)}</td>
+      <td>${fmtDate(d.date)}${d.source_note ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${String(d.source_note).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>` : ''}</td>
       <td>${d.currency}</td>
       <td>${d.currency==='SGD'?fmtSGD(d.amount):fmtUSD(d.amount)}</td>
       <td>
@@ -4817,9 +4816,8 @@ async function loadSyfe() {
   document.getElementById('sy-deposits-body').innerHTML = renderYearGroupedRows(
     syDeps,
     d => `<tr>
-      <td>${fmtDate(d.date)}</td><td>${d.currency}</td>
+      <td>${fmtDate(d.date)}${d.source_note ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${String(d.source_note).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>` : ''}</td><td>${d.currency}</td>
       <td>${d.currency==='SGD'?fmtSGD(d.amount):fmtUSD(d.amount)}</td>
-      <td>${d.source_note||'—'}</td>
       <td>
         <div style="display:flex;gap:6px">
           <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40"
@@ -4829,7 +4827,7 @@ async function loadSyfe() {
         </div>
       </td>
     </tr>`,
-    5, 'sy-deps'
+    4, 'sy-deps'
   );
 
   // Syfe withdrawals
@@ -5011,7 +5009,7 @@ async function loadCMC() {
   document.getElementById('cmc-deposits-body').innerHTML = renderYearGroupedRows(
     cmcDeps.map(d => ({ ...d, currency: d.currency || 'SGD' })),
     d => `<tr>
-      <td>${fmtDate(d.date)}</td>
+      <td>${fmtDate(d.date)}${d.source_note ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${String(d.source_note).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>` : ''}</td>
       <td>${fmtSGD(d.amount)}</td>
       <td><div style="display:flex;gap:6px">
         <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40" onclick="openEditDepositModal(${d.id},'cmc','${d.date}','${d.currency||'SGD'}',${d.amount},'${(d.source_note||'').replace(/'/g,"\\'")}')">Edit</button>
