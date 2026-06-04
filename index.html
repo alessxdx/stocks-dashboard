@@ -1393,21 +1393,21 @@ tr:hover td { background:var(--surface2); }
 <div id="page-ig" class="page">
   <div class="page-header">
     <div class="page-title" style="color:var(--ig)">IG Markets</div>
-    <div class="page-subtitle">Hong Kong Stocks (HKEX) — funded in SGD</div>
+    <div class="page-subtitle">Hong Kong (HKEX) &amp; Singapore (SGX) stocks — funded in SGD</div>
   </div>
   <div class="stat-grid stat-grid-4">
     <div class="stat-card ig">
-      <div class="stat-label">Portfolio Value (HKD)</div>
+      <div class="stat-label">Portfolio Value (SGD)</div>
       <div class="stat-value" id="ig-value">—</div>
       <div class="stat-sub" id="ig-value-sgd">—</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Total Invested (HKD)</div>
+      <div class="stat-label">Total Invested (SGD)</div>
       <div class="stat-value" id="ig-invested">—</div>
       <div class="stat-sub" id="ig-invested-sub">—</div>
     </div>
     <div class="stat-card green">
-      <div class="stat-label">Unrealised P&L (HKD)</div>
+      <div class="stat-label">Unrealised P&L (SGD)</div>
       <div class="stat-value" id="ig-unrealised">—</div>
       <div class="stat-change" id="ig-unrealised-pct">—</div>
     </div>
@@ -1448,7 +1448,7 @@ tr:hover td { background:var(--surface2); }
         <thead><tr>
           <th onclick="sortIGHoldings('ticker')" style="cursor:pointer" class="sort-asc">Ticker</th>
           <th onclick="sortIGHoldings('shares')" style="cursor:pointer">Shares</th>
-          <th onclick="sortIGHoldings('avg_cost')" style="cursor:pointer">Avg Cost (HKD)</th>
+          <th onclick="sortIGHoldings('avg_cost')" style="cursor:pointer">Avg Cost</th>
           <th onclick="sortIGHoldings('total_cost')" style="cursor:pointer">Total Cost</th>
           <th onclick="sortIGHoldings('cost_sgd')" style="cursor:pointer">Cost (SGD)</th>
           <th onclick="sortIGHoldings('eff_fx')" style="cursor:pointer">Eff. FX</th>
@@ -2622,6 +2622,13 @@ tr:hover td { background:var(--surface2); }
   <div class="modal">
     <div class="modal-title" id="cmc-trade-modal-title">Add Trade — CMC Invest</div>
     <input type="hidden" id="sg-edit-id">
+    <div class="form-group" id="sg-ig-market-wrap" style="display:none">
+      <label class="form-label">Exchange</label>
+      <select class="form-input" id="sg-ig-market" onchange="igMarketChanged()">
+        <option value="HK">HKEX — Hong Kong (HKD)</option>
+        <option value="SG">SGX — Singapore (SGD)</option>
+      </select>
+    </div>
     <div class="form-row">
       <div class="form-group">
         <label class="form-label" id="sg-ticker-label">Ticker (SGX)</label>
@@ -2659,6 +2666,13 @@ tr:hover td { background:var(--surface2); }
         </div>
       </div>
       <div id="sg-ig-eff-rate" style="font-size:11px;color:var(--muted);margin-top:-4px;margin-bottom:12px;font-family:var(--font-mono)">Eff. FX: —</div>
+    </div>
+    <!-- SG-only optional fee (shown when IG + SGX) -->
+    <div id="sg-sg-extras" style="display:none">
+      <div class="form-group">
+        <label class="form-label">Fee (SGD, optional)</label>
+        <input class="form-input" type="number" id="sg-fee-sgd" step="0.01" placeholder="0.00">
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-cancel" onclick="closeModal('add-sg-trade-modal')">Cancel</button>
@@ -4047,9 +4061,9 @@ async function loadStockDetail(ticker, broker, isSG) {
     if (wb) detectedBroker = 'webull';
     else if (sy) detectedBroker = 'syfe';
     else if (cmcA || cmcC || cmcAnyTrade) { detectedBroker = 'cmc'; detectedIsSG = true; }
-    else if (igA || igC || igAnyTrade)    { detectedBroker = 'ig';  detectedIsHK = true; }
+    else if (igA || igC || igAnyTrade)    { detectedBroker = 'ig';  if (igIsHK(ticker)) detectedIsHK = true; else detectedIsSG = true; }
   } else if (detectedBroker === 'ig') {
-    detectedIsHK = true;
+    if (igIsHK(ticker)) detectedIsHK = true; else detectedIsSG = true;
   }
   _stockCurrent = { ticker, broker: detectedBroker, isSG: detectedIsSG };
 
@@ -4236,11 +4250,11 @@ async function loadStockDetail(ticker, broker, isSG) {
   }
 
   // Swap header columns based on broker — IG gets extra Cost (SGD) + Eff. FX cols
-  const isIG = detectedBroker === 'ig';
-  document.getElementById('stock-trades-head').innerHTML = isIG
+  const isIGHK = detectedBroker === 'ig' && detectedIsHK;  // only HKEX needs Cost(SGD)+Eff.FX cols
+  document.getElementById('stock-trades-head').innerHTML = isIGHK
     ? `<tr><th>Date</th><th>Action</th><th>Qty</th><th>Price</th><th>Amount</th><th>Cost (SGD)</th><th>Eff. FX</th><th>Realised P&L</th></tr>`
     : `<tr><th>Date</th><th>Action</th><th>Qty</th><th>Price</th><th>Amount</th><th>Realised P&L</th></tr>`;
-  const emptyColspan = isIG ? 8 : 6;
+  const emptyColspan = isIGHK ? 8 : 6;
 
   // Render newest first
   document.getElementById('stock-trades-body').innerHTML = tradeRows.reverse().map(t => {
@@ -4254,7 +4268,7 @@ async function loadStockDetail(ticker, broker, isSG) {
     const pricePerShare = qty > 0 ? amt / qty : 0;
     // IG-only: Cost (SGD) = total_sgd; Eff. FX = total_sgd / (amount + fee_hkd)
     let igExtraCells = '';
-    if (isIG) {
+    if (isIGHK) {
       const fee    = parseFloat(t.fee_hkd || 0);
       const totSgd = parseFloat(t.total_sgd || 0);
       const grossHkd = amt + fee;
@@ -4447,8 +4461,8 @@ async function loadOverview() {
   const cmcActive = getCMCActive();
   const sgTickers = [...new Set(cmcActive.map(h => h.ticker+'.SI'))];
   const igActive = getIGActive();
-  const hkTickers = [...new Set(igActive.map(h => h.ticker+'.HK'))];
-  await fetchPrices([...wbTickers, ...syfeTickers, ...sgTickers, ...hkTickers]);
+  const igTickers = [...new Set(igActive.map(h => h.ticker+igSuffix(h.ticker)))];
+  await fetchPrices([...wbTickers, ...syfeTickers, ...sgTickers, ...igTickers]);
 
   let wbValue=0, wbCost=0, wbRealised=0;
   active.forEach(h => { wbValue += h.shares * price(h.ticker); wbCost += h.total_cost; });
@@ -4467,8 +4481,8 @@ async function loadOverview() {
     const hkInfo = await getLiveHkdToSgd();
     hkdToSgd = hkInfo.rate;
     igActive.forEach(h => {
-      const p = price(h.ticker+'.HK');                  // HKD per share
-      igValueSGD += (h.shares * p) * hkdToSgd;
+      const valNative = h.shares * price(h.ticker+igSuffix(h.ticker));
+      igValueSGD += igIsHK(h.ticker) ? valNative * hkdToSgd : valNative;  // HKEX→SGD; SGX already SGD
       igCostSGD  += h.costSGD;                          // actual SGD outlay incl fees (pro-rated for held shares)
     });
   }
@@ -4527,18 +4541,19 @@ async function loadOverview() {
   // Avg cost is total HKD outlay incl fees / shares (derived via costSGD ÷ effFX since IG holding tracks SGD-with-fees and effFX = SGD/HKD)
   if (igActive.length) {
     igActive.forEach(h => {
-      const livePxHKD = price(h.ticker+'.HK');
-      const valHKD    = h.shares * livePxHKD;
-      // Cost-with-fees in HKD. effFX = buySGD/buyHKD (fee-inclusive HKD). costSGD already pro-rated for held shares.
-      const costHKD   = h.effFX > 0 ? (h.costSGD / h.effFX) : (h.cost || 0);
-      const avgHKD    = h.shares > 0 ? costHKD / h.shares : 0;
-      const pl        = valHKD - costHKD;
-      const pct       = costHKD > 0 ? pl/costHKD*100 : 0;
+      const isHK      = igIsHK(h.ticker);
+      const livePx    = price(h.ticker+igSuffix(h.ticker));
+      const val       = h.shares * livePx;
+      // Fee-inclusive native cost: HKEX derives HKD via effFX; SGX is already SGD (costSGD incl fee)
+      const costNative = isHK ? (h.effFX > 0 ? (h.costSGD / h.effFX) : (h.cost || 0)) : (h.costSGD || h.cost || 0);
+      const avgNative  = h.shares > 0 ? costNative / h.shares : 0;
+      const pl         = val - costNative;
+      const pct        = costNative > 0 ? pl/costNative*100 : 0;
       _allPositionsData.push({
         ticker:h.ticker, broker:'ig', shares:h.shares,
-        avg_cost: avgHKD, live_price: livePxHKD,
-        market_value: valHKD, unrealised_pl: pl, return_pct: pct,
-        isSG:false, isHK:true,
+        avg_cost: avgNative, live_price: livePx,
+        market_value: val, unrealised_pl: pl, return_pct: pct,
+        isSG: !isHK, isHK: isHK,
       });
     });
   }
@@ -5420,6 +5435,13 @@ function igPad(t) {
   return clean.padStart(4, '0').slice(-5); // allow 5-digit codes like 9988 too
 }
 
+// IG holds BOTH HKEX (4-digit numeric codes e.g. 0700, 9988) and SGX (alphanumeric e.g. D05, ME8U).
+// Detect the exchange straight from the ticker — no DB column needed.
+function igIsHK(ticker) { return /^\d+$/.test(String(ticker || '').trim()); }
+function igSuffix(ticker) { return igIsHK(ticker) ? '.HK' : '.SI'; }
+function igCcyPrefix(ticker) { return igIsHK(ticker) ? 'HK$' : 'S$'; }
+function igFmt(ticker, v) { return igIsHK(ticker) ? fmtHKD(v) : fmtSGD(v); }
+
 // Live HKD→SGD rate, cached 1h, with FX-table fallback
 async function getLiveHkdToSgd() {
   const CACHE_KEY = 'hkdSgdRate_v1';
@@ -5522,18 +5544,22 @@ function getIGClosed() {
 async function loadIG() {
   await loadAllData();
   const active = getIGActive();
-  const hkTickers = active.map(h => h.ticker + '.HK');
-  await fetchPrices(hkTickers);
+  const igTickers = [...new Set(active.map(h => h.ticker + igSuffix(h.ticker)))];
+  await fetchPrices(igTickers);
 
-  // Portfolio in HKD + actual SGD outlay (sum of total_sgd on held shares)
-  let igValue = 0, igCost = 0, igCostSGD = 0;
+  // HKD→SGD live rate (HKEX holdings are HKD-native; SGX holdings are already SGD)
+  const hk = await getLiveHkdToSgd();
+  const hkdToSgd = hk.rate;
+
+  // Roll the whole IG book up to SGD (mix of HKEX-HKD + SGX-SGD)
+  let igValueSGD = 0, igCostSGD = 0;
   active.forEach(h => {
-    igValue   += h.shares * price(h.ticker + '.HK');
-    igCost    += h.cost;
-    igCostSGD += h.costSGD || 0;
+    const valNative = h.shares * price(h.ticker + igSuffix(h.ticker));
+    igValueSGD += igIsHK(h.ticker) ? valNative * hkdToSgd : valNative;
+    igCostSGD  += h.costSGD || 0;   // actual SGD outlay incl fees, for both exchanges
   });
-  const igPL = igValue - igCost;
-  const igPct = igCost > 0 ? igPL/igCost*100 : 0;
+  const igPLSGD  = igValueSGD - igCostSGD;
+  const igPctSGD = igCostSGD > 0 ? igPLSGD/igCostSGD*100 : 0;
 
   // Realised P&L from ALL trades (including closed + partial sells)
   const allTrades = (_igTrades||[]).filter(t => t.brokerage==='ig');
@@ -5550,7 +5576,7 @@ async function loadIG() {
       allMap[ticker].cost   -= avg * qty;
     }
   });
-  const igRealisedTotal = Math.round(Object.values(allMap).reduce((s,h)=>s+h.rpl,0)*100)/100;
+  const igRealisedSGD = Math.round(Object.entries(allMap).reduce((s,[tk,h]) => s + (igIsHK(tk) ? h.rpl*hkdToSgd : h.rpl), 0)*100)/100;
 
   // Deposits / withdrawals / FX — all SGD-denominated for IG
   const igDeps = (_deps||[]).filter(d => d.brokerage==='ig');
@@ -5561,17 +5587,13 @@ async function loadIG() {
   const igFxSGD    = igFxRows.reduce((s,f)=>s+parseFloat(f.amount_from||0),0);
   const igFxHKD    = igFxRows.reduce((s,f)=>s+parseFloat(f.amount_to||0),0);
 
-  // HKD→SGD live rate for sub-labels
-  const hk = await getLiveHkdToSgd();
-  const hkdToSgd = hk.rate;
-
-  document.getElementById('ig-value').textContent       = fmtHKD(igValue);
-  document.getElementById('ig-value-sgd').textContent   = igValue>0 ? '≈ ' + fmtSGD(igValue*hkdToSgd) : '—';
-  document.getElementById('ig-invested').textContent    = fmtHKD(igCost);
-  document.getElementById('ig-invested-sub').textContent= `${active.length} active · ${getIGClosed().length} closed · paid ${fmtSGD(igCostSGD)}`;
-  document.getElementById('ig-unrealised').innerHTML    = `<span class="${plColor(igPL)}">${plStr(igPL,'HK$')}</span>`;
-  document.getElementById('ig-unrealised-pct').innerHTML= `<span class="${plColor(igPct)}">${fmtPct(igPct)}</span>`;
-  document.getElementById('ig-realised').innerHTML      = `<span class="${igRealisedTotal!==0?plColor(igRealisedTotal):''}">${igRealisedTotal!==0?plStr(igRealisedTotal,'HK$'):'—'}</span>`;
+  document.getElementById('ig-value').textContent       = fmtSGD(igValueSGD);
+  document.getElementById('ig-value-sgd').textContent   = active.length ? `${active.length} holding${active.length===1?'':'s'} · 1 HKD = S$${hkdToSgd.toFixed(4)}` : '—';
+  document.getElementById('ig-invested').textContent    = fmtSGD(igCostSGD);
+  document.getElementById('ig-invested-sub').textContent= `${active.length} active · ${getIGClosed().length} closed`;
+  document.getElementById('ig-unrealised').innerHTML    = `<span class="${plColor(igPLSGD)}">${plStr(igPLSGD,'S$')}</span>`;
+  document.getElementById('ig-unrealised-pct').innerHTML= `<span class="${plColor(igPctSGD)}">${fmtPct(igPctSGD)}</span>`;
+  document.getElementById('ig-realised').innerHTML      = `<span class="${igRealisedSGD!==0?plColor(igRealisedSGD):''}">${igRealisedSGD!==0?plStr(igRealisedSGD,'S$'):'—'}</span>`;
   document.getElementById('ig-dep-total').textContent   = fmtSGD(igDepTotal);
   document.getElementById('ig-wd-total').textContent    = fmtSGD(igWdTotal);
   document.getElementById('ig-net-dep').textContent     = fmtSGD(igDepTotal - igWdTotal);
@@ -5580,11 +5602,12 @@ async function loadIG() {
 
   // Active holdings table
   _igActiveData = active.map(h => {
-    const p   = price(h.ticker + '.HK');
+    const isHK = igIsHK(h.ticker);
+    const p   = price(h.ticker + igSuffix(h.ticker));
     const val = h.shares * p;
     const pl  = val - h.cost;
     const pct = h.cost>0 ? pl/h.cost*100 : 0;
-    return { ticker:h.ticker, shares:h.shares, avg_cost:h.avgPrice, total_cost:h.cost,
+    return { ticker:h.ticker, isHK, shares:h.shares, avg_cost:h.avgPrice, total_cost:h.cost,
              live_price:p, market_value:val, unrealised_pl:pl, return_pct:pct,
              realised_pl: h.realisedPL || 0,
              eff_fx: h.effFX || 0, cost_sgd: h.costSGD || 0 };
@@ -5652,23 +5675,23 @@ function renderIGActiveHoldings() {
     return typeof av === 'string' ? av.localeCompare(bv)*_igHoldSort.dir : (av-bv)*_igHoldSort.dir;
   });
 
-  document.getElementById('ig-active-body').innerHTML = sorted.map(h => `<tr style="cursor:pointer" onclick="showStockDetail('${h.ticker}','ig',false,'ig')">
+  document.getElementById('ig-active-body').innerHTML = sorted.map(h => `<tr style="cursor:pointer" onclick="showStockDetail('${h.ticker}','ig',${!h.isHK},'ig')">
     <td>
       <div style="display:flex;align-items:center;gap:10px">
-        ${miniLogoHTML(h.ticker, false)}
+        ${miniLogoHTML(h.ticker, !h.isHK)}
         <span class="ticker-badge ig">${h.ticker}</span>
       </div>
     </td>
     <td style="font-family:var(--font-num)">${fmtShares(h.shares)}</td>
-    <td style="font-family:var(--font-num)">${fmtHKD(h.avg_cost)}</td>
-    <td style="font-family:var(--font-num)">${fmtHKD(h.total_cost || (h.shares * h.avg_cost))}</td>
+    <td style="font-family:var(--font-num)">${igFmt(h.ticker, h.avg_cost)}</td>
+    <td style="font-family:var(--font-num)">${igFmt(h.ticker, h.total_cost || (h.shares * h.avg_cost))}</td>
     <td style="font-family:var(--font-num)">${h.cost_sgd>0?fmtSGD(h.cost_sgd):'<span style="color:var(--muted)">—</span>'}</td>
-    <td style="font-family:var(--font-num);color:var(--muted)">${h.eff_fx>0?h.eff_fx.toFixed(5):'—'}</td>
-    <td style="font-family:var(--font-num)">${h.live_price>0?fmtHKD(h.live_price):'<span style="color:var(--muted)">—</span>'}</td>
-    <td style="font-family:var(--font-num);font-weight:600">${h.market_value>0?fmtHKD(h.market_value):'<span style="color:var(--muted)">—</span>'}</td>
-    <td class="${plColor(h.unrealised_pl)}" style="font-family:var(--font-num);font-weight:600">${h.market_value>0?plStr(h.unrealised_pl,'HK$'):'—'}</td>
+    <td style="font-family:var(--font-num);color:var(--muted)">${h.isHK && h.eff_fx>0?h.eff_fx.toFixed(5):'—'}</td>
+    <td style="font-family:var(--font-num)">${h.live_price>0?igFmt(h.ticker, h.live_price):'<span style="color:var(--muted)">—</span>'}</td>
+    <td style="font-family:var(--font-num);font-weight:600">${h.market_value>0?igFmt(h.ticker, h.market_value):'<span style="color:var(--muted)">—</span>'}</td>
+    <td class="${plColor(h.unrealised_pl)}" style="font-family:var(--font-num);font-weight:600">${h.market_value>0?plStr(h.unrealised_pl,igCcyPrefix(h.ticker)):'—'}</td>
     <td class="${plColor(h.return_pct)}" style="font-family:var(--font-num)">${h.market_value>0?fmtPct(h.return_pct):'—'}</td>
-    <td class="${h.realised_pl!==0?plColor(h.realised_pl):''}" style="${h.realised_pl===0?'color:var(--text)':''}font-family:var(--font-num)">${h.realised_pl!==0?plStr(h.realised_pl,'HK$'):'—'}</td>
+    <td class="${h.realised_pl!==0?plColor(h.realised_pl):''}" style="${h.realised_pl===0?'color:var(--text)':''}font-family:var(--font-num)">${h.realised_pl!==0?plStr(h.realised_pl,igCcyPrefix(h.ticker)):'—'}</td>
   </tr>`).join('') || '<tr><td colspan="11" class="empty">No active holdings</td></tr>';
 }
 
@@ -5694,14 +5717,14 @@ function renderIGClosed() {
   });
   const body = document.getElementById('ig-closed-body');
   if (!body) return;
-  body.innerHTML = sorted.map(h => `<tr style="cursor:pointer" onclick="showStockDetail('${h.ticker}','ig',false,'ig')">
+  body.innerHTML = sorted.map(h => `<tr style="cursor:pointer" onclick="showStockDetail('${h.ticker}','ig',${!igIsHK(h.ticker)},'ig')">
     <td>
       <div style="display:flex;align-items:center;gap:10px">
-        ${miniLogoHTML(h.ticker, false)}
+        ${miniLogoHTML(h.ticker, !igIsHK(h.ticker))}
         <span class="ticker-badge ig">${h.ticker}</span>
       </div>
     </td>
-    <td class="${h.realisedPL!==0?plColor(h.realisedPL):''}" style="${h.realisedPL===0?'color:var(--text)':''};font-family:var(--font-num)">${h.realisedPL!==0?plStr(h.realisedPL,'HK$'):'—'}</td>
+    <td class="${h.realisedPL!==0?plColor(h.realisedPL):''}" style="${h.realisedPL===0?'color:var(--text)':''};font-family:var(--font-num)">${h.realisedPL!==0?plStr(h.realisedPL,igCcyPrefix(h.ticker)):'—'}</td>
     <td><span class="status-closed">Closed</span></td>
   </tr>`).join('') || '<tr><td colspan="3" class="empty">No closed positions</td></tr>';
 }
@@ -5709,20 +5732,33 @@ function renderIGClosed() {
 // ── IG Trade CRUD ──
 async function submitIGTrade() {
   const editId = document.getElementById('sg-edit-id').value;
-  const tickerRaw = document.getElementById('sg-ticker').value.trim();
-  const ticker = igPad(tickerRaw);
+  const isHK = document.getElementById('sg-ig-market').value === 'HK';
+  const tickerRaw = document.getElementById('sg-ticker').value.trim().toUpperCase();
+  const ticker = isHK ? igPad(tickerRaw) : tickerRaw;
   const action = document.getElementById('sg-action').value;
   const date = document.getElementById('sg-date').value;
   const qty = parseFloat(document.getElementById('sg-qty').value);
   const price_val = parseFloat(document.getElementById('sg-price').value);
-  const fee_hkd_raw  = document.getElementById('sg-fee-hkd').value;
-  const total_sgd_raw = document.getElementById('sg-total-sgd').value;
-  const fee_hkd   = parseFloat(fee_hkd_raw);
-  const total_sgd = parseFloat(total_sgd_raw);
   if (!ticker || !date || !qty || !price_val) return alert('Please fill ticker, date, qty, and price');
-  // IG requires fee + SGD total for accurate FX tracking
-  if (fee_hkd_raw === '' || isNaN(fee_hkd))   return alert('Please enter the HKD fee (use 0 if none)');
-  if (!total_sgd || isNaN(total_sgd))         return alert('Please enter the Total Filled (SGD)');
+  // Ticker format must match the chosen exchange (detection later relies on this)
+  if (isHK && !/^\d+$/.test(ticker))  return alert('HKEX tickers are numeric (e.g. 0700, 9988).');
+  if (!isHK && /^\d+$/.test(ticker))  return alert('SGX tickers contain letters (e.g. D05, ME8U).');
+
+  let fee_hkd = 0, total_sgd = 0;
+  if (isHK) {
+    // HKEX: capture HKD fee + actual SGD debited for FX tracking
+    const fee_hkd_raw   = document.getElementById('sg-fee-hkd').value;
+    const total_sgd_raw = document.getElementById('sg-total-sgd').value;
+    fee_hkd   = parseFloat(fee_hkd_raw);
+    total_sgd = parseFloat(total_sgd_raw);
+    if (fee_hkd_raw === '' || isNaN(fee_hkd)) return alert('Please enter the HKD fee (use 0 if none)');
+    if (!total_sgd || isNaN(total_sgd))       return alert('Please enter the Total Filled (SGD)');
+  } else {
+    // SGX is SGD-native: amount is the SGD subtotal; optional SGD fee folds into the SGD outlay
+    const fee_sgd = parseFloat(document.getElementById('sg-fee-sgd').value) || 0;
+    fee_hkd   = 0;
+    total_sgd = qty*price_val + fee_sgd;
+  }
   const body = {
     ticker, brokerage:'ig', date, action, qty,
     price: price_val, amount: qty*price_val, profit: 0,
@@ -6513,27 +6549,23 @@ function openModal(id, broker) {
   if (id==='add-withdrawal-modal') { document.getElementById('wd-modal-add-title').textContent=`Add Withdrawal — ${brokerLabel}`; }
   if (id==='add-trade-modal') { document.getElementById('trade-modal-title').textContent='Add Trade — Webull'; document.getElementById('trade-edit-id').value=''; }
   if (id==='add-sg-trade-modal') {
-    // Swap labels + title based on broker (CMC = SGX/SGD, IG = HKEX/HKD)
     const isIG = broker === 'ig';
-    document.getElementById('cmc-trade-modal-title').textContent = isIG ? 'Add Trade — IG Markets' : 'Add Trade — CMC Invest';
-    document.getElementById('sg-ticker-label').textContent       = isIG ? 'Ticker (HKEX, 4-digit)' : 'Ticker (SGX)';
-    document.getElementById('sg-price-label').textContent        = isIG ? 'Price per Share (HKD HK$)' : 'Price per Share (SGD S$)';
-    const tEl = document.getElementById('sg-ticker');
-    tEl.placeholder = isIG ? 'e.g. 0700, 9988' : 'e.g. D05, ME8U';
-    // HKEX tickers are numeric — don't force uppercase on IG; CMC stays as-is
-    tEl.oninput = isIG ? null : function(){ this.value = this.value.toUpperCase(); };
     document.getElementById('sg-edit-id').value = '';
-    // Toggle IG extras (fee + total filled SGD)
-    document.getElementById('sg-ig-extras').style.display = isIG ? '' : 'none';
+    document.getElementById('sg-ig-market-wrap').style.display = isIG ? '' : 'none';
     if (isIG) {
-      // Reset and wire live eff-rate preview
-      document.getElementById('sg-fee-hkd').value = '';
-      document.getElementById('sg-total-sgd').value = '';
-      document.getElementById('sg-ig-eff-rate').textContent = 'Eff. FX: —';
-      ['sg-qty','sg-price','sg-fee-hkd','sg-total-sgd'].forEach(elId => {
-        const el = document.getElementById(elId);
-        el.oninput = updateIGEffRatePreview;
-      });
+      // IG holds both HKEX + SGX — default to HKEX; the toggle reconfigures the rest
+      document.getElementById('sg-ig-market').value = 'HK';
+      igMarketChanged();
+    } else {
+      // CMC = SGX only
+      document.getElementById('cmc-trade-modal-title').textContent = 'Add Trade — CMC Invest';
+      document.getElementById('sg-ticker-label').textContent = 'Ticker (SGX)';
+      document.getElementById('sg-price-label').textContent  = 'Price per Share (SGD S$)';
+      const tEl = document.getElementById('sg-ticker');
+      tEl.placeholder = 'e.g. D05, ME8U';
+      tEl.oninput = function(){ this.value = this.value.toUpperCase(); };
+      document.getElementById('sg-ig-extras').style.display = 'none';
+      document.getElementById('sg-sg-extras').style.display = 'none';
     }
   }
 }
@@ -6552,6 +6584,31 @@ function updateIGEffRatePreview() {
     el.textContent = `Eff. FX: 1 HKD = S$${rate.toFixed(5)}  ·  Subtotal HK$${(qty*price).toFixed(2)} + fee HK$${fee.toFixed(2)} = HK$${totHkd.toFixed(2)}`;
   } else {
     el.textContent = 'Eff. FX: —';
+  }
+}
+
+// Reconfigure the shared trade modal for IG when the HKEX/SGX toggle changes.
+function igMarketChanged() {
+  const isHK = document.getElementById('sg-ig-market').value === 'HK';
+  document.getElementById('cmc-trade-modal-title').textContent = `Add Trade — IG Markets (${isHK?'HKEX':'SGX'})`;
+  document.getElementById('sg-ticker-label').textContent = isHK ? 'Ticker (HKEX, 4-digit)' : 'Ticker (SGX)';
+  document.getElementById('sg-price-label').textContent  = isHK ? 'Price per Share (HKD HK$)' : 'Price per Share (SGD S$)';
+  const tEl = document.getElementById('sg-ticker');
+  tEl.placeholder = isHK ? 'e.g. 0700, 9988' : 'e.g. D05, ME8U';
+  tEl.oninput = isHK ? null : function(){ this.value = this.value.toUpperCase(); };
+  // HKEX: fee(HKD) + total(SGD) drive FX tracking. SGX: SGD-native, optional fee.
+  document.getElementById('sg-ig-extras').style.display = isHK ? '' : 'none';
+  document.getElementById('sg-sg-extras').style.display = isHK ? 'none' : '';
+  if (isHK) {
+    document.getElementById('sg-fee-hkd').value = '';
+    document.getElementById('sg-total-sgd').value = '';
+    document.getElementById('sg-ig-eff-rate').textContent = 'Eff. FX: —';
+    ['sg-qty','sg-price','sg-fee-hkd','sg-total-sgd'].forEach(elId => {
+      const el = document.getElementById(elId); if (el) el.oninput = updateIGEffRatePreview;
+    });
+  } else {
+    document.getElementById('sg-fee-sgd').value = '';
+    ['sg-qty','sg-price'].forEach(elId => { const el = document.getElementById(elId); if (el) el.oninput = null; });
   }
 }
 function closeModal(id) { const o=document.getElementById(id); if(o) o.classList.remove('open'); }
