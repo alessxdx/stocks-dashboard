@@ -682,6 +682,7 @@ tr:hover td { background:var(--surface2); }
   #stock-trades-body td:nth-child(4)::before{content:"Price"}
   #stock-trades-body td:nth-child(5)::before{content:"Amount"}
   #stock-trades-body td:nth-child(6)::before{content:"Realised P&L"}
+  #stock-trades-body td:nth-child(7)::before{content:""}
   #stock-divs-body td:nth-child(2)::before{content:"Amount"}
 
 
@@ -4225,6 +4226,7 @@ async function loadStockDetail(ticker, broker, isSG) {
       date: t.date,
       action: 'Buy',
       qty: t.shares,
+      price: t.price_usd,
       amount: t.amount_usd,
     }));
   } else if (detectedBroker === 'cmc') {
@@ -4277,9 +4279,9 @@ async function loadStockDetail(ticker, broker, isSG) {
   // Swap header columns based on broker — IG gets extra Cost (SGD) + Eff. FX cols
   const isIGHK = detectedBroker === 'ig' && detectedIsHK;  // only HKEX needs Cost(SGD)+Eff.FX cols
   document.getElementById('stock-trades-head').innerHTML = isIGHK
-    ? `<tr><th>Date</th><th>Action</th><th>Qty</th><th>Price</th><th>Amount</th><th>Cost (SGD)</th><th>Eff. FX</th><th>Realised P&L</th></tr>`
-    : `<tr><th>Date</th><th>Action</th><th>Qty</th><th>Price</th><th>Amount</th><th>Realised P&L</th></tr>`;
-  const emptyColspan = isIGHK ? 8 : 6;
+    ? `<tr><th>Date</th><th>Action</th><th>Qty</th><th>Price</th><th>Amount</th><th>Cost (SGD)</th><th>Eff. FX</th><th>Realised P&L</th><th></th></tr>`
+    : `<tr><th>Date</th><th>Action</th><th>Qty</th><th>Price</th><th>Amount</th><th>Realised P&L</th><th></th></tr>`;
+  const emptyColspan = isIGHK ? 9 : 7;
 
   // Render newest first
   document.getElementById('stock-trades-body').innerHTML = tradeRows.reverse().map(t => {
@@ -4304,13 +4306,38 @@ async function loadStockDetail(ticker, broker, isSG) {
         <td style="font-family:var(--font-num)">${costSgdStr}</td>
         <td style="font-family:var(--font-num);color:var(--muted)">${effFXStr}</td>`;
     }
+    // Per-row Edit/Del — route to the right broker handler.
+    // Combined (CMC+IG) rows carry _bk; everything else uses detectedBroker.
+    const rowBk = t._bk || detectedBroker;
+    const tk = String(t.ticker || '').replace(/'/g, "\\'");
+    const px = (t.price != null ? t.price : pricePerShare);
+    let editCall = '', delCall = '';
+    if (rowBk === 'webull') {
+      editCall = `openEditTradeModal(${t.id},'${tk}','${t.date}','${t.action}',${qty},${px},${amt},${t.realised_pl||0})`;
+      delCall  = `deleteWbTrade(${t.id},'${tk}')`;
+    } else if (rowBk === 'cmc') {
+      editCall = `openCMCEditTrade(${t.id},'${tk}','${t.date}','${t.action}',${qty},${px},${amt})`;
+      delCall  = `deleteCMCTrade(${t.id},'${tk}')`;
+    } else if (rowBk === 'ig') {
+      editCall = `openIGEditTrade(${t.id},'${tk}','${t.date}','${t.action}',${qty},${px},${t.fee_hkd||0},${t.total_sgd||0})`;
+      delCall  = `deleteIGTrade(${t.id},'${tk}')`;
+    } else if (rowBk === 'syfe') {
+      editCall = `openSyfeEditTrade(${t.id},'${tk}','${t.date}',${qty},${px},${amt})`;
+      delCall  = `deleteSyfeTrade(${t.id},'${tk}')`;
+    }
+    const actionsCell = (editCall && delCall)
+      ? `<td><div style="display:flex;gap:6px">
+          <button class="btn btn-sm" style="font-size:10px;color:var(--gold);border-color:var(--gold)40" onclick="${editCall}">Edit</button>
+          <button class="btn btn-sm" style="font-size:10px;color:var(--red);border-color:var(--red)40" onclick="${delCall}">Del</button>
+        </div></td>`
+      : '<td></td>';
     return `<tr>
       <td>${fmtDate(t.date)}${t._bk?` <span class="pill pill-${t._bk}" style="font-size:8px;padding:1px 5px;margin-left:4px;vertical-align:middle">${t._bk==='cmc'?'CMC':'IG'}</span>`:''}</td>
       <td><strong class="${actClass}">${t.action || '—'}</strong></td>
       <td style="font-family:var(--font-num)">${fmtShares(qty)}</td>
       <td style="font-family:var(--font-num)">${fmtCcy(pricePerShare)}</td>
       <td style="font-family:var(--font-num)">${fmtCcy(amt)}</td>${igExtraCells}
-      <td style="font-family:var(--font-num);font-weight:600">${realStr}</td>
+      <td style="font-family:var(--font-num);font-weight:600">${realStr}</td>${actionsCell}
     </tr>`;
   }).join('') || `<tr><td colspan="${emptyColspan}" class="empty">No trades for this stock</td></tr>`;
 
@@ -5174,6 +5201,9 @@ async function deleteWbTrade(id, ticker) {
   await sb('webull_trades','DELETE',null,`?id=eq.${id}`);
   invalidateCache();
   loadWebull();
+  if (_stockCurrent && document.getElementById('page-stock').classList.contains('active')) {
+    loadStockDetail(_stockCurrent.ticker, _stockCurrent.broker, _stockCurrent.isSG);
+  }
 }
 
 
@@ -5979,7 +6009,11 @@ async function showCMCTradeHistory(ticker) {
 
 function openCMCEditTrade(id, ticker, date, action, qty, price, amount) {
   closeModal('cmc-trade-history-modal');
+  _currentBroker = 'cmc';
   document.getElementById('cmc-trade-modal-title').textContent = 'Edit Trade — CMC Invest';
+  document.getElementById('sg-ig-market-wrap').style.display = 'none';
+  document.getElementById('sg-ig-extras').style.display = 'none';
+  document.getElementById('sg-sg-extras').style.display = 'none';
   document.getElementById('sg-edit-id').value = id;
   document.getElementById('sg-ticker').value = ticker;
   document.getElementById('sg-action').value = action;
@@ -5995,6 +6029,46 @@ async function deleteCMCTrade(id, ticker) {
   invalidateCache();
   closeModal('cmc-trade-history-modal');
   loadCMC();
+  if (_stockCurrent && document.getElementById('page-stock').classList.contains('active')) {
+    loadStockDetail(_stockCurrent.ticker, _stockCurrent.broker, _stockCurrent.isSG);
+  }
+}
+
+// ── IG Trade Edit/Delete ──
+// Reuses the shared SG/IG trade modal. submitSGTrade() dispatches to submitIGTrade()
+// when _currentBroker === 'ig', so we set that and pre-fill the IG-specific fields.
+function openIGEditTrade(id, ticker, date, action, qty, price, fee_hkd, total_sgd) {
+  // openModal resets the form + shows the exchange toggle; call it first, then fill.
+  openModal('add-sg-trade-modal','ig');
+  const isHK = /^\d+$/.test(String(ticker));
+  document.getElementById('sg-ig-market').value = isHK ? 'HK' : 'SG';
+  igMarketChanged();
+  document.getElementById('cmc-trade-modal-title').textContent = `Edit Trade — IG Markets (${isHK?'HKEX':'SGX'})`;
+  document.getElementById('sg-edit-id').value = id;
+  document.getElementById('sg-ticker').value = ticker;
+  document.getElementById('sg-action').value = action;
+  document.getElementById('sg-date').value = date;
+  document.getElementById('sg-qty').value = qty;
+  document.getElementById('sg-price').value = price;
+  if (isHK) {
+    document.getElementById('sg-fee-hkd').value = fee_hkd || 0;
+    document.getElementById('sg-total-sgd').value = total_sgd || 0;
+    updateIGEffRatePreview();
+  } else {
+    // SGX is SGD-native: stored total_sgd = qty*price + fee_sgd, so back out the fee.
+    const feeSgd = Math.max(0, (parseFloat(total_sgd)||0) - (parseFloat(qty)||0)*(parseFloat(price)||0));
+    document.getElementById('sg-fee-sgd').value = feeSgd ? feeSgd.toFixed(2) : '';
+  }
+}
+
+async function deleteIGTrade(id, ticker) {
+  if (!confirm('Delete this trade?')) return;
+  await sb('ig_trades','DELETE',null,`?id=eq.${id}`);
+  invalidateCache();
+  loadIG();
+  if (_stockCurrent && document.getElementById('page-stock').classList.contains('active')) {
+    loadStockDetail(_stockCurrent.ticker, _stockCurrent.broker, _stockCurrent.isSG);
+  }
 }
 
 // ============================================================
@@ -7013,7 +7087,12 @@ async function deleteSyfeTrade(id,ticker) {
   if(!confirm('Delete this trade?')) return;
   await sb('syfe_trades','DELETE',null,`?id=eq.${id}`);
   await syncSyfeHolding(ticker);
-  invalidateCache(); _syfeTrades=await sb('syfe_trades','GET',null,'?order=date.desc'); showSyfeTradeHistory(ticker);
+  invalidateCache(); _syfeTrades=await sb('syfe_trades','GET',null,'?order=date.desc');
+  if (_stockCurrent && document.getElementById('page-stock').classList.contains('active')) {
+    loadStockDetail(_stockCurrent.ticker, _stockCurrent.broker, _stockCurrent.isSG);
+  } else {
+    showSyfeTradeHistory(ticker);
+  }
 }
 
 // ── Syfe dividend history ──
