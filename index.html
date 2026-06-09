@@ -5199,6 +5199,7 @@ function openEditTradeModal(id, ticker, date, action, qty, price, amount, rpl) {
 async function deleteWbTrade(id, ticker) {
   if (!confirm('Delete this trade? This will affect P&L calculations.')) return;
   await sb('webull_trades','DELETE',null,`?id=eq.${id}`);
+  await syncWebullHolding(ticker);
   invalidateCache();
   loadWebull();
   if (_stockCurrent && document.getElementById('page-stock').classList.contains('active')) {
@@ -6816,6 +6817,38 @@ async function deleteDepositEntry(id, broker) {
 }
 
 // ── Trade submit (Webull) ──
+// Recompute the webull_holdings aggregate for a ticker from its trades so shares/cost/avg
+// never drift after an edit or delete. FIFO realised P&L; avg = running cost / shares.
+// Mirrors syncSyfeHolding — webull_holdings is denormalized like syfe_holdings.
+async function syncWebullHolding(ticker) {
+  const all = (await sb('webull_trades','GET',null,`?ticker=eq.${ticker}&brokerage=eq.webull`)) || [];
+  all.sort((a,b) => (new Date(a.date) - new Date(b.date)) || ((a.id||0) - (b.id||0)));
+  let shares = 0, cost = 0, realised = 0;
+  all.forEach(t => {
+    const qty = parseFloat(t.qty) || 0;
+    const amt = parseFloat(t.amount) || 0;
+    if (t.action === 'Buy') {
+      shares += qty; cost += amt;
+    } else if (t.action === 'Sell') {
+      const avg = shares > 0 ? cost / shares : 0;
+      if (qty > 0) realised += (amt/qty - avg) * qty;
+      shares -= qty; cost -= avg * qty;
+    }
+  });
+  if (shares < 0.01) { shares = 0; cost = 0; }
+  const avg_cost = shares > 0 ? cost / shares : 0;
+  realised = Math.round(realised * 100) / 100;
+  const existing = (_wbHoldings||[]).find(x => x.ticker === ticker && x.brokerage === 'webull');
+  if (all.length === 0) {
+    if (existing) await sb('webull_holdings','DELETE',null,`?ticker=eq.${ticker}&brokerage=eq.webull`);
+  } else {
+    const body = {ticker,brokerage:'webull',shares,total_cost:cost,avg_cost,total_realised_pl:realised,status:shares>0.01?'active':'closed'};
+    if (existing) await sb('webull_holdings','PATCH',body,`?ticker=eq.${ticker}&brokerage=eq.webull`);
+    else await sb('webull_holdings','POST',body);
+  }
+  _wbHoldings = await sb('webull_holdings','GET',null,'?order=ticker.asc');
+}
+
 async function submitTrade() {
   const editId = document.getElementById('trade-edit-id').value;
   const ticker = document.getElementById('trade-ticker').value.toUpperCase().trim();
@@ -6834,6 +6867,7 @@ async function submitTrade() {
   if (editId) {
     await sb('webull_trades','PATCH',body,`?id=eq.${editId}`);
     document.getElementById('trade-edit-id').value=''; document.getElementById('trade-modal-title').textContent='Add Trade — Webull';
+    await syncWebullHolding(ticker);
     invalidateCache(); closeModal('add-trade-modal'); loadWebull();
     if (_stockCurrent && document.getElementById('page-stock').classList.contains('active')) {
       loadStockDetail(_stockCurrent.ticker, _stockCurrent.broker, _stockCurrent.isSG);
@@ -6841,15 +6875,7 @@ async function submitTrade() {
     return;
   }
   await sb('webull_trades','POST',body);
-  const holdings2 = await sb('webull_holdings','GET',null,`?ticker=eq.${ticker}&brokerage=eq.webull`);
-  if (holdings2?.length) {
-    const h=holdings2[0];
-    let newShares=h.shares+(action==='Buy'?qty:-qty), newCost=action==='Buy'?h.total_cost+amount:h.total_cost-(h.avg_cost*qty);
-    let newAvg=newShares>0?newCost/newShares:0, newRPL=h.total_realised_pl+(action==='Sell'?rpl:0);
-    await sb('webull_holdings','PATCH',{shares:newShares,total_cost:newCost,avg_cost:newAvg,total_realised_pl:newRPL,status:newShares>0.01?'active':'closed'},`?id=eq.${h.id}`);
-  } else if (action==='Buy') {
-    await sb('webull_holdings','POST',{ticker,brokerage:'webull',shares:qty,avg_cost:price_val,total_cost:amount,total_realised_pl:0,status:'active'});
-  }
+  await syncWebullHolding(ticker);
   invalidateCache(); closeModal('add-trade-modal'); loadWebull();
   if (_stockCurrent && document.getElementById('page-stock').classList.contains('active')) {
     loadStockDetail(_stockCurrent.ticker, _stockCurrent.broker, _stockCurrent.isSG);
