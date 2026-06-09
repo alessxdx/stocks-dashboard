@@ -4458,7 +4458,50 @@ async function loadAllData() {
     sb('ig_trades','GET',null,'?order=date.desc'),
   ]);
   await reconcileSyfeHoldings();
+  await reconcileWebullHoldings();
   _dataLoaded = true;
+}
+
+// Self-heal: webull_holdings is a stored aggregate (like syfe_holdings). Recompute each
+// ticker from its trades using moving-average cost + FIFO realised, write back only on drift.
+// Fixes rows that drifted before holdings were recomputed on edit/delete.
+async function reconcileWebullHoldings() {
+  const byTicker = {};
+  const sorted = [...(_wbTrades||[])]
+    .filter(t => t.brokerage === 'webull')
+    .sort((a,b) => (new Date(a.date) - new Date(b.date)) || ((a.id||0) - (b.id||0)));
+  sorted.forEach(t => {
+    const k = t.ticker;
+    if (!byTicker[k]) byTicker[k] = {shares:0, cost:0, realised:0};
+    const qty = parseFloat(t.qty)||0, amt = parseFloat(t.amount)||0;
+    const agg = byTicker[k];
+    if (t.action === 'Buy') { agg.shares += qty; agg.cost += amt; }
+    else if (t.action === 'Sell') {
+      const avg = agg.shares>0 ? agg.cost/agg.shares : 0;
+      if (qty>0) agg.realised += (amt/qty - avg)*qty;
+      agg.shares -= qty; agg.cost -= avg*qty;
+    }
+  });
+  let changed = false;
+  for (const ticker of Object.keys(byTicker)) {
+    let {shares, cost, realised} = byTicker[ticker];
+    if (shares < 0.01) { shares = 0; cost = 0; }
+    const avg_cost = shares>0 ? cost/shares : 0;
+    realised = Math.round(realised*100)/100;
+    const h = (_wbHoldings||[]).find(x => x.ticker===ticker && x.brokerage==='webull');
+    const drift = !h
+      || Math.abs((h.shares||0) - shares) > 1e-6
+      || Math.abs((h.total_cost||0) - cost) > 0.005
+      || Math.abs((h.total_realised_pl||0) - realised) > 0.005;
+    if (!drift) continue;
+    const body = {ticker, brokerage:'webull', shares, total_cost:cost, avg_cost,
+                  total_realised_pl:realised, status: shares>0.01 ? 'active' : 'closed'};
+    console.log('[wb-reconcile] DRIFT', ticker, 'stored', h?h.shares:'(none)', '→ writing', shares);
+    if (h) await sb('webull_holdings','PATCH',body,`?ticker=eq.${ticker}&brokerage=eq.webull`);
+    else   await sb('webull_holdings','POST',body);
+    changed = true;
+  }
+  if (changed) _wbHoldings = await sb('webull_holdings','GET',null,'?order=ticker.asc');
 }
 
 // Self-heal: syfe_holdings is a stored aggregate. Recompute each ticker from its
