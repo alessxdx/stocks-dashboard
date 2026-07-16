@@ -4388,11 +4388,23 @@ function openStockAddTrade() {
     openSyfeAddTrade(s.ticker);
     return;
   }
-  // CMC tickers may carry a .SI suffix on the stock-detail page; strip it for the SGX input
-  const cleanTicker = (s.ticker || '').replace(/\.SI$/i, '');
+  // CMC/IG tickers may carry a .SI or .HK suffix on the stock-detail page; strip for the shared input
+  const cleanTicker = (s.ticker || '').replace(/\.(SI|HK)$/i, '');
 
   if (s.broker === 'cmc' || s.broker === 'combined') {
     openModal('add-sg-trade-modal','cmc');
+    const tEl = document.getElementById('sg-ticker');
+    const qEl = document.getElementById('sg-qty');
+    const pEl = document.getElementById('sg-price');
+    if (tEl) tEl.value = cleanTicker;
+    if (qEl) qEl.value = '';
+    if (pEl) pEl.value = '';
+    setTimeout(() => { qEl && qEl.focus(); }, 60);
+  } else if (s.broker === 'ig') {
+    openModal('add-sg-trade-modal','ig');
+    // IG holds both HKEX + SGX — default the toggle to whichever market this ticker is actually on
+    document.getElementById('sg-ig-market').value = igIsHK(cleanTicker) ? 'HK' : 'SG';
+    igMarketChanged();
     const tEl = document.getElementById('sg-ticker');
     const qEl = document.getElementById('sg-qty');
     const pEl = document.getElementById('sg-price');
